@@ -1,0 +1,93 @@
+# -*- coding:utf-8 8-*
+#################################################
+#该脚本用来不停的给ds节点杀进程，等待进程起来，然后put对象
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+import deleteAllAccount_lyz
+import random
+import threading
+import _stability_for_killprocess
+import conf_lyz
+def killoOmsAndS3(num,conffilename,masterip,oossip,dsnodeid,acountnamea,accountemail,bucketname,objectnamea,objectpatha,accountname,createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit,cancleupobjectname, quota):
+
+    confo = conf_lyz.confrelate()
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo = _fault_all_lyz.statusrecovery()
+    # 前期准备：从配置文件中读取参数
+    # print 'masterip is :' %masterip
+    argvs = [masterip,oossip,num]
+    print "argvs is : %s" % argvs
+    readargvs = confo.readmanyconf(conffilename, 'public', argvs)
+    masterip = readargvs[0]
+    oossip = readargvs[1]
+    num = readargvs[2]
+    print 'masterip is %s,oossip is %s,num is %s' % (
+    masterip, oossip,num)
+    argvs2 = [acountnamea,accountemail,bucketname,objectnamea,objectpatha,accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota,dsnodeid]
+    readargvs2 = confo.readmanyconf(conffilename, 'killooss', argvs2)
+    acountnamea=readargvs2[0]
+    accountemail=readargvs2[1]
+    bucketname=readargvs2[2]
+    objectnamea=readargvs2[3]
+    objectpatha=readargvs2[4]
+    accountname = readargvs2[5]
+    createBucketname = readargvs2[6]
+    putObjectname = readargvs2[7]
+    objectpath = readargvs2[8]
+    downobjectpath = readargvs2[9]
+    splitobjectname = readargvs2[10]
+    splitobjectpathdir = readargvs2[11]
+    splitfilename = readargvs2[12]
+    numofsplit = readargvs2[13]
+    cancleupobjectname = readargvs2[14]
+    quota = readargvs2[15]
+    dsnodeid=readargvs2[16]
+    print 'dsnodeid,acountnamea,accountemail,bucketname,objectnamea,objectpatha,accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota is '
+    print dsnodeid,acountnamea,accountemail,bucketname,objectnamea,objectpatha,accountname, createBucketname, putObjectname, objectnamea,objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota
+    num = int(num)
+    for i in range(num):
+        print '这是第 %d 次进行杀进程' %i
+        faulto = _fault_all_lyz.fault()
+        statusrecoveryo = _fault_all_lyz.statusrecovery()
+        #步骤1：创建一个账号，给这个账号创建一个证书，给他创建一个桶
+        acountnamea=acountnamea+str(i)
+        accountemail=accountemail+str(i)
+        bucketname=bucketname+str(i)
+        certificateid=_stability_for_killprocess.stabilityForKillProcess(masterip,oossip,acountnamea,accountemail,bucketname)
+        #步骤2：put对象，同时去kill进程
+        faulto=_fault_all_lyz.fault()
+        threads=[]
+        t1=threading.Thread(target=common.add_objectnocheck,args=(oossip, bucketname, objectnamea,objectpatha, certificateid))
+        t2=threading.Thread(target=faulto.killprocess,args=(oossip,'oOss'))
+        threads.append(t1)
+        threads.append(t2)
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        #步骤3：等待oOss进程起来
+        statusrecoveryo.ifprocessStart(oossip, 'oOss')
+        #步骤4：等待oOss进程ok
+        statusrecoveryo.waiteoossServiceok(masterip, dsnodeid)
+        #步骤5：等待连接数据库成功
+        sqlo = _fault_all_lyz.sql()
+        sqlo.waitsqllink(oossip, masterip)
+        #重新执行put命令
+        _stability1lib_lyz.allOPerations(masterip,accountname, oossip, createBucketname, putObjectname, objectpath,
+                                         downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit,
+                                         cancleupobjectname, quota)
+        #删除最初建立的那个account
+        objectscreateBuckets = common.getAllObjectOfBucket(oossip, bucketname, certificateid)
+        for obj in objectscreateBuckets:
+            common.deleteObject(oossip, bucketname, obj, certificateid)
+        print '删除桶%s中的所有对象成功' %bucketname
+        common.delete_bucket(oossip, bucketname, certificateid)
+        print '***************删除桶%s成功***********' %bucketname
+
+if __name__=="__main__":
+    killoOmsAndS3('num', 'faultconf_lyz.conf', 'masterip', 'oossip','dsnodeid', 'acountnamea', 'accountemail', 'bucketname', 'objectnamea', 'objectpatha', 'accountname','createBucketname', 'putObjectname', 'objectpath', 'downobjectpath', 'splitobjectname','splitobjectpathdir', 'splitfilename', 'numofsplit', 'cancleupobjectname', 'quota')

@@ -1,0 +1,3 @@
+select disk 1
+online disk
+rescan

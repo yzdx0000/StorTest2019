@@ -1,0 +1,71 @@
+#!usr/bin/env python  
+# -*- coding:utf-8 -*-
+""" 
+:author: Liu he
+:Description:
+@file: 5-01-01-04.py
+@time: 2018/11/05
+测试项：
+1、在params.conf中配置预读设置为自动；
+2、将osan重新初始化
+3、主机端下发顺序读业务
+预期：
+1、步骤1，命令设置成功
+2、步骤2，业务正常完成
+"""
+
+import os
+import time
+import json
+import utils_path
+import Lun_managerTest
+import common
+import common2
+import commands
+import breakdown
+import log
+import env_cache
+import env_manage
+import prepare_x1000
+
+'''初始化'''
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+env_manage.rel_check_before_run(file_name, jnl_rep=3, free_jnl_num=0, node_num=3)
+
+'''定义节点IP'''
+node_ip1 = env_cache.deploy_ips[0]
+
+
+def change_conf():
+    log.info("备份配置文件")
+    log.info("sed 修改配置文件参数")
+    log.info("重启（kill） oSan 进程")
+
+
+def restore_conf():
+    log.info("sed 修改还原配置文件参数")
+    log.info("重启（kill） oSan 进程")
+
+
+def case():
+    log.info("step:1.创建逻辑卷,创建lun map")
+    lun_id = env_manage.create_lun()
+    env_manage.create_lun_map()
+    log.info("step:2.主机iscsi映射")
+    env_manage.create_iscsi_login()
+    log.info("step:3.设置lun预读为自动")
+    env_cache.set_cache(id=lun_id, mode=1, size=0, s_ip=node_ip1, stype="dpc_lun_ra")
+    log.info("step:4.主机端下发顺序读业务")
+    env_cache.run_vdb()
+
+
+def main():
+    env_manage.clean_test_env()
+    case()
+    log.info("The case finished!!!")
+
+
+if __name__ == '__main__':
+    main()

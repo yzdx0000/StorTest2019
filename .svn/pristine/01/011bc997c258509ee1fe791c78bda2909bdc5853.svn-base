@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="s3-sample" description="sample benchmark for s3">
+ 
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW0JV17HZ33OMUC6CJ2EL1TO9IPQEEFKML2C21IZG6LI3G7VP7;secretkey=e5fc0846ec5185f07b00f97fbf360a6640c94e72;endpoint=http://20.10.10.16:20480;path_style_access=true;timeout=300000;" />
+ 
+  <workflow>
+ 
+    <workstage name="init">
+      <work type="init" workers="64" config="cprefix=zhbug728_xml;containers=r(1,64)" />
+    </workstage>
+ 
+    <workstage name="prepare">
+      <work type="prepare" workers="64" config="cprefix=zhbug728_xml;containers=r(1,64);objects=r(1,256);sizes=c(64)KB" />
+    </workstage>
+ 
+    <workstage name="main">
+      <work name="main1" workers="64" runtime="7200">
+        <operation type="write" ratio="70" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(1,32);sizes=c(64)KB" />
+        <operation type="read" ratio="30" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(33,64);sizes=c(64)KB" />
+        </work>
+      <work name="main2" workers="64" runtime="7200">
+        <operation type="write" ratio="70" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(65,96);sizes=c(64)KB" />
+        <operation type="read" ratio="30" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(97,128);sizes=c(64)KB" />
+        </work>
+      <work name="main3" workers="64" runtime="7200">
+        <operation type="write" ratio="70" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(129,160);sizes=c(64)KB" />
+        <operation type="read" ratio="30" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(161,192);sizes=c(64)KB" />
+        </work>
+      <work name="main4" workers="64" runtime="7200">
+        <operation type="write" ratio="70" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(193,224);sizes=c(64)KB" />
+        <operation type="read" ratio="30" config="cprefix=zhbug728_xml;containers=u(1,64);objects=u(225,256);sizes=c(64)KB" />
+      </work>
+    </workstage>
+ 
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zhbug728_xml;containers=r(1,64);objects=r(1,256)" />
+    </workstage>
+ 
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zhbug728_xml;containers=r(1,64)" />
+    </workstage>
+ 
+  </workflow>
+ 
+</workload>

@@ -1,0 +1,185 @@
+# -*-coding:utf-8 -*
+import os
+import time
+
+import utils_path
+import common
+import snap_common
+import log
+import shell
+import get_config
+import prepare_clean
+import random
+import nas_common
+import json
+"""
+Author:liangxy
+date 2018-08-30
+@summary：
+     缺陷自动化--kill oRole进程后disable nas（预期成功）
+@steps:
+    1、创建访问区
+    2、enable nas
+    3、kill oRole进程，disable nas
+    4、检查nas服务状态是否关闭
+    5、输出结果，清理环境
+@changelog：
+    todo enable nas 超时bug
+    最后修改时间：
+    修改内容：
+"""
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+MAX_WAIT_TIME = 1801
+# oRole等待时间，3分钟——wuchaofeng
+OROLE_MAX_WAIT = 180
+
+
+def nas_state_change(case_ip, az_id, flag=False):
+    """
+    author：LiangXiaoyu
+    function:改变访问区中的nas，根据参数开启或关闭nas
+    :param case_ip:(str)访问区所在节点ip；
+    :param az_id:(int)访问区id
+    :param flag:(bool)开启（True）或关闭（False）nas
+    :return:
+    @changelog：
+    """
+    class_action = "disable"
+    if flag is True:
+        class_action = "enable"
+    log.info("change nas status,flag:%s---%s" % (flag, class_action))
+
+    time_start = time.time()
+    if flag is True:
+        msg_nas = nas_common.enable_nas(az_id)
+    else:
+        msg_nas = nas_common.disable_nas(az_id)
+    time_end = time.time()
+
+    if time_end - time_start > MAX_WAIT_TIME:
+        raise Exception("wait nas command:%d s" % (time_end - time_start))
+    log.info("wait nas command:%d s" % (time_end - time_start))
+    action_nas_rst = msg_nas["detail_err_msg"]
+    judge_info = "%s nas action :%s" % (class_action, action_nas_rst)
+    common.judge_rc(msg_nas["err_no"], 0, judge_info)
+    time_count = 0
+    while True:
+
+        msg_get_az = nas_common.get_access_zones(az_id)
+        nas_status_active = msg_get_az["result"]["access_zones"][0]["nas_service_enabled"]
+        cmp_nas_status_active = cmp(flag, nas_status_active)
+
+        log.info("wait for %d s(flag:%s,status:%s)" % (time_count, flag, nas_status_active))
+        if 0 != int(cmp_nas_status_active):
+            if MAX_WAIT_TIME < time_count:
+                raise Exception("wait for nas %s active too long:%d s" %
+                                (class_action, time_count))
+            log.info("%s  nas not active yet,waiting:%d" % (class_action, time_count))
+            time.sleep(30)
+            time_count += 30
+            log.info("%d s" % time_count)
+        else:
+            log.info("changed to %s,used %d s" % (class_action, time_count))
+            break
+    return
+
+
+def get_pid_and_time(case_ip):
+    '''
+    Author:LiangXiaoyu
+    date:2018-08-20
+    description：在指定ip上获取oRole的pid和oRole进程开始时间
+    :param case_ip:(str)执行命令的ip
+    :return: oRole的pid
+    '''
+    time_start = time.time()
+    std_p = "123456"
+    while True:
+
+        cmd_pidof = "pidof oRole"
+        (rc_p, std_p) = common.run_command(case_ip, cmd_pidof)
+        get_pid_info = "pidof with rc:%s, result:%s" % (rc_p, std_p)
+        if time.time() - time_start > OROLE_MAX_WAIT:
+            log.info("wait for getting oRole too long:%d" % (time.time() - time_start))
+            common.judge_rc(rc_p, 0, get_pid_info)
+        if rc_p == 0:
+            log.info(get_pid_info)
+            log.info("wait for getting oRole using:%d" % (time.time() - time_start))
+            break
+    # cmd_lstart = "ps -o lstart %s | awk '{ print $4 }' | sed 1d" % std_p
+    common.judge_rc_unequal(int(std_p), 123456, "oRole pid get failed:" + std_p)
+
+    return std_p
+
+
+def case():
+    log.info("case begin")
+    ob_node = common.Node()
+    case_node_id = random.choice(ob_node.get_nodes_id())
+    case_ip = ob_node.get_node_ip_by_id(case_node_id)
+    change_nas_time = 1
+
+    log.info(">1 添加访问分区")
+    msg_add_az = nas_common.create_access_zone(case_node_id, FILE_NAME+"az")
+    az_id = msg_add_az["result"]
+    add_az_result = msg_add_az["detail_err_msg"]
+    # msg_get_az["result"]["access_zones"][0]["id"]
+    common.judge_rc(msg_add_az["err_no"], 0, ("add access_zone %s,info: %s" % (az_id, add_az_result)))
+
+    log.info(">2 确定nas状态,disable-enable nas {}次，保证以enable状态退出".format(change_nas_time))
+    for i in range(0, change_nas_time):
+        nas_state_change(case_ip, az_id, False)
+        nas_state_change(case_ip, az_id, True)
+    log.info(">3 查询oRole进程号，kill oRole，再次pidof拿到新的oRole进程号应不同")
+    std_pid_killing = get_pid_and_time(case_ip)
+    cmd_lstart = "ps -o lstart %s" % std_pid_killing
+    log.info("%s is right" % cmd_lstart)
+    (rc_start_time, std_start) = common.run_command(case_ip, cmd_lstart)
+    info_lstart = "get start time of the process with rc:%s,start:time:%s" % (rc_start_time, std_start)
+    common.judge_rc(rc_start_time, 0, info_lstart)
+    std_start_before_kill = std_start
+    log.info("std_pid_killing:%s,time:%s" % (std_pid_killing, std_start_before_kill))
+    cmd_kill = "kill -9 %s" % std_pid_killing
+    (rc_kill, std_kill) = common.run_command(case_ip, cmd_kill)
+    info_kill = "result of kill oRole on node_%s:%s" % (case_node_id, rc_kill)
+    common.judge_rc(rc_kill, 0, info_kill)
+
+    std_pid_killed = get_pid_and_time(case_ip)
+    restart_info = "first pid is {},pid after kill is {}".format(std_pid_killing, std_pid_killed)
+    log.info(restart_info)
+    time_s = time.time()
+    std_start_after_kill = std_start_before_kill + "qq"
+    while std_pid_killing == std_pid_killed:
+        (std_pid_killed, ) = get_pid_and_time(case_ip)
+        cmd_lstart = "ps -o lstart %s" % std_pid_killed
+        log.info("%s is right" % cmd_lstart)
+        (rc_start_time, std_start_after_kill) = common.run_command(case_ip, cmd_lstart)
+
+        if time.time() - time_s > OROLE_MAX_WAIT:
+            restart_info = "first pid is {},pid after kill is {},wait time:{}".format(std_pid_killing, std_pid_killed, time.time() - time_s)
+            common.judge_rc_unequal(int(std_pid_killed), int(std_pid_killing), restart_info)
+    log.info(">4 disable nas")
+    nas_state_change(case_ip, az_id, False)
+    pid_null_flag = 0
+    if std_pid_killed == "":
+        pid_null_flag = -1
+    if std_pid_killing == "":
+        pid_null_flag = -2
+    if std_start_after_kill == std_start_before_kill:
+        pid_null_flag = -3
+    log.info(">5 输出测试结果，清理环境")
+    pid_info = "oRole pid reslut:{}(-1 cannot get pid after kill,-2 before kill,-3 the same pid)".format(pid_null_flag)
+    common.judge_rc(pid_null_flag, 0, pid_info)
+    log.info("case succeed")
+    return
+
+
+def main():
+    prepare_clean.nas_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.nas_test_clean()
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

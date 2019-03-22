@@ -1,0 +1,25 @@
+# -*- coding:utf-8 -*-            #可以加中文注释
+#**********************************************#
+#标题：批量删除桶里的所有对象，
+#使用方法：用户自己输入指定DS的ip、桶名、证书id；桶内对象是通过调用别的脚本生成的列表。
+
+#作者：张芳芳
+#创建时间：2017/11/1
+#更新时间：2017/11/1
+#**********************************************#
+import os
+import sys
+import commands
+from _get_all_objects import *    #调用脚本_get_all_objects.py
+
+object_list = get_file_lst()      #将桶内对象整合成一个列表
+print object_list
+n = len (object_list)
+print n
+
+for object in object_list:                       
+	d="curl -i http://10.2.20.103:20480/zff1/%s -X DELETE -H \"Authorization: AWS4-HMAC-SHA256 Credential=000020ZYIVOIY1V000001XAX95EMVSIE\"" %(object)  #将桶内对象按照整合成列表进行逐个删除
+	rc, sout = commands.getstatusoutput(d)    #使用commands模块执行Linux shell命令	
+	print sout
+
+

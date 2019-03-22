@@ -1,0 +1,23 @@
+# -*- coding:utf-8 -*-            #可以加中文注释
+#**********************************************#
+#标题：批量创建桶模块
+#使用方法：用户自己输入指定ip、证书id，桶名字是按照程序里起的，当然也可以自己更改。
+#作者：张芳芳
+#创建时间：2017/10/28
+#更新时间：2017/10/28
+#**********************************************#
+import os
+import sys
+import commands
+bucketname_lst = []                                    #定义桶名字的列表
+for i in range(1,101):                              #定义桶列表元素循环，主要是桶名字的后缀
+	a='zff'                                     #桶名字的前缀
+	bucketname_lst.append(a+str(i))             #将字符和数字组合成桶名
+print bucketname_lst
+for bucketname in bucketname_lst:                       #获取桶名的列表元素
+	print bucketname
+	d="curl -i http://10.2.20.103:20480/%s -X PUT -H 'Authorization: AWS4-HMAC-SHA256 Credential=000020ZYD986F14I00001YJ9KZ17ER4E'" %(bucketname)  #列举指定账户id的证书
+	rc, stdout = commands.getstatusoutput(d)    #使用commands模块执行Linux shell命令	
+	print stdout
+
+

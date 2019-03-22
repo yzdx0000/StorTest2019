@@ -1,0 +1,121 @@
+# -*- coding:utf-8 8-*
+#################################################
+#该脚本用来不停的给主宕机，然后每次宕机后，等待从的oOms进程起来后执行s3操作，等主上电且oOms起来后执行s3的操作，反复10次
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+import deleteAllAccount_lyz
+import conf_lyz
+#参数说明：num:故障执行多少次；masterip：主的ip；slaveip：从的ip；pathOfScript:要执行的脚本在从上的路径; stabilityScript:要执行的s3的稳定性脚本名称,然后是_stability1lib_lyz这个脚本需要的参数
+def mgrfaultAndS3(num,conffilename,masterip,masteripmiip,slaveip,slaveipmiip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    confo=conf_lyz.confrelate()
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo=_fault_all_lyz.statusrecovery()
+    sqlo = _fault_all_lyz.sql()
+    #前期准备：从配置文件中读取参数
+    #print 'masterip is :' %masterip
+    argvs=[masterip,masteripmiip,slaveip,slaveipmiip,oossip,num]
+    print "argvs is : %s"%argvs
+    readargvs=confo.readmanyconf(conffilename,'public',argvs)
+    masterip=readargvs[0]
+    masteripmiip=readargvs[1]
+    slaveip=readargvs[2]
+    slaveipmiip=readargvs[3]
+    oossip=readargvs[4]
+    num = readargvs[5]
+    print 'masterip is %s,masteripmiip is %s,slaveip is %s,slaveipmiip is %s,oossip is %s' %(masterip,masteripmiip,slaveip,slaveipmiip,oossip)
+    argvs2=[accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota]
+    readargvs2 = confo.readmanyconf(conffilename, 's3', argvs2)
+    accountname=readargvs2[0]
+    createBucketname=readargvs2[1]
+    putObjectname=readargvs2[2]
+    objectpath=readargvs2[3]
+    downobjectpath=readargvs2[4]
+    splitobjectname=readargvs2[5]
+    splitobjectpathdir=readargvs2[6]
+    splitfilename=readargvs2[7]
+    numofsplit=readargvs2[8]
+    cancleupobjectname=readargvs2[9]
+    quota=readargvs2[10]
+    print 'accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota is '
+    print accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota
+
+
+
+    num=int(num)
+    for i in range(num):
+        print 'masteripmiip is %s' %masteripmiip
+        #步骤1：给主mgr宕机
+        faulto.poweroff(masteripmiip)
+        print 'time of poweoff is %s' %(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print 'time of poweoff is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        print '****************************主宕机第%s次成功，等待1分钟********************************************************' %(i)
+
+        time.sleep(60)
+        #步骤2：等待从接管
+        statusrecoveryo.iftakeover(slaveip)
+        print '**********************************************************************************************************'
+        print '**********************************************************************************************************'
+        print '**********************************************************************************************************'
+        print 'time of slave take over is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        #步骤3：等待从的oOms进程起来
+        statusrecoveryo.ifprocessStart(slaveip,'oOms')
+        statusrecoveryo.ifProcessServiceOk_lyz1(slaveip,'oOms','10.2.40.16')
+        print '**********************************************************************************************************'
+        print '**********************************************************************************************************'
+        print '**********************************************************************************************************'
+        print 'time of slave oOms ok is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        #time.sleep(65)
+        #print 'time after oOms ok 65s is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+
+        #等待从的数据库链接到从ok
+        iflink=sqlo.waitsqllink(oossip,slaveip)
+        #time.sleep(120)
+        #iflink=sqlo.ifsqllink(oossip, slaveip)
+        print 'time of link to sql is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        print '**********************************************************************************************************'
+        print '**********************************************************************************************************'
+        print '**********************************************************************************************************'
+        print 'sqllink status is %s' %iflink
+        #步骤4：执行s3的指令集
+        re=_stability1lib_lyz.allOPerations(slaveip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota)
+        #deleteAllAccount_lyz.deleteAllAccount(slaveip,oossip)
+        if re==-1:
+            return -1
+        #步骤5：将主重新上电
+        faulto.poweron(masteripmiip)
+        print ''
+        print ''
+        print '****************************主开机成功，等待十分钟***************************************************8'
+        time.sleep(600)
+        #步骤6：等待主开机
+        statusrecoveryo.ifpoweron(masterip)
+
+        #步骤7：等待主接管：
+        statusrecoveryo.iftakeover(masterip)
+
+        #步骤8：等待主的oOms起来
+        statusrecoveryo.ifprocessStart(masterip,'oOms')
+        statusrecoveryo.ifProcessServiceOk_lyz1(masterip, 'oOms', '10.2.40.16')
+        print 'time of oOms ok is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        #time.sleep(65)
+        #print 'time after oOms ok 65s is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+
+
+        #再次执行s3的指令集
+        re=_stability1lib_lyz.allOPerations(masterip, accountname,oossip, createBucketname, putObjectname,objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename,numofsplit, cancleupobjectname, quota)
+        #deleteAllAccount_lyz.deleteAllAccount(masterip, oossip)
+        if re==-1:
+            return -1
+        time.sleep(300)
+if __name__=="__main__":
+    #mgrfaultAndS3(masterip, slaveip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname,quota)
+    #mgrfaultAndS3(2,'100.100.100.16','10.2.40.66','100.100.100.17','10.2.40.67','s1123b','100.100.100.18','bucket1123b','object1123b','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit1103o','/opt/s3uploadfile','test',2,'objectsplitcancle03o',1024)
+    mgrfaultAndS3('num','faultconf_lyz.conf','masterip','masteripmiip','slaveip','slaveipmiip','accountname','oossip','createBucketname','putObjectname','objectpath','downobjectpath','splitobjectname','splitobjectpathdir','splitfilename','numofsplit','cancleupobjectname','quota')

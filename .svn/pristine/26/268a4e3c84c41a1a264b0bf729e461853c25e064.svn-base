@@ -1,0 +1,1759 @@
+#!/usr/bin/python
+# -*- encoding=utf8 -*-
+
+#######################################################
+# 脚本作者：李一
+# 脚本说明：SNMP公共函数
+#######################################################
+import os
+import log
+import get_config
+import common
+import xml.dom.minidom
+
+# /home/StorTest/conf/snmp_property_code.xml
+snmp_common_config_path = os.path.join(get_config.config_path, "snmp_property_code.xml")
+# 获取xml的dom对象
+dom = xml.dom.minidom.parse(snmp_common_config_path)
+normal_byte_scope = 50000000       # 执行时间不同给定50M的范围误差
+normal_percent_scope = 1           # 允许1%的动态误差
+normal_percent_scope_point = 0.01  # 有些直接换算
+
+
+def get_snmp_version():
+    """
+    author:liyi
+    date:2018.8.24
+    description:返回snmp版本号
+    :return:
+    """
+    rc, stdout = common.get_snmp()
+    common.judge_rc(rc, 0, "get_snmp failed", exit_flag=False)
+    snmp_info = common.json_loads(stdout)
+    snmp_version = snmp_info["result"]["snmp_version"]
+    if "v2" == snmp_version:
+        return "2c"
+    if "v1" == snmp_version:
+        return 1
+    if "v3" == snmp_version:
+        return 3
+
+
+def get_oid_by_tagname(tagname):
+    """
+    author:liyi
+    date:2018.8.24
+    description:根据标签名获取对应的oid
+    :param tagname: 标签名称
+    :return;
+    """
+    oid = dom.getElementsByTagName(tagname)[0].firstChild.nodeValue
+    return oid
+
+
+def get_sub_oid(oid):
+    """
+    author:liyi
+    date:2018.8.24
+    description:返回oid的子串
+    :param oid: 完整的oid码
+    :return:
+    """
+    sub_oid = oid[12:]
+    return sub_oid
+
+
+def run_snmpwalk_command(tagname):
+    """
+    author:liyi
+    date:2018.8.24
+    description: 返回命令执行结果
+    :param tagname: 标签名
+    :return:
+    """
+    log.info("run snmpwalk command")
+    snmp_version = get_snmp_version()
+    ojmgs_master_ip = get_ojmgs_master_ip()
+    oid = get_oid_by_tagname(tagname)
+    cmd = "snmpwalk -v %s -c public %s %s" % (snmp_version, ojmgs_master_ip, oid)
+    rc, stdout = common.pscli_run_command(cmd)
+    common.judge_rc(rc, 0, "run snmpwalk failed!!", exit_flag=False)
+    return stdout
+
+
+def run_snmpwalk_command_to_one_node(tagname, node_ip):
+    """
+    author:liyi
+    date:2018.8.27
+    description: 对集群中某个节点运行snmpwalk命令,返回执行结果
+    :param tagname: 标签名
+    :param node_ip: 集群中任一一个ip
+    :return:
+    """
+    log.info("run snmpwalk command")
+    snmp_version = get_snmp_version()
+    ojmgs_master_ip = get_ojmgs_master_ip()
+    oid = get_oid_by_tagname(tagname)
+    cmd = "snmpwalk -v %s -c public %s %s" % (snmp_version, ojmgs_master_ip, oid+"."+node_ip)
+    rc, stdout = common.pscli_run_command(cmd)
+    common.judge_rc(rc, 0, "run_snmpwalk failed!!", exit_flag=False)
+    return stdout
+
+
+def get_ojmgs_master_ip():
+    """
+    author:duyuli
+    date:  2018.8.21
+    description:获取ojmgs主ip
+    :return:
+    """
+    rc, stdout = common.get_master()
+    common.judge_rc(rc, 0, "get oJmgs master ip failed!!!")
+    master = common.json_loads(stdout)
+    data_ips = master["result"]["data_ips"]
+    master_ip = data_ips[0]["ip_address"]
+    if master_ip == "":
+        common.except_exit("get oJmgs master ip failed!!!")
+    else:
+        return master_ip
+
+
+def get_node_property_info_list(tagname):
+    """
+    :author:liyi
+    :date:2018.8.27
+    :description: 返回节点信息列表
+    :param tagname: 标签名
+    :return:
+    """
+    stdout = run_snmpwalk_command(tagname)
+    oid = get_oid_by_tagname(tagname)
+    sub_oid = get_sub_oid(oid)
+    node_property_list = stdout.split('\n')
+
+    node_property_info_list = []
+    for node_property in node_property_list:
+        if -1 != node_property.find(sub_oid):
+            node_property_info_list.append(node_property.split('"')[1])
+    return node_property_info_list
+
+
+def get_one_node_property_info_list(tagname, node_ip):
+    """
+    :author:liyi
+    :date:2018.8.28
+    :description: 返回某个节点信息列表
+    :param tagname: 标签名
+    :param node_ip: 某个节点ip
+    :return:
+    """
+    stdout = run_snmpwalk_command_to_one_node(tagname, node_ip)
+    oid = get_oid_by_tagname(tagname)
+    sub_oid = get_sub_oid(oid)
+    node_property_list = stdout.split('\n')
+
+    node_property_info_list = []
+    for node_property in node_property_list:
+        if -1 != node_property.find(sub_oid):
+            node_property_info_list.append(node_property.split('"')[1])
+    return node_property_info_list
+
+
+def handle_node_property_info_list(tagname):
+    """
+    author:liyi
+    date:2018.8.28
+    description: 处理节点信息列表
+    :param tagname: 标签名
+    :return:
+    """
+    node_property_info_list = get_node_property_info_list(tagname)
+    node_property_list = []
+    for node_property in node_property_info_list:
+        node_property_list.append(node_property.split(":")[1:][0])
+    return node_property_list
+
+
+def handle_one_node_property_info_list(tagname, node_ip):
+    """
+    author:liyi
+    date:2018.8.28
+    description: 处理节点信息列表
+    :param tagname: 标签名
+    :return:
+    """
+    node_property_info_list = get_one_node_property_info_list(tagname, node_ip)
+    node_property_list = []
+    for node_property in node_property_info_list:
+        node_property_list.append(node_property.split(":")[1:][0])
+    return node_property_list
+
+
+def handle_net_interface_info_list(tagname):
+    """
+    author:liyi
+    date:2018.8.28
+    description: 处理网络接口信息列表
+    :param tagname: 标签名
+    :return:
+    """
+    node_net_interface_info_list = get_node_property_info_list(tagname)
+    net_interface_list = node_net_interface_info_list[0].split(";")
+    net_interface_num = len(net_interface_list)-1  # 网卡个数
+
+    net_interface_list = []
+    for net_interface in node_net_interface_info_list:
+        for i in range(net_interface_num):
+            net_interface_list.append(net_interface.split(";")[i])
+    return net_interface_list
+
+
+def handle_net_interface_info_list_to_one_node(tagname, node_ip):
+    """
+    author:liyi
+    date:2018.8.28
+    description: 处理某个节点网络接口信息列表
+    :param tagname: 标签名
+    :param node_ip: 集群中任一一个节点ip
+    :return:
+    """
+    node_net_interface_info_list = get_one_node_property_info_list(tagname, node_ip)
+    net_interface_list = node_net_interface_info_list[0].split(";")
+    net_interface_num = len(net_interface_list)-1  # 网卡个数
+
+    net_interface_list = []
+    for net_interface in node_net_interface_info_list:
+        for i in range(net_interface_num):
+            net_interface_list.append(net_interface.split(";")[i])
+    return net_interface_list
+
+
+def get_one_node_service_opara_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点opara服务状态
+    :return:
+    """
+    one_node_service_opara_status = get_one_node_property_info_list("nodeServiceOparaStatus", node_ip)
+    return one_node_service_opara_status
+
+
+def get_one_node_service_ostor_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点opara服务状态
+    :return:
+    """
+    one_node_service_ostor_status = get_one_node_property_info_list("nodeServiceOstorStatus", node_ip)
+    return one_node_service_ostor_status
+
+
+def get_one_node_service_oapp_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点opara服务状态
+    :return:
+    """
+    one_node_service_oapp_status = get_one_node_property_info_list("nodeServiceOappStatus", node_ip)
+    return one_node_service_oapp_status
+
+
+def get_one_node_service_ojob_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点opara服务状态
+    :return:
+    """
+    one_node_service_ojob_status = get_one_node_property_info_list("nodeServiceOjobStatus", node_ip)
+    return one_node_service_ojob_status
+
+
+def get_one_node_service_ojmgs_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点opara服务状态
+    :return:
+    """
+    one_node_service_ojmgs_status = get_one_node_property_info_list("nodeServiceOjmgsStatus", node_ip)
+    return one_node_service_ojmgs_status
+
+
+def get_one_node_service_ocnas_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点opara服务状态
+    :return:
+    """
+    one_node_service_ocnas_status = get_one_node_property_info_list("nodeServiceOcnasStatus", node_ip)
+    return one_node_service_ocnas_status
+
+
+def get_one_node_service_nfs_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:获取某个节点的nfs服务状态（snmp协议获取）
+    :return:
+    """
+    one_node_service_nfs_status = get_one_node_property_info_list("nodeNFS", node_ip)
+    return one_node_service_nfs_status
+
+
+def get_one_node_service_smb_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:获取某个节点的smb服务状态（snmp协议获取）
+    :return:
+    """
+    one_node_service_smb_status = get_one_node_property_info_list("nodeSMB", node_ip)
+    return one_node_service_smb_status
+
+
+def get_one_node_service_ftp_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:获取某个节点的ftp服务状态（snmp协议获取）
+    :return:
+    """
+    one_node_service_ftp_status = get_one_node_property_info_list("nodeFTP", node_ip)
+    return one_node_service_ftp_status
+
+
+def get_one_node_service_ctdb_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:获取某个节点的ctdb服务状态（snmp协议获取）
+    :return:
+    """
+    one_node_service_ctdb_status = get_one_node_property_info_list("nodeCTDB", node_ip)
+    return one_node_service_ctdb_status
+
+
+def get_one_node_service_local_auth_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:获取某个节点的local_auth服务状态（snmp协议获取）
+    :return:
+    """
+    one_node_service_local_auth_status = get_one_node_property_info_list("nodeLocalAuth", node_ip)
+    return one_node_service_local_auth_status
+
+
+def get_node_current_status_list():
+    """
+    :author:liyi
+    :date:2018.8.28
+    :description: 返回节点当前状态列表
+    :return:
+    """
+    current_status_list = get_node_property_info_list("currentNodeStatus")
+    return current_status_list
+
+
+def get_node_power_status_list():
+    """
+    :author:liyi
+    :date:2018.8.30
+    :description: 返回节点电源状态列表
+    :return:
+    """
+    node_power_status_list = get_node_property_info_list("nodePowerStatus")
+    return node_power_status_list
+
+
+def get_node_power_temperature_status_list():
+    """
+    :author:liyi
+    :date:2018.8.30
+    :description: 返回节点电源温度状态列表
+    :return:
+    """
+    node_power_temperature_status_list = get_node_property_info_list("nodePowerTemperature")
+    return node_power_temperature_status_list
+
+
+def get_node_fan_status_list():
+    """
+     :author:liyi
+     :date:2018.8.30
+     :description: 返回电扇状态列表
+     :return:
+     """
+    node_fan_status_list = get_node_property_info_list("nodeFanStatus")
+    return node_fan_status_list
+
+
+def get_node_disk_controller_status_list():
+    """
+     :author:duyuli
+     :date:2018.8.31
+     :description: 返回磁盘控制器状态列表
+     :return:
+     """
+    disk_controller_status_list = get_node_property_info_list("nodeDiskControllerStatus")
+    return disk_controller_status_list
+
+
+def get_node_cpu_status_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回节点cpu状态列表
+    :return:
+    """
+    node_cpu_status_list = handle_node_property_info_list("nodeCpuStatus")
+    return node_cpu_status_list
+
+
+def get_node_cpu_temperature_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回节点cpu温度列表
+    :return:
+    """
+    node_cpu_temperature_list = handle_node_property_info_list("nodeCpuTemperature")
+    return node_cpu_temperature_list
+
+
+def get_node_memory_status_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回节点内存状态列表
+    :return:
+    """
+    node_memory_status_list = handle_node_property_info_list("nodeMemoryStatus")
+    return node_memory_status_list
+
+
+def get_node_memory_temperature_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回节点内存温度列表
+    :return:
+    """
+    node_memory_temperature_list = handle_node_property_info_list("nodeMemoryTemperature")
+    return node_memory_temperature_list
+
+
+def get_node_net_interface_status_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回网络接口状态列表
+    :return:
+    """
+    node_net_interface_status_list = handle_net_interface_info_list("nodeNetInterfaceStatus")
+    return node_net_interface_status_list
+
+
+def get_node_net_interface_receive_speed_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回网络接口接收速度列表
+    :return:
+    """
+    node_net_interface_receive_speed_list = handle_net_interface_info_list("nodeNetInterfaceReceiveSpeed")
+    return node_net_interface_receive_speed_list
+
+
+def get_node_net_interface_send_speed_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回网络接口发送速度列表
+    :return:
+    """
+    node_net_interface_send_speed_list = handle_net_interface_info_list("nodeNetInterfaceSendSpeed")
+    return node_net_interface_send_speed_list
+
+
+def get_node_net_interface_error_rate_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回网络接口误码率列表
+    :return:
+    """
+    node_net_interface_error_rate_list = handle_net_interface_info_list("nodeNetInterfaceErrorRate")
+    return node_net_interface_error_rate_list
+
+
+def get_node_net_interface_drop_rate_list():
+    """
+    author:liyi
+    date:2018.8.28
+    description:返回网络接口丢包率列表
+    :return:
+    """
+    node_net_interface_drop_rate_list = handle_net_interface_info_list("nodeNetInterfaceDropRate")
+    return node_net_interface_drop_rate_list
+
+
+def handle_stdout_for_more(stdout, *args):
+    """
+    author:duyuli
+    date:  2018.8.21
+    args:  需要获取的行数  e,g  5, 6, 7
+    description:通用输出处理函数，返回指定行数value值
+    :return:
+    """
+    line_num, i = 1, 0
+    nums = len(args)
+    values_list = []
+    if stdout == "":
+        common.except_exit("get snmp values failed")
+
+    for line in stdout.split("\n"):
+        if line_num == args[i]:
+            value_list = line.split('"')
+            store_mem = value_list[1]
+            if store_mem == "":
+                common.except_exit("get snmp values failed")
+            values_list.append(store_mem)
+            i += 1
+        line_num += 1
+        if i == nums:
+            break
+
+        if line_num > 30:     # 目前不会超过30行，防止死循环
+            common.except_exit("get value failed")
+    return values_list
+
+
+def handle_stdout_for_property_num(stdout, **kwargs):
+    """
+    author:duyuli
+    date:  2018.8.21
+    args:  需要获取属性编号  e,g  property_num=.1.8.7.1.1
+    description:通用输出处理函数，返回指定行数value值
+    :return:
+    """
+    value_list = []
+    if stdout == "":
+        common.except_exit("get snmp values failed")
+
+    for line in stdout.split("\n"):
+        if line.find(kwargs["property_num"]) != -1:
+            line_value_list = line.split('"')
+            value_list.append(line_value_list[1])
+
+    if value_list == "":
+        common.except_exit("get snmp values failed")
+    return value_list
+
+
+def handle_stdout_for_one(stdout):
+    """
+    author:duyuli
+    date:  2018.8.21
+    description:输出通用处理函数
+    :return:
+    """
+    if stdout == "":
+        common.except_exit("get snmp values failed")
+
+    values = stdout.split('"')
+    if values == "":
+        common.except_exit("value is null")
+    return values[1]
+
+
+def handle_stdin_command(stdin):
+    """
+    author:duyuli
+    date:  2018.8.22
+    stdin: eg  27500.1.8.7
+    description:获取磁盘备用块数
+    :return:
+    """
+    master_ip = get_ojmgs_master_ip()
+    version = get_snmp_version()
+    cmd = "snmpwalk -v %s -c public %s .1.3.6.1.4.1.%s" % (version, master_ip, stdin)
+    rc, stdout = common.pscli_run_command(cmd)
+    common.judge_rc(rc, 0, "get snmp values failed!!!")
+
+    return stdout
+
+
+def handle_command_stdin_code(code):
+    """
+    author:duyuli
+    date:  2018.8.22
+    code: eg  .1.3.6.1.4.1.27500.1.8.7.1.12
+    description:通用snmp码处理函数
+    :return:
+    """
+    master_ip = get_ojmgs_master_ip()
+    version = get_snmp_version()
+    cmd = "snmpwalk -v %s -c public %s %s" % (version,  master_ip, code)
+    rc, stdout = common.pscli_run_command(cmd)
+    if stdout.find("No Response from") != -1:
+        log.info("please turn on snmp")
+        common.except_exit("snmp turn off")
+    common.judge_rc(rc, 0, "get snmp values failed!!!")
+
+    return stdout
+
+
+# 读取xml并执行pscli命令后，统一处理函数
+def handle_stdout_for_property_code(stdout):
+    """
+    author:duyuli
+    date:  2018.8.23
+    description:通用输出处理函数，返回指定属性码value值
+    :return:
+    """
+    value_list = []
+    if stdout == "":
+        common.except_exit("get snmp values failed")
+
+    for value in stdout.split("enterprises.27500"):
+        if value.find('"') != -1:                # 针对值为string类型
+            split_value_list = value.split('"')
+            value_list.append(split_value_list[1])
+        elif value.find('=') != -1:                     # 针对值为int类型
+            split_value_list = value.split('\n')[0].split(':')
+            value_list.append(split_value_list[1].strip())   # int类型前有一空格strip一下
+
+    return value_list
+
+
+def get_mem_usage():
+    """
+    author:duyuli
+    date:  2018.8.21
+    description:获取内存使用率
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("memUtilityRate")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    mem_usage_list = handle_stdout_for_property_code(stdout)
+    return mem_usage_list
+
+
+def get_system_service_status():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取系统信息
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("serviceStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    system_service_status_list = handle_stdout_for_property_code(stdout)
+    return system_service_status_list
+
+
+def get_system_info():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取系统信息
+    :return:
+    """
+    string = ""
+    disk_usage_rate_code = dom.getElementsByTagName("systemInfo")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    # 输出格式不一样，单独处理
+    for value in stdout.split("enterprises.27500"):
+        if value.find('{') != -1:                # 针对值为string类型
+            split_value_list = value.split('STRING: ')
+            string = split_value_list[1].strip().replace("\\", "")
+    return string
+
+
+def get_storage_pool_usage():
+    """
+    author:duyuli
+    date:  2018.8.21
+    description:获取存储池信息
+    :return:
+    """
+    storage_pool_usage_dic = {}
+    disk_usage_rate_code = dom.getElementsByTagName("storagePoolUsageRate")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    # ['shared_storage_pool: 1.00; storage_pool_1: 1.00; ']
+    storage_pool_usage_list = handle_stdout_for_property_code(stdout)
+    for storage_pool_usage in storage_pool_usage_list[0].split("; ")[:-1]:
+        name = storage_pool_usage.split(": ")[0]
+        value = storage_pool_usage.split(": ")[1]
+        storage_pool_usage_dic[name] = value
+    return storage_pool_usage_dic
+
+
+def get_system_data_abnormal():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取系统数据状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("systemDataStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    system_data_abnormal_list = handle_stdout_for_property_code(stdout)
+    return system_data_abnormal_list
+
+
+def get_node_total_capacity():
+    """
+    author:duyuli
+    date:  2018.8.30
+    description:获取所有节点磁盘总容量
+    :return:
+    """
+    node_total_capacity_code = dom.getElementsByTagName("totalCapacity")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(node_total_capacity_code)
+
+    node_total_capacity_code_list = handle_stdout_for_property_code(stdout)
+    return node_total_capacity_code_list
+
+
+def get_node_used_capacity():
+    """
+    author:duyuli
+    date:  2018.8.30
+    description:获取所有节点磁盘已使用容量
+    :return:
+    """
+    node_used_capacity_code = dom.getElementsByTagName("capacityOfUsed")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(node_used_capacity_code)
+
+    node_used_capacity_list = handle_stdout_for_property_code(stdout)
+    return node_used_capacity_list
+
+
+def get_node_unused_capacity():
+    """
+    author:duyuli
+    date:  2018.8.30
+    description:获取所有节点磁盘未使用容量
+    :return:
+    """
+    unused_capacity_code = dom.getElementsByTagName("capacityOfUnused")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(unused_capacity_code)
+
+    unused_capacity_list = handle_stdout_for_property_code(stdout)
+    return unused_capacity_list
+
+
+def get_node_available_capacity():
+    """
+    author:duyuli
+    date:  2018.8.30
+    description:获取所有节点磁盘可用容量
+    :return:
+    """
+    available_capacity_code = dom.getElementsByTagName("available")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(available_capacity_code)
+
+    available_capacity_list = handle_stdout_for_property_code(stdout)
+    return available_capacity_list
+
+
+def get_system_disk_status():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取系统盘状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeSystemDiskStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    system_disk_status_list = handle_stdout_for_property_code(stdout)
+    return system_disk_status_list
+
+
+def get_system_disk_usage():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取系统盘使用率
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeSystemDiskUsageRate")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    system_disk_usage_list = handle_stdout_for_property_code(stdout)
+    return system_disk_usage_list
+
+
+def get_disk_status():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_status_list = handle_stdout_for_property_code(stdout)
+    return disk_status_list
+
+
+def get_disk_smart_info():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘smart信息
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskSmartInfo")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_smart_info_list = handle_stdout_for_property_code(stdout)
+    return disk_smart_info_list
+
+
+def get_disk_bad_sector_number():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘坏道数
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskBadSectorCount")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_bad_sector_number_list = handle_stdout_for_property_code(stdout)
+    return disk_bad_sector_number_list
+
+
+def get_disk_standby_block_number():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘备用块数
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskStandbyBlockNumber")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_standby_block_number_list = handle_stdout_for_property_code(stdout)
+    return disk_standby_block_number_list
+
+
+def get_disk_temperature():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘温度
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskTemperature")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_temperature_list = handle_stdout_for_property_code(stdout)
+    return disk_temperature_list
+
+
+def get_ssd_abrasion():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘磨损程度
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskSSDAbrasion")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    ssd_abrasion_list = handle_stdout_for_property_code(stdout)
+    return ssd_abrasion_list
+
+
+def get_disk_smart_state():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘smart状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskSmartState")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_smart_state_list = handle_stdout_for_property_code(stdout)
+    return disk_smart_state_list
+
+
+def get_disk_size():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘size
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskSize")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_size_list = handle_stdout_for_property_code(stdout)
+    return disk_size_list
+
+
+def get_disk_rpm():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘转速
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskRpm")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_rpm_list = handle_stdout_for_property_code(stdout)
+    return disk_rpm_list
+
+
+def get_disk_vendor():
+    """
+    author:duyuli
+    date:  2018.8.22
+    description:获取磁盘厂商
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskVender")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_vendor_list = handle_stdout_for_property_code(stdout)
+    return disk_vendor_list
+
+
+def get_disk_usage_rate():
+    """
+    author:duyuli
+    date:  2018.8.23
+    description:获取磁盘使用率
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeDiskUsageRate")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    disk_usage_rate_list = handle_stdout_for_property_code(stdout)
+    return disk_usage_rate_list
+
+
+def get_node_service_opara_status():
+    """
+    author:duyuli
+    date:  2018.8.23
+    description:获取opara服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeServiceOparaStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_service_opara_status_list = handle_stdout_for_property_code(stdout)
+    return node_service_opara_status_list
+
+
+def get_node_service_ostor_status():
+    """
+    author:duyuli
+    date:  2018.8.23
+    description:获取ostor服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeServiceOstorStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_service_ostor_status_list = handle_stdout_for_property_code(stdout)
+    return node_service_ostor_status_list
+
+
+def get_node_service_ocnas_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取ocnas服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeServiceOcnasStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_service_ocnas_status_list = handle_stdout_for_property_code(stdout)
+    return node_service_ocnas_status_list
+
+
+def get_node_service_ojmgs_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取ojmgs服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeServiceOjmgsStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_service_ojmgs_status_list = handle_stdout_for_property_code(stdout)
+    return node_service_ojmgs_status_list
+
+
+def get_node_service_ojob_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取ojob服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeServiceOjobStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_service_ojob_status_list = handle_stdout_for_property_code(stdout)
+    return node_service_ojob_status_list
+
+
+def get_node_service_oapp_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取oapp服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeServiceOappStatus")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_service_oapp_status_list = handle_stdout_for_property_code(stdout)
+    return node_service_oapp_status_list
+
+
+def get_node_nfs_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取nfs服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeNFS")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_nfs_status_list = handle_stdout_for_property_code(stdout)
+    return node_nfs_status_list
+
+
+def get_node_smb_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取smb服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeSMB")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_smb_status_list = handle_stdout_for_property_code(stdout)
+    return node_smb_status_list
+
+
+def get_node_ftp_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取ftp服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeFTP")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_ftp_status_list = handle_stdout_for_property_code(stdout)
+    return node_ftp_status_list
+
+
+def get_node_ctdb_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取ctdb服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeCTDB")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_ctdb_status_list = handle_stdout_for_property_code(stdout)
+    return node_ctdb_status_list
+
+
+def get_node_local_auth_status():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取local_auth服务状态
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("nodeLocalAuth")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    node_local_auth_status_list = handle_stdout_for_property_code(stdout)
+    return node_local_auth_status_list
+
+
+def get_min_meta_replica():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取最小元数据副本数
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("minMetaReplica")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    min_meta_replica_list = handle_stdout_for_property_code(stdout)
+    return min_meta_replica_list
+
+
+def get_min_jnl_replica():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取最小日志副本数
+    :return:
+    """
+    disk_usage_rate_code = dom.getElementsByTagName("minJNLReplica")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    min_jnl_replica_list = handle_stdout_for_property_code(stdout)
+    return min_jnl_replica_list
+
+
+def get_client_export_dir():
+    """
+    author:duyuli
+    date:  2018.8.27
+    description:获取客户端挂在目录
+    :return:
+    """
+    client_export_dir_list = []
+    disk_usage_rate_code = dom.getElementsByTagName("clientExportDir")[0].firstChild.nodeValue
+    stdout = handle_command_stdin_code(disk_usage_rate_code)
+
+    # 输出内容不一样，单独处理
+    for value in stdout.split("enterprises.27500"):
+        if value.find('"') != -1:  # 针对值为string类型
+            split_value_list = value.split('"')
+            client_export_dir_list.append(split_value_list[1])
+            break
+    return client_export_dir_list
+
+
+def get_node_ids():
+    """
+    author:duyuli
+    date:  2018.8.29
+    description:获取节点ids  eg  1,2,3
+    :return:
+    """
+    node_ids = ""
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get node ids failed!!!")
+
+    stdout = common.json_loads(stdout)
+    for node in stdout["result"]["nodes"]:
+        node_ids = node_ids + str(node["node_id"]) + ","
+    node_ids = node_ids[:-1]
+    return node_ids
+
+
+'''常用的pscli命令获取参数列表的相关函数'''
+
+
+def get_opara_status_list():
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取opera状态列表
+    :return:
+    """
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+    opara_status_list = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+        for service in service_node_list:
+            if service['service_type'] == 'oPara':
+                opara_status_list.append(service['inTimeStatus'])
+    return opara_status_list
+
+
+def get_nodeid_by_nodeip(node_ip):
+    """
+    author:duyuli
+    date:  2018.8.29
+    description:通过节点ip获取节点id
+    :return:
+    """
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get node ids failed!!!")
+
+    stdout = common.json_loads(stdout)
+    for node in stdout["result"]["nodes"]:
+        if node["ctl_ips"][0]["ip_address"] == node_ip:
+            return node["node_id"]
+
+
+def get_disk_value_info(node_ip):
+    """
+    author:duyuli
+    date:  2018.8.29
+    description:获取指定节点的disk信息
+    :return:
+    """
+    node_id = get_nodeid_by_nodeip(node_ip)
+    rc, stdout = common.get_disks(node_ids=node_id)
+    common.judge_rc(rc, 0, "get system disk usage failed!!!")
+    stdout = common.json_loads(stdout)
+
+    return stdout
+
+
+def get_one_node_opara_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点的opera状态
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    opara_status = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+
+        for service in service_node_list:
+            if service['service_type'] == 'oPara' and service["node_id"] == node_id:
+                opara_status.append(service['inTimeStatus'])
+    return opara_status
+
+
+def get_ostor_status_list():
+    """
+    author:liyi
+    date:2018.8.29
+    description: 返回ostor状态列表
+    :return:
+    """
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ostor_status_list = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+        for service in service_node_list:
+            if service['service_type'] == 'oStor':
+                ostor_status_list.append(service['inTimeStatus'])
+    return ostor_status_list
+
+
+def get_one_node_ostor_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点的ostor状态
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ostor_status = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+
+        for service in service_node_list:
+            if service['service_type'] == 'oStor' and service["node_id"] == node_id:
+                ostor_status.append(service['inTimeStatus'])
+    return ostor_status
+
+
+def get_ocnas_status_list():
+    """
+    author:liyi
+    date:2018.8.29
+    description: 返回oCnas状态列表
+    :return:
+    """
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ocnas_status_list = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+        for service in service_node_list:
+            if service['service_type'] == 'oCnas':
+                ocnas_status_list.append(service['inTimeStatus'])
+    return ocnas_status_list
+
+
+def get_one_node_ocnas_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点的ocnas状态
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ocnas_status = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+
+        for service in service_node_list:
+            if service['service_type'] == 'oCnas' and service["node_id"] == node_id:
+                ocnas_status.append(service['inTimeStatus'])
+    return ocnas_status
+
+
+def get_ojob_status_list():
+    """
+    author:liyi
+    date:2018.8.29
+    description: 返回oJob状态列表
+    :return:
+    """
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+    ojob_status_list = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+        for service in service_node_list:
+            if service['service_type'] == 'oJob':
+                ojob_status_list.append(service['inTimeStatus'])
+    return ojob_status_list
+
+
+def get_one_node_ojob_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点的ojob状态
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ojob_status = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+
+        for service in service_node_list:
+            if service['service_type'] == 'oJob' and service["node_id"] == node_id:
+                ojob_status.append(service['inTimeStatus'])
+    return ojob_status
+
+
+def get_oapp_status_list():
+    """
+    author:liyi
+    date:2018.8.29
+    description: 返回oJob状态列表
+    :return:
+    """
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    oapp_status_list = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+        for service in service_node_list:
+            if service['service_type'] == 'oApp':
+                oapp_status_list.append(service['inTimeStatus'])
+    return oapp_status_list
+
+
+def get_one_node_oapp_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点的oapp状态
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    oapp_status = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+
+        for service in service_node_list:
+            if service['service_type'] == 'oApp' and service["node_id"] == node_id:
+                oapp_status.append(service['inTimeStatus'])
+    return oapp_status
+
+
+def get_ojmgs_status_list():
+    """
+    author:liyi
+    date:2018.8.29
+    description: 返回oJob状态列表
+    :return:
+    """
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ojmgs_status_list = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+        for service in service_node_list:
+            if service['service_type'] == 'oJmgs':
+                ojmgs_status_list.append(service['inTimeStatus'])
+    return ojmgs_status_list
+
+
+def get_one_node_ojmgs_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.29
+    description:获取某个节点的ojmgs状态
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed!!")
+    service_info = common.json_loads(stdout)
+
+    ojmgs_status = []
+    for service_node in service_info["result"]['nodes']:
+        service_node_list = service_node['services']
+
+        for service in service_node_list:
+            if service['service_type'] == 'oJmgs' and service["node_id"] == node_id:
+                ojmgs_status.append(service['inTimeStatus'])
+    return ojmgs_status
+
+
+def get_node_value_info(node_ip):
+    """
+    author:duyuli
+    date:  2018.8.30
+    description:获取指定节点信息
+    :return:
+    """
+    node_id = get_nodeid_by_nodeip(node_ip)
+    rc, stdout = common.get_nodes(ids=node_id)
+    common.judge_rc(rc, 0, "get node info failed!!!")
+    stdout = common.json_loads(stdout)
+
+    return stdout
+
+
+def get_nfs_status_list():
+    """
+    author:liyi
+    date:  2018.8.30
+    description:返回nfs状态列表（P300系统发起请求获取的）
+    :return:
+    """
+
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    node_info = common.json_loads(stdout)
+
+    nfs_status_list = []
+    for node in node_info["result"]["nodes"]:
+        service_status = node["reported_info"]["nas_protocol"]["server_status"]
+        nfs_status_list.append(service_status["nfs_status"])
+    return nfs_status_list
+
+
+def get_one_node_nfs_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:返回某节点的nfs状态（P300系统发起请求获取的）
+    :param node_ip: 某个节点ip
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    node_info = common.json_loads(stdout)
+
+    nfs_status = []
+    for node in node_info["result"]["nodes"]:
+        if node["node_id"] == node_id:
+            service_status = node["reported_info"]["nas_protocol"]["server_status"]
+            nfs_status.append(service_status["nfs_status"])
+    return nfs_status
+
+
+def get_one_node_smb_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:返回某节点的smb状态（P300系统发起请求获取的）
+    :param node_ip: 某个节点ip
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    node_info = common.json_loads(stdout)
+
+    smb_status = []
+    for node in node_info["result"]["nodes"]:
+        if node["node_id"] == node_id:
+            service_status = node["reported_info"]["nas_protocol"]["server_status"]
+            smb_status.append(service_status["smb_status"])
+    return smb_status
+
+
+def get_one_node_ftp_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:返回某节点的ftp状态（P300系统发起请求获取的）
+    :param node_ip: 某个节点ip
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    node_info = common.json_loads(stdout)
+
+    ftp_status = []
+    for node in node_info["result"]["nodes"]:
+        if node["node_id"] == node_id:
+            service_status = node["reported_info"]["nas_protocol"]["server_status"]
+            ftp_status.append(service_status["ftp_status"])
+    return ftp_status
+
+
+def get_one_node_ctdb_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:返回某节点的ctdb状态（P300系统发起请求获取的）
+    :param node_ip: 某个节点ip
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    node_info = common.json_loads(stdout)
+
+    ctdb_status = []
+    for node in node_info["result"]["nodes"]:
+        if node["node_id"] == node_id:
+            service_status = node["reported_info"]["nas_protocol"]["server_status"]
+            ctdb_status.append(service_status["ctdb_status"])
+    return ctdb_status
+
+
+def get_one_node_auth_provider_server_status(node_ip):
+    """
+    author:liyi
+    date:  2018.8.30
+    description:返回本地认证服务状态（P300系统发起请求获取的）
+    :param node_ip: 某个节点ip
+    :return:
+    """
+    node_obj = common.Node()
+    node_id = node_obj.get_node_id_by_ip(node_ip)
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    node_info = common.json_loads(stdout)
+
+    auth_provider_server_status = []
+    for node in node_info["result"]["nodes"]:
+        if node["node_id"] == node_id:
+            service_status = node["reported_info"]["nas_protocol"]["server_status"]
+            auth_provider_server_status.append(service_status["auth_provider_server_status"])
+    return auth_provider_server_status
+
+
+def get_parastor_min_meta_replica():
+    """
+    author:liyi
+    date:  2018.8.31
+    description:获取最小元数据副本（P300系统发起请求获取的）
+    :return:
+    """
+    rc, stdout = common.get_params()
+    common.judge_rc(rc, 0, "get_params failed!!")
+    check_result = common.json_loads(stdout)
+
+    min_meta_replica = []
+    parameters_info = check_result["result"]["parameters"]
+    for parameter in parameters_info:
+        if parameter["name"] == "min_meta_replica":
+            min_meta_replica.append(parameter["current"])
+    return min_meta_replica
+
+
+def get_jnl_replica():
+    """
+    author:liyi
+    date:  2018.8.31
+    description:获取日志副本（P300系统发起请求获取的）
+    :return:
+    """
+    rc, stdout = common.get_jnl_replica()
+    common.judge_rc(rc, 0, "get_jnl_replica failed!!")
+    check_result = common.json_loads(stdout)
+    jnl_replica = check_result["result"]["jnl_replica"]
+    return jnl_replica
+
+
+def get_parastor_system_state():
+    """
+    author:liyi
+    date:  2018.8.31
+    description:获取系统状态（P300系统发起请求获取的）
+    :return:
+    """
+    rc, stdout = common.get_system_state()
+    common.judge_rc(rc, 0, "get_system_state failed!!")
+    check_result = common.json_loads(stdout)
+    system_state = check_result["result"]["storage_system_state"]
+    return system_state
+
+
+def get_parastor_storage_pool_usage():
+    """
+    author:liyi
+    date:  2018.8.31
+    description:获取存储池利用率（P300系统发起请求获取的）
+    :return:  返回字典形式 eg:{stor1:1}
+    """
+    rc, stdout = common.get_storage_pools()
+    common.judge_rc(rc, 0, "get_storage_pools failed!!")
+    check_result = common.json_loads(stdout)
+
+    storage_name = []
+    used_ratio = []
+    for storage_info in check_result["result"]["storage_pools"]:
+        storage_name.append(storage_info["name"])
+        used_ratio.append(storage_info["used_ratio"])
+    storage_pool_usage = dict(zip(storage_name, used_ratio))
+    return storage_pool_usage
+
+
+def get_parastor_mem_usage_rate():
+    """
+     author:liyi
+     date:  2018.8.31
+     description:获取系统内存使用率（P300系统发起请求获取的）
+     :return:
+     """
+    mem_usage_rate = []
+    rc, stdout = common.get_system_perf()
+    common.judge_rc(rc, 0, "get_system_perf failed!!")
+    check_result = common.json_loads(stdout)
+    mem_usage_rate.append(check_result["result"]["memory_usage_rate"])
+    return mem_usage_rate
+
+
+def get_parastor_mem_usage_rate_list():
+    """
+     author:liyi
+     date:  2018.8.31
+     description:获取系统内存使用率列表（P300系统发起请求获取的）
+     :return:
+     """
+    mem_usage_rate_list = []
+    rc, stdout = common.get_nodes()
+    common.judge_rc(rc, 0, "get_nodes failed!!")
+    check_result = common.json_loads(stdout)
+    node_info_lst = check_result['result']['nodes']
+    for node_info in node_info_lst:
+        mem_usage_rate_list.append(node_info['reported_info']['summary']['memory']['memory_rate'])
+    return mem_usage_rate_list
+
+
+def get_parastor_system_data_status():
+    """
+     author:liyi
+     date:  2018.8.31
+     description:获取系统数据状态（P300系统发起请求获取的）
+     :return:
+     """
+    rc, stdout = common.get_cluster_overview()
+    common.judge_rc(rc, 0, "get_cluster_overview failed!!")
+    check_result = common.json_loads(stdout)
+    system_data_status = []
+    system_data_status.append(check_result["result"]["cluster_data_state"])
+    return system_data_status
+
+
+def get_parastor_system_info():
+    """
+     author:liyi
+     date:  2018.8.31
+     description:获取系统信息（P300系统发起请求获取的）
+     :return:返回字典形式的系统信息
+     """
+    rc, stdout = common.get_system_perf()
+    common.judge_rc(rc, 0, "get_system_perf failed!!")
+    check_result = common.json_loads(stdout)
+    system_info = ["max_memory_usage_rate",
+                   "total_memory_capacity",
+                   "memory_usage_rate",
+                   "max_cpu_usage_rate",
+                   "cpu_usage_rate",
+                   "used_memory_capacity"]
+    system_info_values = []
+    system_info_values.append(check_result["result"]["max_memory_usage_rate"])
+    system_info_values.append(check_result["result"]["total_memory_capacity"])
+    system_info_values.append(check_result["result"]["memory_usage_rate"])
+    system_info_values.append(check_result["result"]["max_cpu_usage"])
+    system_info_values.append(check_result["result"]["cpu_usage"])
+    system_info_values.append(check_result["result"]["used_memory_capacity"])
+    system_info_dict = dict(zip(system_info, system_info_values))
+    return system_info_dict
+
+def enable_snmp():
+    rc, stdout = common.set_snmp(enabled="true", snmp_version="v2", community="public", port="161", trap_level="WARN")
+    common.judge_rc(rc, 0, "enable snmp failed")
+    return
+
+
+enable_snmp()  # 需要在导入的收就自动enable snmp
+
+def disable_snmp():
+    rc, stdout = common.set_snmp(enabled="false")
+    common.judge_rc(rc, 0, "disable snmp failed")
+    return

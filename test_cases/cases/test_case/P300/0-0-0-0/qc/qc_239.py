@@ -1,0 +1,172 @@
+# -*-coding:utf-8 -*
+from multiprocessing import Process
+import os
+import time
+import random
+
+import utils_path
+import common
+import log
+import get_config
+import prepare_clean
+import tool_use
+
+#################################################################
+#
+# Author: chenjy1
+# Date: 2018-08-20
+# @summary：
+#        vdbench读写时，删除两个节点上各一块盘
+# @steps:
+#       1、开启子进程跑vdbench
+#       2、循环删除盘
+# @changelog：
+#################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                 # 本脚本名字
+VDBENCH_PATH = os.path.join(prepare_clean.DEFECT_PATH, FILE_NAME)          # /mnt/volume1/defect_case/qc_239
+N = 1
+get_node_stat_rc = 1
+
+
+def wait_disk_remove(fault_node_id, fault_disk_id, no_rebuilding_wait_time):
+    """
+    Author:                         chenjy1
+    :date:                          2018.08.14
+    :description:                   随机拔出插入一块共享盘
+    :param fault_node_id:          (int)故障节点ID
+    :param fault_disk_id:          (int)故障磁盘ID
+    :param no_rebuilding_wait_time (int)重建前或重建后等待最大时间，超时认为删盘失败
+    :return:                       (bool)是否删除掉
+    """
+    obj_disk = common.Disk()
+    flag_remove_disk = False
+    start_time = time.time()
+    no_rebuilding_time_start = 0
+    no_rebuilding_exist_time = 0
+    while True:
+        if "DISK_STATE_REBUILDING_ACTIVE" == obj_disk.get_disk_state_by_id(fault_node_id, fault_disk_id):
+            time.sleep(10)
+            exist_time = int(time.time() - start_time)
+            m, s = divmod(exist_time, 60)
+            h, m = divmod(m, 60)
+            log.info('DISK_STATE_REBUILDING_ACTIVE exist %dh:%dm:%ds' % (h, m, s))
+        else:
+            no_rebuilding_time_start = time.time()
+            if obj_disk.check_disk_exist(fault_node_id, fault_disk_id):
+                time.sleep(10)
+                no_rebuilding_exist_time = no_rebuilding_exist_time + int(time.time() - no_rebuilding_time_start)
+                if no_rebuilding_exist_time > no_rebuilding_wait_time:
+                    stat = obj_disk.get_disk_state_by_id(fault_node_id, fault_disk_id)
+                    log.info('disk stat %s' % stat)
+                    break
+                m, s = divmod(no_rebuilding_exist_time, 60)
+                h, m = divmod(m, 60)
+                log.info('no REBUILDING_ACTIVE but disk exist %dh:%dm:%ds' % (h, m, s))
+            else:
+                flag_remove_disk = True
+                log.info("disk have been deleted!")
+                break
+    return flag_remove_disk
+
+
+def case():
+    log.info("case begin")
+
+    '''获取集群节点信息'''
+    ob_node = common.Node()
+    ob_disk = common.Disk()
+    ob_storage_pool = common.Storagepool()
+    node_id_lst = ob_node.get_nodes_id()
+
+    fault_node_id_lst = random.sample(node_id_lst, 2)
+    fault_disk_name_lst = []
+    for fault_node_id in fault_node_id_lst:
+        """获取故障节点内所有的共享硬盘和数据硬盘"""
+        share_disk_names, monopoly_disk_names = ob_disk.get_share_monopoly_disk_names(fault_node_id)
+        """随机选择一个数据盘"""
+        fault_disk_name = random.sample(monopoly_disk_names, 1)[0]
+        fault_disk_name_lst.append(fault_disk_name)
+
+    """获取故障盘的scsi id, id, uuid, 盘类型, 存储池id"""
+    fault_disk_physicalid_lst = []
+    fault_disk_id_lst = []
+    fault_disk_uuid_lst = []
+    fault_disk_usage_lst = []
+    storage_pool_id_lst = []
+
+    for i, fault_node_id in enumerate(fault_node_id_lst):
+        fault_node_ip = ob_node.get_node_ip_by_id(fault_node_id)
+        """物理id"""
+        fault_disk_physicalid = ob_disk.get_physicalid_by_name(fault_node_ip, fault_disk_name_lst[i])
+        fault_disk_physicalid_lst.append(fault_disk_physicalid)
+        """id"""
+        fault_disk_id = ob_disk.get_diskid_by_name(fault_node_id, fault_disk_name_lst[i])
+        fault_disk_id_lst.append(fault_disk_id)
+        """uuid"""
+        fault_disk_uuid = ob_disk.get_disk_uuid_by_name(fault_node_id, fault_disk_name_lst[i])
+        fault_disk_uuid_lst.append(fault_disk_uuid)
+        """usage"""
+        fault_disk_usage = ob_disk.get_disk_usage_by_name(fault_node_id, fault_disk_name_lst[i])
+        fault_disk_usage_lst.append(fault_disk_usage)
+        """存储池id"""
+        storage_pool_id = ob_disk.get_storage_pool_id_by_diskid(fault_node_id, fault_disk_id_lst[i])
+        storage_pool_id_lst.append(storage_pool_id)
+
+        log.info("fault_node_id : %s"
+                 "\nfault_disk_name : %s"
+                 "\nfault_disk_physicalid : %s"
+                 "\nfault_disk_uuid : %s"
+                 "\nfault_disk_usage : %s"
+                 "\nfault_disk_id : %s"
+                 "\nstorage_pool_id : %s"
+                 % (str(fault_node_id),
+                    fault_disk_name_lst[i],
+                    fault_disk_physicalid,
+                    fault_disk_uuid,
+                    fault_disk_usage,
+                    str(fault_disk_id),
+                    str(storage_pool_id)))
+
+    log.info("1> 子进程跑vdbench")
+    client_ip_lst = get_config.get_allclient_ip()
+    p1 = Process(target=tool_use.vdbench_run, args=(VDBENCH_PATH, client_ip_lst[0], client_ip_lst[1]),
+                 kwargs={'run_create': True, 'run_check_write': True})
+    p1.daemon = True
+    p1.start()
+
+    log.info("2> 循环删除盘")
+    for cnt in range(N):
+        for i, fault_node_id in enumerate(fault_node_id_lst):
+            fault_disk_id = ob_disk.get_disk_id_by_uuid(fault_node_id, fault_disk_uuid_lst[i])
+            ob_disk.remove_disks_asyn(fault_disk_id)
+            flag_remove_disk = wait_disk_remove(fault_node_id, fault_disk_id, 600)
+            common.judge_rc(flag_remove_disk, True, "disk_remove failed nodeID:%s diskuuid: %s"
+                            % (fault_node_id, fault_disk_uuid_lst[i]))
+        log.info('wait 180s')
+        time.sleep(180)
+        """加入磁盘,并且加入存储池"""
+        for i, fault_node_id in enumerate(fault_node_id_lst):
+            ob_disk.add_disks(fault_node_id, fault_disk_uuid_lst[i], fault_disk_usage_lst[i])
+            fault_disk_id_new = ob_disk.get_disk_id_by_uuid(fault_node_id, fault_disk_uuid_lst[i])
+            ob_storage_pool.expand_storage_pool(storage_pool_id_lst[i], fault_disk_id_new)
+
+    p1.join()
+    rc, stdout = common.get_node_stat()
+    common.judge_rc(rc, get_node_stat_rc, "get_node_stat  failed")
+    common.judge_rc(p1.exitcode, 0, 'vdbench  run_create and run_check_write failed ')
+
+    '''再跑检查数据的正确性'''
+    tool_use.vdbench_run(VDBENCH_PATH, client_ip_lst[0], client_ip_lst[1], run_check=True)
+    return
+
+
+def main():
+    prepare_clean.defect_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.defect_test_clean(FILE_NAME, fault=True)
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

@@ -1,0 +1,19 @@
+#!/usr/bin/python
+# -*- coding:utf-8 -*-
+"""
+Date:20181206
+Author:Diws
+:Description:
+1、创建12条LUN，其中LUN1-LUN6对应对齐大小块混合读写，LUN7-LUN12为非对齐大小块混合读写；
+2、使用2个主机，主机1映射LUN1-LUN6，主机2映射LUN7-LUN12；
+3、在主机1上运行vdbench -f mix-S-Align.conf -jn；在主机2上运行vdbench -f mix-S.conf;
+4、在步骤3中的业务运行过程中，向节点池中加入新节点，日志盘配置成共享盘，数据盘配置成数据盘，将数据盘加入到存储池中，存储节点启动均衡；
+5、业务执行完成后，在主机1上执行vdbench -f mix-S-Align.conf -jro比较一致性；
+6、数据均衡完成后，在主机1上执行vdbench -f mix-S-Align.conf -jro比较一致性；
+7、检查均衡后硬盘和节点容量，比较存储内部数据一致性；
+"""
+import utils_path
+import common2
+import get_config
+expand_ips = get_config.get_expand_ip_info()
+print expand_ips

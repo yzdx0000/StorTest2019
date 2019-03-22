@@ -1,0 +1,73 @@
+1、功能介绍
+脚本功能：用于测试xstor系统可靠性
+支持测试项：
+"1 : down disk (no wait repair)        √
+"2 : down net  (no wait repair)        √
+"3 : down node (no wait repait)        √
+"4 : kill process                      √
+"5 : down disk (wait repair)           √
+"6 : del disk  (wait transfer)         √
+"7 : down net  (wait repair)           √
+"8 : down node (wait repait)           √
+"9 : del node  (wait transfer)         √
+"10: down part net
+
+
+
+2、使用方法：
+方法一：单独运行
+1）进入到脚本目录：
+	cd /home/StorTest/test_cases/cases/test_case/X1000/random_fault/
+2）运行脚本：
+	默认运行：
+	python ReliableTest_xstor_vXXX.py
+	注：
+	XXX为版本号，版本号迭代递增
+   	带参数运行：
+	python ReliableTest_xstor_vXXX.py  -o X -z X -i X
+	注：
+	1.具体参数介绍使用-h命令查询，根据当前系统情况进行配置
+	2.当外部参数与内部参数冲突时，外部参数优先级高于内部默认参数
+3）脚本运行
+	1.脚本默认持续运行
+	2.手动停掉脚本或脚本运行出现故障才停止
+
+方法二：使用自动化测试框架运行
+1）修改配置文件：
+    进入到conf目录：cd /home/StorTest/conf/
+	vim x1000_test_config.xml
+    修改：修改caselit目录为random_fault目录
+ 	<caselist>/home/StorTest/test_cases/cases/case_list/random_fault</caselist>
+    进入到case_list 目录：cd /home/StorTest/test_cases/cases/case_list/
+    修改 random_fault 脚本名称文件
+	vim random_fault
+	/X1000/random_fault/ReliableTest_xstor_v1.py
+	注：如果xstor系统不稳定，比如容易出core或出现其他异常，
+	    建议多写几行，规则和其他case list文件格式相同
+2）如果脚本默认参数不符合当前测试条件需要定制，需要编辑ReliableTest_xstor_vXXX.py 进行
+	注：
+	1.参数修改选项参考 -h 参数打印信息
+	2.目前可修改参数比较少
+3）运行脚本：
+	cd /home/StorTest/scripts/
+	python run_all_tests_xstor_vXXXX.py -c
+	注：
+	   run_all_test 版本和参数根据该脚本介绍执行即可，不进行赘述
+
+
+
+3、版本变更记录：
+===================================v1 版本========================================
+变更功能：
+1.适配虚拟机节点故障测试
+2.合入xstor自动化测试环境
+3.支持外部参数和内部（默认）参数运行
+4.vdbench 默认使用4k 随机读写 如需改动需要修改vdbench配置文件生成方式
+    # vdb_file = env.analysis_xml_file(lun_list=lun_name)  # 使用配置文件param 生成vdbench配置文件
+    vdb_file = env_manage.osan.gen_vdb_xml(lun=lun_name, xfersize="4k", rdpct="50", maxdata="100G")
+5.默认参数执行默认在1-4模型中随机进行
+
+===================================v6.0 版本========================================
+功能：
+从P300移植来，适配大部分场景，使用外部参数独立运行
+

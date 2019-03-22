@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <jenkins>
+        <ip>10.2.43.186</ip>
+        <path>/home/StorTest</ip>
+    </jenkins>
+    <nodes>
+        <node>
+            <ctrl_ip>10.2.41.114</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.41.115</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.41.116</ctrl_ip>
+        </node>
+    </nodes>
+    <clients>
+        <client>
+            <ctrl_ip>10.2.41.114</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.41.115</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.41.116</ctrl_ip>
+        </client>
+    </clients>
+
+    <!-- 卷 -->
+    <volumes>
+        <volume>volume1</volume>
+    </volumes>
+
+    <!-- 文件系统目录 -->
+    <mount_paths>
+        <mount_path>/mnt/parastor1</mount_path>
+    </mount_paths>
+
+    <!-- 快照测试路径 -->
+    <snap_test_paths>
+        <snap_test_path>/mnt/volume1/snap</snap_test_path>
+    </snap_test_paths>
+
+    <!-- 配额测试路径 -->
+    <quota_test_paths>
+        <quota_test_path>/mnt/volume1/quota_test_dir</quota_test_path>
+    </quota_test_paths>
+
+    <!-- 重要!!!执行用例列表文件 -->
+    <caselist>/home/StorTest/Test_cases/Cases/case_list/case_list</caselist>
+
+    <!-- 脚本日志存放路径 -->
+    <test_log_path>/home/StorTest/Test_cases/Log/Case_log</test_log_path>
+
+    <!-- 脚本执行结果存放路径 -->
+    <test_result_path>/home/StorTest/Test_cases/Log/Case_result</test_result_path>
+
+    <!-- 工具路径 -->
+    <tools_path>/home/StorTest/Test_cases/Tools</tools_path>
+
+    <!-- vdbench工具的路径 -->
+    <vdbench_path>/home/vdbench50406_snap</vdbench_path>
+</testconfig>

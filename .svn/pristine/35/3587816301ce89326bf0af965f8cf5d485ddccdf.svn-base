@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="s3-sample" description="sample benchmark for s3">
+ 
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW03T0IJW5M8MLSHU82EL1TO9IPQEEFKML1L10GHBYOJTHW6OV;secretkey=8250859c4eed4756fc793ccd5d93c24a48498bcf;endpoint=http://www.aaa.com:20480;path_style_access=true;timeout=1800000;" />
+  <workflow>
+
+    <workstage name="prepare">
+      <work type="prepare" workers="8" config="cprefix=bucketaaa;containers=r(1,5);objects=r(1,80);sizes=h(100|200|50,500|1000|50)KB" />    
+    </workstage>
+ 
+    <workstage name="main">
+      <work name="main1" workers="8" runtime="720">
+        <operation type="write" ratio="70" config="cprefix=bucketaaa;containers=u(1,5);objects=u(1,10);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=bucketaaa;containers=u(1,5);objects=u(11,20);hashCheck=False" />
+      </work>
+      <work name="main2" workers="8" runtime="720">
+        <operation type="write" ratio="90" config="cprefix=bucketaaa;containers=u(1,5);objects=u(21,30);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />       
+        <operation type="read" ratio="10" config="cprefix=bucketaaa;containers=u(1,5);objects=u(31,40);hashCheck=False" />
+      </work>
+      <work name="main3" workers="8" runtime="720">
+        <operation type="write" ratio="30" config="cprefix=bucketaaa;containers=u(1,5);objects=u(41,50);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />       
+        <operation type="read" ratio="70" config="cprefix=bucketaaa;containers=u(1,5);objects=u(51,60);hashCheck=False" />
+     </work>
+      <work name="main4" workers="8" runtime="720">
+        <operation type="write" ratio="10" config="cprefix=bucketaaa;containers=u(1,5);objects=u(61,70);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />        
+        <operation type="read" ratio="90" config="cprefix=bucketaaa;containers=u(1,5);objects=u(71,80);hashCheck=False" />
+      </work>
+    </workstage>
+
+    <workstage name="cleanup">
+      <work type="cleanup" workers="8" config="cprefix=bucketaaa;containers=r(1,5);objects=r(1,80)" />
+    </workstage>
+ 
+    <workstage name="dispose">
+      <work type="dispose" workers="8" config="cprefix=bucketaaa;containers=r(1,5)" />
+    </workstage>
+ 
+  </workflow>
+ 
+</workload>
+

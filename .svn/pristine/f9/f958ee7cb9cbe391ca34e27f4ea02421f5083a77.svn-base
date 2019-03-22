@@ -1,0 +1,21 @@
+#-*- coding:utf-8 -*
+#函数名称：delete_bucket
+#函数作用：删除指定bucket
+#函数输入：oossip,bucketname,certificateid
+#将删除结果打印出来
+import commands
+import sys
+import _checkresult_lyz
+def delete_bucket(oossip,bucketname,certificateid):
+	print 'certificateid is %s' %certificateid
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print status
+	print output
+	re=_checkresult_lyz.checkresult(status,output)
+	if re==-1:
+		return -1
+if __name__=="__main__":
+	delete_bucket(sys.argv[1],sys.argv[2],sys.argv[3])
+	#delete_bucket('10.2.40.18','bucketname102607','000020ZYTUAP29Z1000020ZYSD52KRHK')

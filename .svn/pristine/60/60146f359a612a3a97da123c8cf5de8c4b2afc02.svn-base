@@ -1,0 +1,153 @@
+# -*-coding:utf-8 -*
+from multiprocessing import Process
+import os
+import time
+
+import utils_path
+import common
+import log
+import get_config
+import prepare_clean
+import tool_use
+#################################################################
+#
+# author 陈津宇
+# date 2018-07-14
+# @summary：
+#        P300-2454卷正在被占用时，删除旧卷并创建新卷，df查看不到(此脚本仅适用于独立的私有客户端选上了自动挂载的环境)
+# @steps:
+#       1、创建一个新卷（卷名P300_2463）
+#       2、获取卷P300_2463的所有信息
+#       3、跑vdbench占用此卷
+#       4、删除存储卷
+#       5、添加存储卷
+#       6、等待直到df发现卷
+#       7、删除卷
+# @changelog：
+#################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                 # 本脚本名字
+
+
+def process_run():
+    while True:
+        cmd = 'cd /mnt/%s' % FILE_NAME
+        rc, stdout = common.run_command(get_config.get_allclient_ip()[0], cmd)
+
+
+def case():
+    log.info("case begin")
+
+    ob_volume = common.Volume()
+    ob_storagepool = common.Storagepool()
+
+    '''获取存储池的信息'''
+    rc, storage_pools = ob_storagepool.get_storagepool_info()
+    common.judge_rc(rc, 0, "get_storagepool_info failed")
+    storage_name = ''
+    for storage_pool in storage_pools['result']['storage_pools']:
+        if storage_pool['name'] != 'shared_storage_pool':
+            storage_name = storage_pool['name']
+            break
+
+    rc, storagepool_id = ob_storagepool.get_storagepool_id(storage_name)  # 获取此存储池的ID
+    common.judge_rc(rc, 0, 'get_storagepool_id failed ')
+
+    '''获取该存储池上一个已有的卷的信息'''
+    one_volume = {}
+    rc, pscli_info = ob_volume.get_all_volumes()
+    common.judge_rc(rc, 0, "Execute command: get volume failed." )
+    volume_num = pscli_info['result']['total']
+    if volume_num == 0:
+        raise Exception('your storage_pool need a volume!')
+    for volume in pscli_info['result']['volumes']:
+        if volume['storage_pool_name'] == storage_name:
+            one_volume = volume
+
+    log.info("1> 创建一个新卷（卷名P300_2463）")
+    rc, jsn_info = ob_volume.create_volume(FILE_NAME, storagepool_id, one_volume['layout']['stripe_width'],
+                            one_volume['layout']['disk_parity_num'], one_volume['layout']['node_parity_num'],
+                            one_volume['layout']['replica_num'])
+    common.judge_rc(rc, 0,"create volume failed")
+    """获取此卷所有信息"""
+    log.info("2> 获取卷P300_2463的所有信息")
+    old_volume = {}
+    rc, pscli_info = ob_volume.get_all_volumes()
+    common.judge_rc(rc, 0, "Execute command: get volume failed.")
+    for volume in pscli_info['result']['volumes']:
+        if volume['name'] == FILE_NAME:
+            old_volume = volume
+
+    """在集群节点跑vdbench"""
+    log.info("3> 跑vdbench占用此卷")
+    vdbench_path = os.path.join(os.path.dirname(get_config.get_one_mount_path()), FILE_NAME)
+    p1 = Process(target=process_run)
+    p1.start()
+
+    """删除卷"""
+    log.info(" 4> 删除存储卷")
+    rc = ob_volume.delete_volume(old_volume['id'])
+    common.judge_rc(rc, 0, "delete_volume failed")
+
+    """等待vdbench进程结束"""
+    p1.terminate()
+    p1.join()
+
+    """按照旧卷的信息创建卷"""
+    log.info(" 5> 添加存储卷")
+    rc, json_info = ob_volume.create_volume(FILE_NAME, storagepool_id, one_volume['layout']['stripe_width'],
+                            one_volume['layout']['disk_parity_num'], one_volume['layout']['node_parity_num'],
+                            one_volume['layout']['replica_num'])
+    common.judge_rc(rc,0, "create volume failed")
+    """获取此卷所有信息"""
+    new_volume = {}
+    rc, pscli_info = ob_volume.get_all_volumes()
+    common.judge_rc(rc, 0, "Execute command: get volume failed. \nstdout")
+    for volume in pscli_info['result']['volumes']:
+        if volume['name'] == FILE_NAME:
+            new_volume = volume
+
+    """等待集群所有节点df发现卷"""
+    log.info("6> 等待直到df发现卷")
+    node = common.Node()
+    all_node_ip = node.get_nodes_ip()
+    flag_ip_volume = 1
+    for i in range(len(all_node_ip) - 1):
+        flag_ip_volume = (flag_ip_volume << 1) + 1  # 111
+    res_ip_volume = flag_ip_volume  # 111
+    start_time = time.time()
+    while True:
+        for i, ip in enumerate(all_node_ip):
+            if (flag_ip_volume & (1 << i)) != 0:  # 仅看还未发现卷的节点
+                res = common.check_client_state(ip, FILE_NAME)  # 使用判断客户端超时的函数
+                if 0 == res:
+                    flag_ip_volume &= (res_ip_volume ^ (1 << i))  # 将i对应的标志位置0
+                elif -1 == res:
+                    raise Exception('ssh failed !!!  please check node!!!')
+                elif -2 == res:
+                    raise Exception('client is blockup !!!')
+                else:
+                    log.info('still waiting %s' % ip)
+        if flag_ip_volume & res_ip_volume == 0:  # 全0则通过
+            break
+        time.sleep(10)
+        exist_time = int(time.time() - start_time)
+        m, s = divmod(exist_time, 60)
+        h, m = divmod(m, 60)
+        log.info('not found volume exist %dh:%dm:%ds' % (h, m, s))
+
+    log.info("7> 删除卷")
+    rc = ob_volume.delete_volume(new_volume['id'])
+    common.judge_rc(rc, 0, "delete_volume failed")
+    return
+
+
+def main():
+    prepare_clean.defect_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.defect_test_clean(FILE_NAME)
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

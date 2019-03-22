@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<snmpconfig>
+    <system>.1.3.6.1.4.1.27500.1.2
+
+        <cpuUtility>.1.3.6.1.4.1.27500.1.2.1
+            <cpuUtilityEntry>.1.3.6.1.4.1.27500.1.2.1.1
+                <cpuUtilityRate>.1.3.6.1.4.1.27500.1.2.1.1.2</cpuUtilityRate>
+            </cpuUtilityEntry>
+        </cpuUtility>
+
+        <memUtility>.1.3.6.1.4.1.27500.1.2.2
+            <memUtilityEntry>
+                <memUtilityRate>.1.3.6.1.4.1.27500.1.2.2.1.2</memUtilityRate>
+            </memUtilityEntry>
+        </memUtility>
+
+        <serviceStatus>.1.3.6.1.4.1.27500.1.2.3.0</serviceStatus>
+
+        <rwThroughPut>.1.3.6.1.4.1.27500.1.2.14
+            <readThroughPut>.1.3.6.1.4.1.27500.1.2.14.1.2</readThroughPut>
+            <writeThroughPut>.1.3.6.1.4.1.27500.1.2.14.1.3</writeThroughPut>
+        </rwThroughPut>
+
+        <iops>.1.3.6.1.4.1.27500.1.2.15</iops>
+
+        <systemInfo>.1.3.6.1.4.1.27500.1.2.16.0</systemInfo>
+
+        <storagePoolUsageRate>.1.3.6.1.4.1.27500.1.2.17.0</storagePoolUsageRate>
+
+        <systemDataStatus>.1.3.6.1.4.1.27500.1.2.18.0</systemDataStatus>
+
+        <volumeUsageRate>.1.3.6.1.4.1.27500.1.2.19.0</volumeUsageRate>
+
+    </system>
+
+    <fileSystem>
+    </fileSystem>
+
+    <node>
+        <currentNodeStatus>.1.3.6.1.4.1.27500.1.7.1.1.2</currentNodeStatus>
+
+        <nodePower>.1.3.6.1.4.1.27500.1.7.2
+            <nodePowerStatus>.1.3.6.1.4.1.27500.1.7.2.1.2</nodePowerStatus>
+            <nodePowerTemperature>.1.3.6.1.4.1.27500.1.7.2.1.3</nodePowerTemperature>
+        </nodePower>
+
+        <nodeFanStatus>.1.3.6.1.4.1.27500.1.7.3.1.2</nodeFanStatus>
+
+        <nodeCpu>.1.3.6.1.4.1.27500.1.7.4
+            <nodeCpuStatus>.1.3.6.1.4.1.27500.1.7.4.1.2</nodeCpuStatus>
+            <nodeCpuTemperature>.1.3.6.1.4.1.27500.1.7.4.1.3</nodeCpuTemperature>
+        </nodeCpu>
+
+        <nodeMemory>.1.3.6.1.4.1.27500.1.7.5
+            <nodeMemoryStatus>.1.3.6.1.4.1.27500.1.7.5.1.2</nodeMemoryStatus>
+            <nodeMemoryTemperature>.1.3.6.1.4.1.27500.1.7.5.1.3</nodeMemoryTemperature>
+        </nodeMemory>
+
+        <nodeNetInterface>.1.3.6.1.4.1.27500.1.7.6
+            <nodeNetInterfaceStatus>.1.3.6.1.4.1.27500.1.7.6.1.2</nodeNetInterfaceStatus>
+            <nodeNetInterfaceReceiveSpeed>.1.3.6.1.4.1.27500.1.7.6.1.3</nodeNetInterfaceReceiveSpeed>
+            <nodeNetInterfaceSendSpeed>.1.3.6.1.4.1.27500.1.7.6.1.4</nodeNetInterfaceSendSpeed>
+            <nodeNetInterfaceErrorRate>.1.3.6.1.4.1.27500.1.7.6.1.5</nodeNetInterfaceErrorRate>
+            <nodeNetInterfaceDropRate>.1.3.6.1.4.1.27500.1.7.6.1.6</nodeNetInterfaceDropRate>
+        </nodeNetInterface>
+
+        <nodeDiskController>.1.3.6.1.4.1.27500.1.7.7
+            <nodeDiskControllerStatus>.1.3.6.1.4.1.27500.1.7.7.1.2</nodeDiskControllerStatus>
+            <nodeDiskControllerVender>.1.3.6.1.4.1.27500.1.7.7.1.3</nodeDiskControllerVender>
+        </nodeDiskController>
+    </node>
+
+    <disk>
+        <capacity>.1.3.6.1.4.1.27500.1.8.5
+            <totalCapacity>.1.3.6.1.4.1.27500.1.8.5.1.2</totalCapacity>
+            <capacityOfUsed>.1.3.6.1.4.1.27500.1.8.5.1.3</capacityOfUsed>
+            <capacityOfUnused>.1.3.6.1.4.1.27500.1.8.5.1.4</capacityOfUnused>
+            <available>.1.3.6.1.4.1.27500.1.8.5.1.5</available>
+        </capacity>
+
+        <nodeSystemDisk>.1.3.6.1.4.1.27500.1.8.6
+            <nodeSystemDiskStatus>.1.3.6.1.4.1.27500.1.8.6.1.2</nodeSystemDiskStatus>
+            <nodeSystemDiskUsageRate>.1.3.6.1.4.1.27500.1.8.6.1.3</nodeSystemDiskUsageRate>
+        </nodeSystemDisk>
+
+        <nodeDisk>.1.3.6.1.4.1.27500.1.8.7
+            <nodeDiskStatus>.1.3.6.1.4.1.27500.1.8.7.1.2</nodeDiskStatus>
+            <nodeDiskSmartInfo>.1.3.6.1.4.1.27500.1.8.7.1.3</nodeDiskSmartInfo>
+            <nodeDiskBadSectorCount>.1.3.6.1.4.1.27500.1.8.7.1.4</nodeDiskBadSectorCount>
+            <nodeDiskStandbyBlockNumber>.1.3.6.1.4.1.27500.1.8.7.1.5</nodeDiskStandbyBlockNumber>
+            <nodeDiskTemperature>.1.3.6.1.4.1.27500.1.8.7.1.6</nodeDiskTemperature>
+            <nodeDiskSSDAbrasion>.1.3.6.1.4.1.27500.1.8.7.1.7</nodeDiskSSDAbrasion>
+            <nodeDiskSmartState>.1.3.6.1.4.1.27500.1.8.7.1.8</nodeDiskSmartState>
+            <nodeDiskSize>.1.3.6.1.4.1.27500.1.8.7.1.9</nodeDiskSize>
+            <nodeDiskRpm>.1.3.6.1.4.1.27500.1.8.7.1.10</nodeDiskRpm>
+            <nodeDiskVender>.1.3.6.1.4.1.27500.1.8.7.1.11</nodeDiskVender>
+            <nodeDiskUsageRate>.1.3.6.1.4.1.27500.1.8.7.1.12</nodeDiskUsageRate>
+        </nodeDisk>
+    </disk>
+
+    <cluster>
+        <zkStatus>.1.3.6.1.4.1.27500.1.9.1.0</zkStatus>
+
+        <nisStatus>.1.3.6.1.4.1.27500.1.9.2.0</nisStatus>
+
+        <nodeService>.1.3.6.1.4.1.27500.1.9.3
+            <nodeServiceOparaStatus>.1.3.6.1.4.1.27500.1.9.3.1.2</nodeServiceOparaStatus>
+            <nodeServiceOstorStatus>.1.3.6.1.4.1.27500.1.9.3.1.3</nodeServiceOstorStatus>
+            <nodeServiceOcnasStatus>.1.3.6.1.4.1.27500.1.9.3.1.4</nodeServiceOcnasStatus>
+            <nodeServiceOjmgsStatus>.1.3.6.1.4.1.27500.1.9.3.1.5</nodeServiceOjmgsStatus>
+            <nodeServiceOjobStatus>.1.3.6.1.4.1.27500.1.9.3.1.6</nodeServiceOjobStatus>
+            <nodeServiceOappStatus>.1.3.6.1.4.1.27500.1.9.3.1.7</nodeServiceOappStatus>
+        </nodeService>
+
+        <nodeNasService>.1.3.6.1.4.1.27500.1.9.4
+            <nodeNasServiceIndex>.1.3.6.1.4.1.27500.1.9.4.1.1</nodeNasServiceIndex>
+            <nodeNFS>.1.3.6.1.4.1.27500.1.9.4.1.2</nodeNFS>
+            <nodeSMB>.1.3.6.1.4.1.27500.1.9.4.1.3</nodeSMB>
+            <nodeFTP>.1.3.6.1.4.1.27500.1.9.4.1.4</nodeFTP>
+            <nodeCTDB>.1.3.6.1.4.1.27500.1.9.4.1.5</nodeCTDB>
+            <nodeLocalAuth>.1.3.6.1.4.1.27500.1.9.4.1.6</nodeLocalAuth>
+        </nodeNasService>
+    </cluster>
+
+    <parameter>
+        <minMetaReplica>.1.3.6.1.4.1.27500.1.10.1.0</minMetaReplica>
+        <minJNLReplica>.1.3.6.1.4.1.27500.1.10.2.0</minJNLReplica>
+        <clientExportDir>.1.3.6.1.4.1.27500.1.10.3</clientExportDir>
+    </parameter>
+
+</snmpconfig>
+
+
+
+
+

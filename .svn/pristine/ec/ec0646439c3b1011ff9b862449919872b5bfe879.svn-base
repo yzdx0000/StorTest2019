@@ -1,0 +1,10 @@
+sd=default,journal=/root/vdbench/journal
+sd=sd1,lun=\\.\PhysicalDrive1,offset=0,align=0
+sd=sd2,lun=\\.\PhysicalDrive2,offset=0,align=0
+sd=sd4,lun=\\.\PhysicalDrive4,offset=0,align=0
+sd=sd3,lun=\\.\PhysicalDrive3,offset=0,align=0
+wd=wd1,sd=sd1,xfersize=(16k,20,32k,10,64k,30,192k,40),rdpct=0,seekpct=0
+wd=wd2,sd=sd2,xfersize=(270k,20,520k,10,1036k,30,4095k,40),rdpct=0,seekpct=0
+wd=wd4,sd=sd4,xfersize=(16k,20,32k,10,64k,30,192k,40),rdpct=0,seekpct=0
+wd=wd3,sd=sd3,xfersize=(270k,20,520k,10,1036k,30,4095k,40),rdpct=0,seekpct=0
+rd=run1,wd=wd*,iorate=200,elapsed=600,maxdata=32G,threads=32,interval=1

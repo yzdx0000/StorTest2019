@@ -1,0 +1,19 @@
+<?xml version="1.0" standalone="yes"?>
+<path_info>
+  <ad_set>dwsad.com</ad_set>
+  <net_driver_path>\\70.2.42.232\smb_dac_smb_acl_all\</net_driver_path>
+  <test_user_u1>\du1</test_user_u1>
+  <test_user_u2>\du2</test_user_u2>
+  <test_user_u3>\du3</test_user_u3>
+  <test_user_u4>\du4</test_user_u4>
+  <test_user_u5>\du5</test_user_u5>
+  <pwd_u1>parastor;123</pwd_u1>
+  <pwd_u2>parastor;123</pwd_u2>
+  <pwd_u3>parastor;123</pwd_u3>
+  <pwd_u4>parastor;123</pwd_u4>
+  <pwd_u5>parastor;123</pwd_u5>
+  <test_group_1>\sugon</test_group_1>
+  <test_temp>0</test_temp>
+  <test_sucess>0</test_sucess>
+  <test_failed>0</test_failed>
+</path_info>

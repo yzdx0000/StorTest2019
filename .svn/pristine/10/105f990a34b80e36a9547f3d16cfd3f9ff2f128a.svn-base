@@ -1,0 +1,31 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建桶模块
+#使用方法：调用函数，指定ostor_ip、桶名、证书id。
+#如：output = bucket_add("10.10.222.6","test1","000023GNCOR3TGZU00001ZRM69FDH4O2")
+#作者：王建磊
+#创建时间：2017/10/19
+#更新时间：2017/10/19
+#**********************************************#
+import os,sys
+import commands
+
+#创建桶命令生成函数
+def bucket_add_cmd(ip,bucketname,credential):
+	part1 = "curl -i http://" 	#拼串片段，无需关注。
+	part2 = ":20480/" 							 	#拼串片段，无需关注。
+	part3 = " -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential="		#拼串片段，无需关注。
+	cmd = ''.join((part1,ip,part2,bucketname,part3,credential,"\""))#生成创建桶的指令
+	return cmd
+
+#创建桶函数
+def bucket_add(ip,bucketname,credential):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	cmd = bucket_add_cmd(ip,bucketname,credential)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	return output
+
+#调试代码
+#cmd=bucket_add_cmd('10.2.30.xx','hehe','0000000001')
+#print cmd
+#output = bucket_add("10.10.222.6","test1","000023GNCOR3TGZU00001ZRM69FDH4O2")
+#print output

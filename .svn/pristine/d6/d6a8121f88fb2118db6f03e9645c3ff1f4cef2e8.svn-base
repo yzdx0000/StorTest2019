@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="bigfile" description="sample benchmark for s3">
+
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW2PO1B8F4QBKHP30K2EL1TO9IPQEEFKML0PT327N3GJS5B82G;secretkey=ba97d8566029e44972ea0518352a87c3cf1f5687;endpoint=http://30.10.10.151:20480;path_style_access=true;timeout=30000;" />
+
+  <workflow>
+<workstage name="init">
+        <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW2PO1B8F4QBKHP30K2EL1TO9IPQEEFKML0PT327N3GJS5B82G;secretkey=ba97d8566029e44972ea0518352a87c3cf1f5687;endpoint=http://30.10.10.151:20480;path_style_access=true;timeout=720000;" />
+      <work type="init" workers="64" config="cprefix=zh1031node89b;containers=r(1,30)" />
+    </workstage>
+    <workstage name="prepare">
+      <work type="prepare" workers="100" config="cprefix=zh1031node89b;oprefix=apple;containers=r(1,30);objects=r(1,1000);sizes=h(1|64|40,128|256|30,256|512|30)MB" />
+    </workstage>
+
+    <workstage name="mn">
+      <work name="mn1" workers="100" runtime="7200">
+        <operation type="write" ratio="70" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(1,200);sizes=h(1|64|40,128|256|30,256|512|30)MB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(201,400);hashCheck=False" />
+	</work>
+      <work name="mdn2" workers="100" runtime="7200">
+        <operation type="write" ratio="60" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(401,600);sizes=h(1|64|40,128|256|30,256|512|30)MB;hashCheck=False" />
+        <operation type="read" ratio="40" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(601,700);hashCheck=False" />
+	</work>
+      <work name="mn3" workers="100" runtime="7200">
+        <operation type="write" ratio="30" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(701,800);sizes=h(1|64|40,128|256|30,256|512|30)MB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(801,900);hashCheck=False" />
+	</work>
+      <work name="mn4" workers="100" runtime="7200">
+        <operation type="read" ratio="100" config="cprefix=zh1031node89b;oprefix=apple;containers=u(1,30);objects=u(901,1000);sizes=h(1|64|40,128|256|30,256|512|30)MB;hashCheck=False" />
+      </work>
+    </workstage>
+
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zh1031node89b;oprefix=apple;containers=r(1,30);objects=r(1,1000)" />
+    </workstage>
+
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zh1031node89b;containers=r(1,30)" />
+    </workstage>
+
+  </workflow>
+
+</workload>

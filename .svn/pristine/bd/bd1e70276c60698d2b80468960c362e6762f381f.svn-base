@@ -1,0 +1,41 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：删除账户模块
+#使用方法：调用"acc_del()"函数，指定账户名、email即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/11
+#**********************************************#
+import os,sys
+import commands
+import sys,os
+import _checkresult_lyz
+#命令生成函数
+def acc_del_cmd(mgrip,acc_id):
+	cmd='ssh '+ mgrip+' "/home/parastor/bin/sysctl/parastor_pos delaccount accountid='+acc_id+'"'	 	#拼串片段，无需关注。
+	#cmd = ''.join((part1,acc_id))#生成指令
+	return cmd
+
+#删除账户函数
+def acc_del(mgrip,acc_id):#输入参数为:"账户id"
+	cmd = acc_del_cmd(mgrip,acc_id)
+	print cmd
+	(return_code,output)=commands.getstatusoutput(cmd)
+	print output
+	if (output[0:1]!='a'):
+		print "delete error!"
+		return -1
+	print "delete success!"
+def acc_delHaveLog(mgrip,acc_id,logger):#输入参数为:"账户id"
+	cmd = acc_del_cmd(mgrip,acc_id)
+	logger.info(cmd)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	if (output[0:1]!='a'):
+		logger.error("delete error!")
+		return -1
+	logger.info("delete success!")
+if __name__=="__main__":
+	acc_del(sys.argv[1],sys.argv[2])
+#调试代码
+#acc_del('0000000000000028')

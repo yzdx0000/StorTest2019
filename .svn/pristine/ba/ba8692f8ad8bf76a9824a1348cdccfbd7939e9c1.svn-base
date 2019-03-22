@@ -1,0 +1,16 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+import subprocess
+acl_num=5
+target_accountuid=[]
+child2=subprocess.Popen('sh _get_accuid_zh.sh',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+child2.wait()
+result=child2.stdout.readlines()
+res=str(result)   #将得到的列表转化为字符串
+res=res.split(' ') #以空格为分隔符，将字符串转化为列表
+res[0]=res[0][2:]  #对于第一个元素，舍弃掉前两位无用的符号
+res[-1]=res[-1][0:32]   #对于最后一个元素，舍弃掉后面的换行符等无用符号
+for i in range(0,acl_num):
+    target_accountuid.append(res[i])
+    print target_accountuid[i]

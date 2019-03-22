@@ -1,0 +1,31 @@
+#!/bin/bash
+if [ $# -ne 4 ]
+then
+	echo Usage:create_xml.sh xml_to_change cprefix_name cli_node_ip mgr_ctl_ip
+	exit 1
+fi
+mgrip=$4
+xml_name=$1
+num=$2
+dst_path=`pwd`
+dst_ip=$3
+dst_file="$dst_ip:$dst_path"
+scp add_acc_and_cer_diws.sh $mgrip:/root
+scp $xml_name $mgrip:/root
+
+ssh $mgrip "sh /root/add_acc_and_cer_diws.sh $xml_name $num $dst_file"
+#../../cli.sh submit bak
+echo "#$num" >> create_xml.sh
+#d001
+#d002
+#d003
+#d003
+#d004
+#d005
+#d006
+#d007
+#d008
+#d009
+#d010
+#d011
+#d012

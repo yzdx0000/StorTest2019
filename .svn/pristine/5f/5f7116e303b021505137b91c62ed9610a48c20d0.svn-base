@@ -1,0 +1,15 @@
+sd=default,journal=/root/vdbench/journal,openflags=o_direct
+sd=sd1,lun=/dev/sdc,range=(0,100M)
+sd=sd2,lun=/dev/sdd,range=(0,100M)
+sd=sd3,lun=/dev/sde,range=(0,100M)
+sd=sd4,lun=/dev/sdf,range=(0,100M)
+sd=sd5,lun=/dev/sdg,range=(0,100M)
+sd=sd6,lun=/dev/sdh,range=(0,100M)
+wd=default,xfersize=(4k,20,8k,20,1k,35,10k,25),rdpct=0,seekpct=0
+wd=wd1,sd=sd1
+wd=wd2,sd=sd2
+wd=wd3,sd=sd3
+wd=wd4,sd=sd4
+wd=wd5,sd=sd5
+wd=wd6,sd=sd6
+rd=run1,wd=wd*,iorate=max,elapsed=600,maxdata=1G,threads=8,interval=1

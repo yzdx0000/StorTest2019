@@ -1,0 +1,105 @@
+; 脚本放到不做节点故障的节点即可
+; 网络故障要down的网卡不可以包含[]中的ip，即[]中的ip不可以down掉
+; 使用者自己保证故障冗余，脚本内不做判断
+; 每个故障都有个开关配置，置成0，则此故障不做
+; 故障时间是做完故障到恢复故障的时间，等待时间是恢复完故障到下次故障的时间
+
+[10.2.40.47]
+; 节点故障
+run_down_node_fault = 0                  ; 0代表不做宕节点的故障，1代表做宕节点的故障
+down_node_fault_time = 1-300             ; 宕节点故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有
+down_node_wait_time = 3600                ; 宕节点故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有
+
+; 网络故障
+run_down_net_fault = 1               ; 0代表不做断数据网的故障，1代表做断数据网的故障
+net_lst =  enp61s0f0                ; 做故障的网卡名
+net_fault_num = 1                        ; 故障网卡的个数
+net_fault_time = 1-300                   ; 网络故障的故障时间, 单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有'
+net_wait_time = 300                      ; 网络故障的间隔时间, 单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有'
+
+; 数据磁盘故障
+run_down_data_disk_fault = 1                 ; 0代表不做数据磁盘故障，1代表做数据磁盘故障
+data_disk_fault_lst = sdb        ; 故障数据盘的盘符范围，如果填None，默认所有数据磁盘
+data_disk_fault_num = 1                      ; 故障数据盘的个数
+data_disk_fault_time = 1-300                  ; 数据磁盘故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机
+data_disk_wait_time = 300                     ; 数据磁盘故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机
+
+; 共享磁盘故障
+run_down_share_disk_fault = 0                ; 0代表不做共享磁盘故障，1代表做共享磁盘故障
+share_disk_fault_lst = sdj,sdm        ; 故障共享盘的盘符范围，如果填None，默认所有共享磁盘
+share_disk_fault_num = 1                       ; 故障共享盘的个数
+share_disk_fault_time = 1-300                  ; 共享磁盘故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+share_disk_wait_time = 300                     ; 共享磁盘故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+
+; 进程故障
+run_process_fault = 1                                     ; 0代表不做杀进程故障，1代表做杀进程故障
+pro_fault_lst = oRole,oJob,oPara,oOss,oCnas,oJmgs  ; 故障进程的类型
+pro_fault_num = 4                                       ; 故障进程的个数
+pro_wait_time = 300                                       ; 进程故障的间隔时间，单位:s， 有'-'代表时间段，会取一个
+
+[10.2.40.48]
+; 节点故障
+run_down_node_fault = 0                  ; 0代表不做宕节点的故障，1代表做宕节点的故障
+down_node_fault_time = 1-300             ; 宕节点故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有
+down_node_wait_time = 300                ; 宕节点故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有
+
+; 网络故障
+run_down_net_fault = 0                 ; 0代表不做断数据网的故障，1代表做断数据网的故障
+net_lst = enp61s0f0               ; 做故障的网卡名
+net_fault_num = 1                        ; 故障网卡的个数
+net_fault_time = 1-300                   ; 网络故障的故障时间, 单位:s， 有'-'代表时间段，会取一个时间段内随机时间，
+net_wait_time = 300                      ; 网络故障的间隔时间, 单位:s， 有'-'代表时间段，会取一个时间段内随机时间
+
+; 数据磁盘故障
+run_down_data_disk_fault = 1                 ; 0代表不做数据磁盘故障，1代表做数据磁盘故障
+data_disk_fault_lst = sdb         ; 故障数据盘的盘符范围，如果填None，默认所有数据磁盘
+data_disk_fault_num = 1                       ; 故障数据盘的个数
+data_disk_fault_time = 1-300                  ; 数据磁盘故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+data_disk_wait_time = 300                     ; 数据磁盘故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机
+
+; 共享磁盘故障
+run_down_share_disk_fault = 0                ; 0代表不做共享磁盘故障，1代表做共享磁盘故障
+share_disk_fault_lst = sdm,sdn        ; 故障共享盘的盘符范围，如果填None，默认所有共享磁盘
+share_disk_fault_num = 1                       ; 故障共享盘的个数
+share_disk_fault_time = 1-300                  ; 共享磁盘故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+share_disk_wait_time = 600
+
+; 进程故障
+run_process_fault = 1                                    ; 0代表不做杀进程故障，1代表做杀进程故障
+pro_fault_lst = oRole,zk,oOss,oJmgs,oJob   ; 故障进程的类型
+pro_fault_num = 3                                         ; 故障进程的个数
+pro_wait_time = 300                                       ; 进程故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段>
+
+[10.2.40.49]
+; 节点故障
+run_down_node_fault = 0                  ; 0代表不做宕节点的故障，1代表做宕节点的故障
+down_node_fault_time = 1-300             ; 宕节点故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有
+down_node_wait_time = 300                ; 宕节点故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有
+
+; 网络故障
+run_down_net_fault = 0                   ; 0代表不做断数据网的故障，1代表做断数据网的故障
+net_lst = enp61s0f0,enp61s0f1                  ; 做故障的网卡名
+net_fault_num = 2                        ; 故障网卡的个数
+net_fault_time = 1-300                   ; 网络故障的故障时间, 单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有'-
+net_wait_time = 900                      ; 网络故障的间隔时间, 单位:s， 有'-'代表时间段，会取一个时间段内随机时间，没有'-
+
+; 数据磁盘故障
+run_down_data_disk_fault = 0                 ; 0代表不做数据磁盘故障，1代表做数据磁盘故障
+data_disk_fault_lst = sdg        ; 故障数据盘的盘符范围，如果填None，默认所有数据磁盘
+data_disk_fault_num = 2                       ; 故障数据盘的个数
+data_disk_fault_time = 1-300                  ; 数据磁盘故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+data_disk_wait_time = 300                     ; 数据磁盘故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+
+; 共享磁盘故障
+run_down_share_disk_fault = 0                  ; 0代表不做共享磁盘故障，1代表做共享磁盘故障
+share_disk_fault_lst = sdl,sdm        ; 故障共享盘的盘符范围，如果填None，默认所有共享磁盘
+share_disk_fault_num = 1                       ; 故障共享盘的个数
+share_disk_fault_time = 1-300                  ; 共享磁盘故障的故障时间，单位:s， 有'-'代表时间段，会取一个时间段内随机时
+share_disk_wait_time = 600                     ; 共享磁盘故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段内
+
+; 进程故障
+run_process_fault = 0                                     ; 0代表不做杀进程故障，1代表做杀进程故障
+pro_fault_lst = oPara,oRole,oJob,oOss,oCnas,oJmgs,oJmw   ; 故障进程的类型
+pro_fault_num = 5                                         ; 故障进程的个数
+pro_wait_time = 300                                       ; 进程故障的间隔时间，单位:s， 有'-'代表时间段，会取一个时间段
+

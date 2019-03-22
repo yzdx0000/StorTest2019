@@ -1,0 +1,38 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建文件模块
+#说明：创建测试文件，用于上传。每执行一次生成的文件MD5均不同。
+#使用方法：直接调用mk_file()函数，生成文件的路径，文件的大小作为参数。以M为单位
+#例：mk_file("/home/5Mfile",5)
+#作者：王建磊
+#创建时间：2017/10/24
+#更新时间：2017/10/24
+#**********************************************#
+import os
+import sys
+import random
+
+#【主调函数】输入文件生成的绝对路径和文件大小作为参数。以M为单位。
+def mk_file(obj_path,amount):
+        a=[0 for x in range(1024*1024)]
+        for i in range(len(a)-10):
+            a[i]='a'
+        for j in range(10):
+            data=random.randint(0,9)
+            a[len(a)-10+j]=str(data)
+        a="".join(a)
+        f=open(obj_path,'a+')
+        for k in range(amount):
+                f.write(a)
+        f.close()
+
+#创建随机字符
+def radom_character(charnumber):
+	data = ''
+	for i in range(int(charnumber)):
+		data_cur = random.choice('abcdefghijklmnopqrstuvwxyz')
+		data = data + data_cur
+	return data
+
+if __name__ == '__main__':
+	mk_file(sys.argv[1],int(sys.argv[2]))

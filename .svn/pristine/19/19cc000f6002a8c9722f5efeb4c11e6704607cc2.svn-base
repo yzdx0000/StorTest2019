@@ -1,0 +1,31 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于查询账户认证###########
+#需要执行list_certificates_exc，参数包括：oOms节点ip和accountid
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+def list_certificates_cmd(ip,account_id):
+    cmd='/home/parastor/bin/sysctl/parastor_pos'+' listcertificates'+' accountid='+str(account_id)  #执行查询账户认证命令本身
+    cmd='ssh '+str(ip)+' -C '+"'"+cmd+"'"   #到管理节点去执行查询账户认证命令
+    return cmd
+
+def list_certificates_exc(ip,account_id):
+    cmd=list_certificates_cmd(ip,account_id)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    list_certificates_exc(mgr_ip,account_id)
+    list_certificates_exc(all_argvs['master_mgr_ip'],'00003P6T9RXMXKRA')   
+

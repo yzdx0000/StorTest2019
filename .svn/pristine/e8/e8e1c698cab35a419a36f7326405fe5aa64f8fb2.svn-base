@@ -1,0 +1,183 @@
+#!/usr/bin/python
+#-*-coding:utf-8 -*
+"""
+:Date: 2019-01-02
+:Author: wuyq
+:Description:
+function: Try to find the best performance configuration.
+:Changerlog:
+"""
+import os
+import time
+import datetime
+import xml
+import commands
+import ConfigParser
+import utils_path
+import log
+import common2
+import common
+import get_config
+import login
+import breakdown
+
+# 参数实例化
+conf_file = common2.CONF_FILE
+osan = common2.oSan()
+reliable = breakdown.Os_Reliable()
+disk = breakdown.disk()
+node = common.Node()
+conf = ConfigParser.ConfigParser()
+
+# 初始化日志文件
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]
+log_file_path = log.get_log_path(file_name)
+log.init(log_file_path, True)
+
+# 获取集群节点信息
+deploy_ips = get_config.get_env_ip_info(conf_file)
+client_ips = get_config.get_allclient_ip()
+
+config_info = xml.dom.minidom.parse(conf_file)
+replica = config_info.getElementsByTagName('replica')[0].firstChild.nodeValue
+strip_width = config_info.getElementsByTagName('stripwidth')[0].firstChild.nodeValue
+node_parity = int(replica) - 1
+vip = login.login()
+now_path = os.path.dirname(os.path.abspath(__file__))
+per_result_path = os.path.join(now_path, 'per_result')
+if os.path.exists(per_result_path) is False:
+    os.mkdir(per_result_path)
+
+current_time = datetime.datetime.now()
+now_time = current_time.strftime('%Y-%m-%d_%H-%M-%S')
+per_log = per_result_path + '/stress_res_' + now_time + '.log'
+vdb_conf = now_path + '/vdb.conf'
+
+xfersize_conf = '(4k,20,16k,20,64k,20,256k,20,512k,20)'
+iorate_conf = 'max'
+rdpct_conf = 0
+seekpct_conf = 0
+output_dir = 'stress_io'    # vdbench output dirname
+luns_list = []              # A list of volumes used each time
+thread_list = []            # A list of threads used each time
+iorate_list = []            # A list of iorate produced each time
+base_nums = osan.get_lun_nums(deploy_ips[0])
+
+def view_vdb_result(client_ip=client_ips[0]):
+    result_path = '/root/output/' + output_dir + '_nor'
+    cmd1 = ("ssh %s 'cat %s/summary.html' | grep 'avg' | awk -F 'avg' '{print $2}'" % (client_ip, result_path))
+    rc1, result = commands.getstatusoutput(cmd1)
+    cmd2 = ("ssh %s 'cat %s/totals.html' | grep 'Starting.*threads' | awk -F 'threads=' '{print $2}' | awk -F '</b>' '{print $1}'"
+            % (client_ip, result_path))
+    rc2, final = commands.getstatusoutput(cmd2)
+    lun_nums = osan.get_lun_nums(deploy_ips[0])
+    if 0 != rc1 or 0 != rc2:
+        log.error("Can't view the output of vdbench in %s" % client_ip)
+        os._exit(1)
+    else:
+        result_list = result.split('\n')
+        threads_list = final.split('\n')
+        iorate_list = []
+        bw_list = []
+        split_line = "----------------------------------------------------------------------"
+        title_line = "Result count | iorate  | bandwidth | resp_time | queue_depth | threads"
+        log.info(split_line)
+        log.info(title_line)
+        per_write = open(per_log, 'a+')
+        per_write.write(split_line+'\n')
+        per_write.write(title_line+'\n')
+        count = 1
+        for each_res in result_list:
+            result = each_res.split()
+            log.info(split_line)
+            res_line = ("Result %-5s | %-7s | %-9s | %-9s | %-11s | %-7s"
+                        % (str(count), result[1], result[2], result[5], result[10], threads_list[count - 1]))
+            log.info(res_line)
+            per_write.write(split_line+'\n')
+            per_write.write(res_line+'\n')
+
+            iorate_list.append(float(result[1]))
+            bw_list.append(float(result[2]))
+            count += 1
+        log.info(split_line)
+        per_write.write(split_line + '\n')
+        res_total = ("the Max iops:%s, threads:%s, Lun nums:%s"
+                     % (max(iorate_list), threads_list[iorate_list.index(max(iorate_list))], str(lun_nums)))
+        log.info(res_total)
+        per_write.write(res_total+'\n')
+        per_write.write(split_line+'\n')
+        per_write.close()
+        return max(iorate_list), threads_list[iorate_list.index(max(iorate_list))]
+
+def process():
+    log.info("Start to understand the performance of the cluster system...")
+    ex_count = 1
+    while True:
+        split_line = "======================================================================"
+        log.info(split_line)
+        log.info("The %s time to understand the performance..." % ex_count)
+        log.info("Step1:Generate vdbench pressure test parameters.")
+        stress_io = osan.gen_stress_vdb(xfersize=xfersize_conf,
+                                        rdpct=rdpct_conf,
+                                        seekpct=seekpct_conf,
+                                        iorate=iorate_conf,
+                                        model='forthreads=(1-64,d)')
+
+        log.info("Step2:Run vdbench stress test in host 1.host IP:%s" % client_ips[0])
+        osan.run_vdb(client_ips[0], stress_io, output=output_dir, time=3600)
+
+        time.sleep(10)
+        log.info("Step3:View the vdbench execution results.host IP:%s" % client_ips[0])
+        (iorate, thread) = view_vdb_result(client_ips[0])
+        now_nums = osan.get_lun_nums(deploy_ips[0])
+
+        log.info("The %s time to understand the performance successful!" % ex_count)
+        log.info(split_line)
+        if len(iorate_list) > 0 and iorate < iorate_list[-1]:
+            final_res = ("the Max iops:%s, the Suitable threads:%s, the Suitable LUN nums:%s"
+                         %(iorate_list[-1], thread_list[-1], luns_list[-1]))
+            log.info(final_res)
+            log.info(split_line)
+            per_write = open(per_log, 'a+')
+            per_write.write(split_line+'\n')
+            per_write.write(final_res+'\n')
+            per_write.write(split_line+'\n')
+            per_write.close()
+            conf.remove_section('stress_conf')
+            conf.add_section('stress_conf')
+            conf.set('stress_conf', 'max_iops', iorate_list[-1])
+            conf.set('stress_conf', 'threads', thread_list[-1])
+            conf.set('stress_conf', 'lun_nums', luns_list[-1])
+            conf.write(open(vdb_conf, 'w'))
+            break
+        iorate_list.append(iorate)
+        thread_list.append(thread)
+        luns_list.append(now_nums)
+        time.sleep(5)
+
+        log.info("Step4:Add the number of base nums.Number of now LUNs:%s" % str(now_nums))
+        lun_ids = osan.get_lun(deploy_ips[0])
+        for count in range(max(lun_ids)+1, max(lun_ids)+base_nums+1):
+            osan.create_lun(s_ip=deploy_ips[0], lun_name="lun_"+str(count), stor_pool_id=2,
+                            acc_zone_id=1, replica_num=replica, node_parity_num=node_parity,
+                            stripe_width=strip_width, lun_type="THIN", total_bytes="1073741824",
+                            max_throughput="9000", max_iops="2000", disk_parity_num="0")
+
+        log.info("Step5:Map all new LUNs to the host groups.")
+        host_groups = osan.get_host_groups(deploy_ips[0])
+
+        for count in range(max(lun_ids)+1, max(lun_ids)+base_nums+1):
+                osan.map_lun(s_ip=deploy_ips[0], lun_ids=count, hg_id=host_groups[count % len(client_ips)])
+
+        log.info("Step6:Login all hosts to the vips again.")
+        login.login()
+        ex_count += 1
+
+    log.info("List the results of this stress test...")
+    cmd = ('cat %s' % per_log)
+    stdout = commands.getoutput(cmd)
+    log.info(stdout)
+
+if __name__ == '__main__':
+    process()

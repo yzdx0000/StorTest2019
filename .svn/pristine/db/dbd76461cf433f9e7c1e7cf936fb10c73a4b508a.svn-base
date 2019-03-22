@@ -1,0 +1,27 @@
+# -*- coding:utf-8 -*
+import os,sys,commands
+import _checkresult_lyz
+#该脚本用来设置object的acl
+#dest_credentials,dest_mails,operationss都是列表，dest_credentials是dst的certificateid列表，dest_mails是dest_mail的列表，operationss是每个用户权限的列表，他的每个元素仍然是一个列表，例如[[READ],[READ,WRITE]]
+def setobjectacl(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credentials,dest_mails,operationss):
+	cmd = "curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList>" %(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail)
+	for i in range(len(dest_credentials)):
+		dest_credential=dest_credentials[i]
+		dest_mail=dest_mails[i]
+		operations=operationss[i]
+		for operation in operations:
+			print operation
+			#cmd="curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'"
+			cmdoperation="<Grant><Grantee xmlns:xsi =\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant>" %(dest_credential,dest_mail,operation)
+			cmd=cmd+cmdoperation
+	cmd=cmd+"</AccessControlList></AccessControlPolicy>\'"
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	re=_checkresult_lyz.checkresult(status,output)
+	if re == -1:
+		return -1
+if __name__=="__main__":
+	setobjectacl('10.2.40.18', 'acl1031', 'objectacl1031', '000024OZMBDHHAHA000025XC0GHKSMWE','000024OZMBDHHAHA00001ZJXZXL623PS', 'lyz8@sugon.com',['000020ZYG4SAATAI00001ZJXZXL623PS','000025XC0ZXH0Z6U00001ZJXZXL623PS'],['lyz4@sugon.com'], [['FULL_CONTROL']])
+	#setobjectacl('10.2.40.18', 'acl1031', 'objectacl1031', '000024OZMBDHHAHA000025XC0GHKSMWE','000024OZMBDHHAHA00001ZJXZXL623PS', 'lyz8@sugon.com', ['000023GN82J64MKK00001ZJXZXL623PS','00001YJ9NJ1NEAH000001ZJXZXL623PS'],['lyz7@sugon.com','lyz5@sugon.com'], [['READ', 'READ_ACP', 'WRITE_ACP'],['READ','READ_ACP']])
+

@@ -1,0 +1,26 @@
+# -*- coding:utf-8 -*- #可以加入中文注释
+#列举当前账户所有的accountuid
+import os
+import sys
+import commands
+accountuid_lst = [] 
+def target_accountuid():
+	c="/home/parastor/bin/sysctl/parastor_pos listaccounts"
+	rc, stdout = commands.getstatusoutput(c) 
+	stdout_list = stdout.split('\n')                      #将上条指令输出的结果按行划分
+	#accountuid_lst = []                                    #定义账户uid列表
+	for line in stdout_list:                              #定义列表元素循环
+    		if 'accountuid' in line:
+			accountuid = line.split('#')[1].split(':')[1]
+			accountuid_lst.append(accountuid)
+	return accountuid_lst
+if __name__=="__main__":
+	c="/home/parastor/bin/sysctl/parastor_pos listaccounts"
+        rc, stdout = commands.getstatusoutput(c) 
+        stdout_list = stdout.split('\n')                      #将上条指令输出的结果按行划分
+        for line in stdout_list:                              #定义列表元素循环
+                if 'accountuid' in line:
+                        accountuid = line.split('#')[1].split(':')[1]
+                        accountuid_lst.append(accountuid)
+	print accountuid_lst
+

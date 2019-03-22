@@ -1,0 +1,8 @@
+# -*- coding:utf-8 -*- #可以加入中文注释
+#查询当前所有账户的列表
+import os
+import sys
+import commands
+c="/home/parastor/bin/sysctl/parastor_pos listaccounts"
+rc, stdout = commands.getstatusoutput(c) 
+print stdout

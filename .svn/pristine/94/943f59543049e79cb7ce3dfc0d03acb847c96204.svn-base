@@ -1,0 +1,43 @@
+#!/bin/bash
+
+if [ -d "/home/parastor/log/otrace" ]
+then  
+	echo "删除原有的otrace目录"
+	rm -rf /home/parastor/log/otrace
+fi
+echo "step1:创建otrace数据目录"
+mkdir /home/parastor/log/otrace
+echo "step2:删除shm里的otrace文件:"
+rm -f /dev/shm/otrace_buf
+rm -f /dev/shm/sem.otrace_tp
+sleep 2
+echo "step3:查杀旧的otraced进程"
+otrace=`pidof otraced`
+if [ -n "$otrace" ]
+then
+	kill -9 "$otrace"
+fi	
+echo "step3:启动otrace进程"
+/home/parastor/tools/otraced -d
+sleep 2
+echo "step4:开启otrace工具"
+/home/parastor/tools/otrc -z on
+echo "step5:查看otrace状态"
+/home/parastor/tools/otrc -i
+echo "step6:指定输出文件"
+/home/parastor/tools/otrc -o /home/parastor/log/otrace/otrace.data -s 4096 -S "IOPREP|DJNL|DPC|LMPC|LIOC" 
+sleep 2
+echo "step7:重启oSan进程"
+oSan_id=`pidof oSan`
+kill -9 $oSan_id
+sleep 4
+echo "step8:检查是否生成data文件"
+jud=`ls /home/parastor/log/otrace`
+if [ -n "$jud" ]
+then
+	ls -l  /home/parastor/log/otrace/
+	echo "otrace启动成功!!!"
+else
+	echo "otrace启动失败!!!"
+fi
+

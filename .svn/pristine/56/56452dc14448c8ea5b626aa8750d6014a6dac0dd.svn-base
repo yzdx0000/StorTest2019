@@ -1,0 +1,6 @@
+path="/home/StorTest/src_code/ofs/code/test/osan/osan_perf/whole"
+cmd="osan_pf_whole -m 1 -r 0"
+
+path="/home/StorTest/src_code/ofs/code/test/osan/osan_perf/whole"
+cmd="osan_pf_whole -m 1 -r 0"
+#ss

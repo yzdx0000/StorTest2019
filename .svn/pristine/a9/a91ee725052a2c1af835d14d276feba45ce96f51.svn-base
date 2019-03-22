@@ -1,0 +1,84 @@
+# -*- coding:utf-8 -*
+#脚本名称：listaccounts
+#脚本用途：该脚本获取所有account名称和id
+#脚本输入：主MGR的地址
+#脚本输出：一个列表，每个元素是一个账户信息，形式是字典，键是accountname，值是[accountid，email]
+#脚本创建者：刘艳哲
+#创建日期：2017.10.20
+import commands,sys
+import _checkresult_lyz
+def sshlistaccounts(mgrip):
+	print 'jinru sshlistaccounts'
+	(status,output)=commands.getstatusoutput('ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listaccounts"')
+	#print status
+	print output
+	accountnum=output.count('accountid')
+	beforestartAccountid=0
+	dicts={}
+	for i in range(accountnum):
+		#截取accountid
+		accountidstart=output.find('accountid:',beforestartAccountid)
+		accountidstend=output.find('#accountuid',beforestartAccountid)
+		accountid=output[(accountidstart+10):accountidstend]
+		#截取accountuid
+		accountuidstart=output.find('accountuid',beforestartAccountid)
+		accountuidend=output.find('#accountname',beforestartAccountid)
+		accountuid=output[(accountuidstart+11):accountuidend]
+		#截取accountname
+		accountnamestart=output.find('accountname:',beforestartAccountid)
+		accountnameend=output.find('#email',beforestartAccountid)
+		accountname=output[(accountnamestart+12):accountnameend]
+		#截取email
+		emailstart=output.find('email',beforestartAccountid)
+		emailend=output.find('#quota',beforestartAccountid)
+		email=output[(emailstart+6):emailend]
+		info=[]
+		info.append(accountid)
+		info.append(accountuid)
+		info.append(email)
+		dict={accountname:info}
+		dicts.update(dict)
+		beforestartAccountid=emailend+1
+		#print dict
+	print dicts
+	return dicts
+#####################################################################################
+#第二个函数与第一个不同的是，第二个多了一个logger功能
+def sshlistaccountsHaveLog(mgrip,logger):
+	(status,output)=commands.getstatusoutput('ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listaccounts"')
+	#print status
+	logger.info(output)
+	accountnum=output.count('accountid')
+	beforestartAccountid=0
+	dicts={}
+	for i in range(accountnum):
+		#截取accountid
+		accountidstart=output.find('accountid:',beforestartAccountid)
+		accountidstend=output.find('#accountuid',beforestartAccountid)
+		accountid=output[(accountidstart+10):accountidstend]
+		#截取accountuid
+		accountuidstart=output.find('accountuid',beforestartAccountid)
+		accountuidend=output.find('#accountname',beforestartAccountid)
+		accountuid=output[(accountuidstart+11):accountuidend]
+		#截取accountname
+		accountnamestart=output.find('accountname:',beforestartAccountid)
+		accountnameend=output.find('#email',beforestartAccountid)
+		accountname=output[(accountnamestart+12):accountnameend]
+		#截取email
+		emailstart=output.find('email',beforestartAccountid)
+		emailend=output.find('#quota',beforestartAccountid)
+		email=output[(emailstart+6):emailend]
+		info=[]
+		info.append(accountid)
+		info.append(accountuid)
+		info.append(email)
+		dict={accountname:info}
+		dicts.update(dict)
+		beforestartAccountid=emailend+1
+		#print dict
+	logger.info(dicts)
+	return dicts
+	
+if __name__=="__main__":
+	sshlistaccounts(sys.argv[1])
+

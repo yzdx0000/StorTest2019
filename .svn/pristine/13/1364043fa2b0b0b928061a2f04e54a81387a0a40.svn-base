@@ -1,0 +1,37 @@
+#!/usr/bin/python
+#-*- coding:utf-8 -*
+import os,sys,commands
+import logging
+import getoutputpath_lp
+
+def log(logfilename):
+    output = getoutputpath_lp.getoutputpath()
+    logfilepath=os.path.join(output,logfilename)
+    #第一步：创建logger
+    logger=logging.getLogger()
+    logger.setLevel(logging.INFO)
+    #第二步：创建一个Handler，用于输出到屏幕
+    screenp=logging.StreamHandler()
+    #第三步：创建一个Handler，用于输出到文件
+    print 'logger获得的输出文件为 %s' %logfilepath
+    filep=logging.FileHandler(logfilepath,mode='a')
+    #第四步：定义Handler的输出格式
+    formatter=logging.Formatter("%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s")
+    screenp.setFormatter(formatter)
+    filep.setFormatter(formatter)
+    #第五步，为logger增加处理器
+    logger.addHandler(screenp)
+    logger.addHandler(filep)
+    return logger
+if __name__=='__main__':
+    logg=log('test')
+    aa = 2
+    ss='ss'
+    logg.info(aa)
+    logg.debug('this is a logger debug message   ')
+    logg.info('this is a logger info message %d' %aa)
+    logg.warning('this is a logger warning message %s' %ss)
+    logg.error('this is a logger error message aa')
+    logg.critical('this is a logger critical message aa')
+
+

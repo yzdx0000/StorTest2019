@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <jenkins>
+        <ip>10.10.10.10</ip>
+        <path>/home/StorTest</path>
+    </jenkins>
+    <nodes>
+        <node>
+            <ctrl_ip>10.2.42.105</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.42.106</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.42.107</ctrl_ip>
+        </node>
+    </nodes>
+    <expand_nodes>
+        <node>
+            <ctrl_ip>10.2.42.109</ctrl_ip>
+        </node>
+    </expand_nodes>
+    <clients>
+        <client>
+            <ctrl_ip>10.2.42.109</ctrl_ip>
+        </client>
+    </clients>
+    <windows_hosts>
+        <windows_host>
+            <ip>10.2.41.230</ip>
+            <port>8010</port>
+            <switch>off</switch>
+        </windows_host>
+    </windows_hosts>
+    <svips>
+        <svip>
+            <ip>20.1.2.111</ip>
+            <ip>20.1.2.112</ip>
+        </svip>
+    </svips>
+    <vips>
+        <vip>
+            <ip>20.1.2.115-124</ip>
+            <ip>20.1.2.125-130</ip>
+        </vip>
+    </vips>
+    <!--vir  or    phy-->
+    <machinetype>vir</machinetype>
+    <stripwidth>4</stripwidth>              <!--条带宽度-->
+    <disk_parity_num>2</disk_parity_num>    <!--磁盘冗余 (副本模式, 这个值为0)-->
+    <node_parity_num>1</node_parity_num>    <!--节点冗余-->
+    <replica>1</replica>                    <!--复本数 (nmb模式, 这个值为1)-->
+    <esxis>
+        <esxi>
+            <ip>10.2.40.14</ip>
+            <name>root</name>
+            <pwd>parastor;123</pwd>
+        </esxi>
+    </esxis>
+    <!-- 卷 -->
+    <volumes>
+        <volume>volume1</volume>
+        <volume>volume2</volume>
+    </volumes>
+
+    <!-- 文件系统目录 -->
+    <mount_paths>
+        <mount_path>/mnt/volume1</mount_path>
+    </mount_paths>
+
+    <!-- windows文件系统目录 -->
+    <windows_paths>
+        <mount_path>/mnt/volume1</mount_path>
+    </windows_paths>
+
+    <!-- 快照测试路径 -->
+    <snap_test_path>/mnt/volume1/snap</snap_test_path>
+
+    <!-- 配额测试路径 -->
+    <quota_test_path>/mnt/volume1/quota_test_dir</quota_test_path>
+
+    <!-- NAS测试路径 -->
+    <nas_test_paths>
+        <nas_test_path>/mnt/volume</nas_test_path>
+    </nas_test_paths>
+
+    <!-- 集群节点和客户端节点放置安装包的位置 -->
+    <client_install_path>/root/ofs3.0/pkg</client_install_path>  <!-- 此目录会被清空，请用空目录 -->
+
+    <!-- 缺陷脚本测试路径 -->
+    <defect_test_path>/mnt/volume1/defect_case</defect_test_path>
+
+    <!-- 重要!!!执行用例列表文件 -->
+    <caselist>/home/StorTest/test_cases/cases/case_list/case_list</caselist>
+
+    <!-- 脚本日志存放路径 -->
+    <test_log_path>/home/StorTest/test_cases/log/case_log</test_log_path>
+
+    <!-- 脚本执行结果存放路径 -->
+    <test_result_path>/home/StorTest/test_cases/log/case_result</test_result_path>
+
+    <!-- 工具路径 -->
+    <tools_path>/home/StorTest/test_cases/tools</tools_path>
+	
+	<!-- 第三方安装包路径 -->
+	<third_package_path>/home/StorTest/tools</third_package_path>
+
+    <!-- vdbench工具的路径 -->
+    <vdbench_path>/home/vdbench</vdbench_path>
+
+    <!-- 快照专用vdbench工具的路径 -->
+    <snap_vdbench_path>/home/vdbench50406</snap_vdbench_path>
+
+    <!-- 每天发新包的位置 -->
+    <new_pkg_position>10.2.14.252:/mnt/sdc/ofs3.0_pkg</new_pkg_position>
+    <!-- 升级后要跑的用例 -->
+    <upgrade_case_list>/home/StorTest/test_cases/cases/case_list/case_list</upgrade_case_list>
+    <package_position>10.2.42.216:/root/ofs3.0/ParaStor-3.0.0-centos7.5-feature_ofs3.0_lastdebug0302_ce2103a_bc3a1d5_20190318_190007-2-1.tar</package_position>
+    <!-- 界面自动化相关配置参数 -->
+    <web>
+        <!-- webui的地址 -->
+        <webui_ip>10.2.41.231</webui_ip>
+
+        <!-- 浏览器名称：firefox、chrome -->
+        <explorer_name>firefox</explorer_name>
+
+        <!-- 节点名称（用于删除节点） -->
+        <web_node_name>vm153</web_node_name>
+
+        <!-- 节点ip（用于添加节点） -->
+        <web_node_ip>10.2.42.153,20.2.42.153,30.2.42.153</web_node_ip>
+
+        <!-- 集群安装包地址 -->
+        <web_pkg_position>/home/deploy</web_pkg_position>
+
+        <!-- 集群网卡名称分布 (用于子网中网卡的绑定) -->
+        <web_eth_names>
+            <web_eth_name_ctrl>ens160</web_eth_name_ctrl>
+            <web_eth_name_data>ens192</web_eth_name_data>
+            <web_eth_name_data>ens224</web_eth_name_data>
+            <web_eth_name_no_ip>ens256</web_eth_name_no_ip>
+        </web_eth_names>
+
+        <!-- 磁盘大小，用于部署集群选盘（单位GB） -->
+        <web_disk_size>10.00</web_disk_size>
+
+        <!-- 掩码长度（外网22， 内网20） -->
+        <web_network_mask>22</web_network_mask>
+
+        <!-- 物理机、虚拟机：vir 或者 phy -->
+        <web_machine>vir</web_machine>
+
+        <!-- 登录用户名 -->
+        <web_login_name>admin</web_login_name>
+
+        <!-- 登录密码 -->
+        <web_login_pwd>adminadmin</web_login_pwd>
+    </web>
+
+    <!-- testlink配置 -->
+    <testlink>false</testlink>
+    <tlurl>http://10.2.43.156/testlink/lib/api/xmlrpc/v1/xmlrpc.php</tlurl>
+    <tldevkey>1a97b5c7e30085ccbecf00ec454e9212</tldevkey>  <!-- admin的密钥 -->
+    <tlprojectname>xStor1000</tlprojectname>
+    <tlplanname>xstor1000 v1.0测试计划</tlplanname>
+    <tlplatformname> xstor1000 V1R1B2</tlplatformname>
+
+    <!-- 副本一致性检查开关:on/off -->
+    <uniform>on</uniform>
+    <!-- 日志存放节点信息 在collect_log.py中 -->
+    <err_log_ip>10.2.43.77</err_log_ip>
+    <err_log_path>/mnt/log/liuhe</err_log_path>
+    <mount_log_path ip="10.2.42.151">/mnt/volume1/log/10.2.42.151</mount_log_path>
+    <mount_log_path ip="10.2.42.152">/mnt/volume1/log/10.2.42.152</mount_log_path>
+    <mount_log_path ip="10.2.42.153">/mnt/volume1/log/10.2.42.153</mount_log_path>
+
+    <!-- 远程复制配置文件位置 -->
+    <rep_config_file_name>p300_rep_config.xml</rep_config_file_name>
+
+</testconfig>

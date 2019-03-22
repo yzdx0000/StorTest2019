@@ -1,0 +1,35 @@
+# -*- coding:utf-8 -*-            #可以加中文注释
+#**********************************************#
+#标题：批量上传客户端指定目录下的文件
+#使用方法：用户自己输入指定DS的ip和客户端ip、证书id，桶名，客户端指定目录，object名字是自己使用列表定义。
+
+#作者：张芳芳
+#创建时间：2017/10/30
+#更新时间：2017/10/30
+#**********************************************#
+import os
+import sys
+import commands
+file_list = [] 
+rc,out = commands.getstatusoutput("ssh 10.2.20.107 \"cd /mnt/fa1; find  ./ -maxdepth 1 -type f | sed 's/.\///'\"")#筛选客户端指定目录下文件
+file_list = out.split('\n')#将筛选的的文件组成列表
+print file_list           
+n = len (file_list)
+print n
+#print type(n)
+objectname_lst = []                                    #定义上传对象名字的列表
+for i in range(1,n+1):                              
+	a='juzi'                                     #上传对象名字的前缀
+	objectname_lst.append(a+str(i))             #将字符和数字组合成上传对象的最终名字
+print objectname_lst
+zuhes=zip(objectname_lst,file_list)
+print zuhes
+for zuhe in zuhes:                       #将对象的名字和上传的文件组合成列表
+	objectname=zuhe[0]
+	yuanfile=zuhe[1]
+	print yuanfile
+	d="ssh 10.2.20.107 'curl -i http://10.2.20.103:20480/zff1/%s -X PUT -T \"/mnt/fa1/%s\" -H \"Expect:Authorization:AWS4-HMAC-SHA256 Credential=000020ZYIVOIY1V000001XAX95EMVSIE\"' " %(objectname,yuanfile)  #上传指定的文件到指定的桶里
+	rc, sout = commands.getstatusoutput(d)    #使用commands模块执行Linux shell命令	
+	print sout
+
+

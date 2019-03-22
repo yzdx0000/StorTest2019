@@ -1,0 +1,78 @@
+#-*-coding:utf-8 -*
+#!/usr/bin/python
+##功能，删除空桶
+import os
+import xml.dom.minidom
+import commands
+
+def get_xml(filename):
+        
+	f = open(filename)
+	lines = f.readlines()
+	count = 0
+	for line in lines:
+		if line.startswith('<?xml'):
+                	break
+        	else:
+                	count = count + 1
+        xml_lst = lines[count:]
+        f.close()
+        xml_string = ''.join(xml_lst)
+        return xml_string
+
+def analyze_xml(filename):
+        xml_string = get_xml(filename)
+
+        xml_info = xml.dom.minidom.parseString(xml_string)
+        Buckets = xml_info.getElementsByTagName('Bucket')
+	global bucketnames
+	bucketnames=[]
+        for Bucket in Buckets:
+        	bucketname = Bucket.getElementsByTagName('Name')[0].firstChild.nodeValue
+            	bucketnames.append(bucketname)
+        print bucketnames
+	counts=len(bucketnames)
+	print "the total num of buckets is %d" % counts
+
+def delete_objects(start,end,dsip,bucketnames,certificateid):
+	j=0
+	for i in range(start,end):
+		bucket=bucketnames[i]
+		cmd='curl -s -i http://'+dsip+':20480/'+bucket+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+		output=os.popen(cmd).read()
+		num1=output.find('HTTP/1.1')
+                num2=output[(num1+9):((num1+12))]
+		if(num2=='200'):
+			cmd1=cmd='curl -s -i http://'+dsip+':20480/'+bucket+' -X HEAD -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+			output1=os.popen(cmd).read()
+			num3=output1.find('HTTP/1.1')
+        		num4=output1[(num1+9):((num1+12))]
+	#		print num4
+			if(num4=='404'):
+				j+=1
+				#print "success"
+			else:
+				print "the object %s delete error" % bucket
+				print "the recode_num of get bucket metadata is %s" % num4
+				print output1
+	return j
+if __name__ == '__main__':
+	f=open('output','w')
+	dsip=raw_input("please input ds ip: ")
+        certificateid=raw_input("please input certificate id: ")
+        cmd2='curl -s -i http://%s:20480 -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(dsip,certificateid)
+	output2=os.popen(cmd2).read()
+	num5=output2.find('HTTP/1.1')
+        num6=output2[(num5+9):((num5+12))]
+        #print num6
+        if(num6=='200'):
+                f.write(output2)
+                f.close()
+		get_xml('output')
+		analyze_xml('output')
+		start1=raw_input("please input the start num: ")
+		start=int(start1)
+		end1=raw_input("please input the end num: ")
+		end=int(end1)
+		total=delete_objects(start,end,dsip,bucketnames,certificateid)
+		print "the total num of deleted bucketnames is %d" % total

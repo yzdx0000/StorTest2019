@@ -1,0 +1,36 @@
+#-*-coding:utf-8 -*
+#!/usr/bin/python
+#该脚本会判断Object是否接受完，当Object的个数超过1000时，判断一个返回值，如果超过，则返回一个False
+import os
+import xml.dom.minidom
+import getoutputpath_lyz
+
+def get_xml():
+    output=getoutputpath_lyz.getoutputpath()
+    fileAllObjectsallpath=os.path.join(output,'fileAllObjects')
+    f = open(fileAllObjectsallpath)
+    lines = f.readlines()
+    count = 0
+    for line in lines:
+        if line.startswith('<?xml'):
+            break
+        else:
+            count = count + 1
+    xml_lst = lines[count:]
+    f.close()
+    xml_string = ''.join(xml_lst)
+    #print xml_string
+    return xml_string
+
+def analyze_xml():
+    xml_string = get_xml()
+    keys=[]
+    xml_info = xml.dom.minidom.parseString(xml_string)
+    ifenough= xml_info.getElementsByTagName('IsTruncated')[0].firstChild.nodeValue
+    #print LastModified
+    #print keys
+    print 'ifenough is %s' %ifenough
+    return ifenough,keys
+
+if __name__ == '__main__':
+    analyze_xml()

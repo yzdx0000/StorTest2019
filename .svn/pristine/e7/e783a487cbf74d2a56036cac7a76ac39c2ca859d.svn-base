@@ -1,0 +1,43 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#本脚本用于向指定文件中打印“S3执行shell”的logfile
+#本脚本包含三个函数
+#第一个函数get_current_time()获取当前时间
+#第二个函数create_logfile()用于保存shell打印的日志，四个参数分别为：需要执行的shell命令、命令的返回值、命令的输出结果和日志文件名称(默认为‘logfile’，可修改)
+#第三个函数add_content向日志中增加任意内容，两个参数：想要记录的内容和日志文件名称(默认为‘logfile’，可修改)
+
+import time
+#定义获得当前时间函数
+def get_current_time():
+    current_time=time.strftime('%Y-%m-%d-%H-%M-%S',time.localtime(time.time()))     #指定格式获取当前时间
+    time_format=[]    #定义列表，其元素保存年,月,日,时,分,秒
+    time_format=current_time.split('-')  #得到年,月,日,时,分,秒每个元素，目前尚未用到，后续可根据需求进一步完善*****
+    return current_time
+
+#定义保存日志函数，保存命令执行的时间、命令内容、标准输出和标准错误等内容    
+def create_logfile(current_cmd,return_code,output,log_name='../S3output/logfile'):
+
+    log_file=open(log_name,'a')   #以追加写的方式打开日志文件
+    current_time=get_current_time()   #获取当前时间
+    log_file.write(str(current_time))   #将当前时间写入日志
+    log_file.write('\n')
+    log_file.write('**********Notice,the next function will be excute**********\n')
+    log_file.write(str(current_cmd))   #将执行的命令写入日志
+    log_file.write('\n')
+
+    #正常输出信息
+    log_file.write('**********the shell output is********** \n')
+    log_file.write(str(return_code))
+    log_file.write(str(output))
+    log_file.write('\n')
+
+#向日志中增加任意内容函数
+def add_content(current_cmd,log_name='../S3output/logfile'):
+    log_file = open(log_name, 'a')
+    current_time = get_current_time()
+    log_file.write(str(current_time))
+    log_file.write('\n')
+    log_file.write(current_cmd)
+    log_file.write('\n')
+

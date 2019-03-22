@@ -1,0 +1,57 @@
+###############################################################################
+# !!!!!!每一行只配置一个用例，否则除第一个以外的用例都不会执行!!!!!!
+# 可以有空行
+# 单行注释请在每一行的 最开始 使用#，只要此行最开始使用了#，剩余字符均不生效
+#
+# 多行注释请使用 /*开始  */结束(!!!!!注释请占一行!!!!!!)
+/*
+/basic_function/5nodes_system_install.py
+/basic_function/1-0-5-8_mod-nodepoolname.py
+#*/ (这个结束符被注释掉，所以不生效，也就是说#的优先级高于/*和*/)
+/basic_function/5nodes_system_install.py
+*/  11.py(此结束符生效，而且这一行剩余字符均不生效，!!!!!!11.py是不会执行的!!!!!!)
+# /* 和 */不可以在一行中（/* 11.py */，这种不支持，只能识别开始的/*，后面的内容不支持）
+#zff测试通过的用/*
+#zff测试不过得用#
+################################################################################
+
+P300/29-0-0-0/s3_29_0_0_1_mix.py
+
+P300/S3/OutSide/s3testcase/29-0-0-1_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-6_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-7_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-8_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-9_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-10_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-11_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-13_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-14_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-13_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-14_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-15_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-16_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-17_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-18_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-19_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-20_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-21_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-1_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-2_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-3_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-4_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-5_lp.py
+P300/S3/OutSide/s3testcase/29-0-8-6_lp.py
+P300/S3/OutSide/s3testcase/29-0-1-12_lp.py
+P300/S3/OutSide/s3testcase/29-0-0-2_lp.py
+
+P300/S3/OutSide/s3testcase/29-0-10-1_zh.py
+P300/S3/OutSide/s3testcase/29-0-12-4_zh.py
+P300/S3/OutSide/s3testcase/29-0-12-5_zh.py
+P300/S3/OutSide/s3testcase/29-0-12-7_zh.py
+P300/S3/OutSide/s3testcase/29-0-12-8_zh.py
+P300/S3/OutSide/s3testcase/29-0-5-10_zh.py
+P300/S3/OutSide/s3testcase/29-0-5-11_zh.py
+P300/S3/OutSide/s3testcase/29-0-5-12_zh.py
+P300/S3/OutSide/s3testcase/29-0-5-7_zh.py
+P300/S3/OutSide/s3testcase/29-0-5-8_zh.py
+P300/S3/OutSide/s3testcase/29-0-5-9_zh.py

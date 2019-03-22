@@ -1,0 +1,92 @@
+#!usr/bin/env python  
+# -*- coding:utf-8 _*-
+""" 
+@author: Liu he
+@file: test.py 
+@time: 2018/10/31 
+"""
+
+import os
+import re
+import sys
+import time
+import inspect
+import random
+import utils_path
+import Lun_managerTest
+import common
+import common2
+import commands
+import breakdown
+import env_manage
+import log
+import json
+import prepare_x1000
+# import prepare_x1000
+import get_config
+from get_config import config_parser as cp
+import decorator_func
+import ReliableTest
+import access_env
+
+# 初始化配置文件
+conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+
+'''日志初始化'''
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+
+log.init(log_file_path, True)
+
+# 类实例化
+osan = Lun_managerTest.oSan()
+com_lh = breakdown.Os_Reliable()
+com_disk = common.Disk()
+node = common.Node()
+com2_osan = common2.oSan()
+com_bd_disk = breakdown.disk()
+
+node_ip1 = env_manage.deploy_ips[0]
+node_ip2 = env_manage.deploy_ips[1]
+node_ip3 = env_manage.deploy_ips[2]
+
+
+def create_luns2():
+    for i in range(3, 10):
+        lun_name = "LUN" + str(i)
+        env_manage.create_lun(node_ip1, lun_name)
+
+
+def create_iscsi_login(ips, cli_ips):
+    # node_id = com_lh.get_node_id_by_ip(ips)
+    svip = com2_osan.get_svip(ips)
+    print svip
+    osan.discover_scsi_list(client_ip=cli_ips, svip=svip[0])  # 进行一下discovery，真正的tag从xstor中拿
+    target_list = osan.get_map_target(ips)
+    print target_list
+    map_vip = com_lh.get_map_vip(ips)
+    print "aaa", map_vip
+    new_target_list = []
+    for iqn in target_list:
+        iqn = iqn.encode("utf-8")
+        lun_map_vip = iqn.split("target.")[-1]
+        print lun_map_vip
+        print iqn
+        if lun_map_vip in map_vip:
+            continue
+        else:
+            new_target_list.append(iqn)
+    print new_target_list
+    # log.info("Get Info:\nSvip list:%s \nTarget list:%s" % (svip, new_target_list))
+    # for tag in new_target_list:
+    #     log.info("主机发现存储target：%s,主机 %s 将进行SCSI登录" % (tag, cli_ips))
+    #     osan.iscsi_login(client_ip=cli_ips, iqn=tag)
+
+
+# create_luns2()
+# env_manage.create_lun_map(node_ip1)
+env_manage.create_iscsi_login(node_ip1, client_ips[0])
+# env_manage.clean_lun_map()

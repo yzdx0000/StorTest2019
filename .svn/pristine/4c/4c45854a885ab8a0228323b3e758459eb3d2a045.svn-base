@@ -1,0 +1,32 @@
+1..7
+
+1: (Is 'A' string-equal to 'B'?)
+1:   A: "Here is some more dummy content\n"
+1:   B: "Here is some more dummy content\n"
+1: ok 1
+
+2: (Is 'A' string-equal to 'B'?)
+2:   A: "Here is yet more dummy content.\n"
+2:   B: "Here is yet more dummy content.\n"
+2: ok 2
+
+3: ok 3
+
+4: ok 4
+
+5: (Is 'A' string-equal to 'B'?)
+5:   A: "Here is some more dummy content\n"
+5:   B: "Here is some more dummy content\n"
+5: ok 5
+
+6: (Is 'A' string-equal to 'B'?)
+6:   A: "Here is yet more dummy content.\n"
+6:   B: "Here is yet more dummy content.\n"
+6: ok 6
+
+7: (Is 'A' string-equal to 'B'?)
+7:   A: "Here is some more dummy content\nHere is yet more dummy content.\n"
+7:   B: "Here is some more dummy content\nHere is yet more dummy content.\n"
+7: ok 7
+
+# END

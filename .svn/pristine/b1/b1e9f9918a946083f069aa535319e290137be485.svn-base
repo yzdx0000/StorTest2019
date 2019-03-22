@@ -1,0 +1,21 @@
+# -*- coding:utf-8 -*-            #可以加中文注释
+#listcertificate  based on accountid 列举指定账户id的证书
+import os
+import sys
+import commands
+#from creataccount2 import *
+rc, stdout = commands.getstatusoutput('/home/parastor/bin/sysctl/parastor_pos listaccounts') #获取已经创建的账户id指令
+stdout_list = stdout.split('\n')                      #将上条指令输出的结果按行划分
+accountid_lst = []                                    #定义账户id列表
+for line in stdout_list:                              #定义列表元素循环
+    if 'accountid' in line:                           #加入条件判断，如果分割出来的行里面有字符"accountid"
+        accountid = line.split('#')[0].split(':')[-1] #取分隔行里面有字符"accountid"，则对该行字符分割获取账户id号
+        accountid_lst.append(accountid)               #将账户id组成一个列表
+print accountid_lst
+for accountid in accountid_lst:                       #获取账户id列表里面的元素组成循环
+#	print accountid
+	d="/home/parastor/bin/sysctl/parastor_pos listcertificates accountid=%s" %(accountid)  #列举指定账户id的证书
+	dout = os.popen(d)
+	doutput=dout.read()
+        
+	print doutput

@@ -1,0 +1,12 @@
+#!/bin/bash
+python 29-0-0-1_lp.py
+python 29-0-1-6_lp.py
+python 29-0-1-7_lp.py
+python 29-0-1-8_lp.py
+python 29-0-1-9_lp.py
+python 29-0-1-10_lp.py
+python 29-0-1-11_lp.py
+python 29-0-1-13_lp.py
+python 29-0-1-14_lp.py
+#python 29-0-0-2_lp.py
+python 29-0-1-12_lp.py

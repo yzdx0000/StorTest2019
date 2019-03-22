@@ -1,0 +1,378 @@
+# -*- encoding=utf8 -*-
+"""
+Author:wangxiang
+description:功能性函数和装饰器
+1、以后若有需要，将对函数作为入参的函数，装饰器...全部写在此模块里
+2、以下是装饰器方法名称列表:
+deco_create_storage_pool
+deco_create_lun
+judge_target
+deco_uninstall_Xstor
+pool_func
+fun_exit
+"""
+import log
+import os
+import time
+import sys
+import functools
+import inspect
+import multiprocessing
+import threading
+from multiprocessing import Pool
+
+
+def exit_fun(arg='common', num=1):
+    """
+    :Author: wangxiang
+	:Date :2018-08-13
+    :Description:退出命令
+    :param arg(str): common调用非多线程退出命令；mul_threading调用多线程退出命令
+    :param num(int): 退出的状态码: 0 是正常退出；非0是错误退出
+    :return:
+    change_log:
+            ===================================================
+            2018-08-13:
+            change:wangxiang
+            1.描述:创建
+    """
+    if arg == 'common':
+        exit(num)
+    elif arg == 'mul_threading':
+        os._exit(num)
+        # sys.exit(num)
+    else:
+        log.error("get  wrong parameter !")
+
+
+def pool_func(Pool_num, *args):
+    """
+    功能:多进程执行函数
+    执行说明：创建一个进程池pool，并设定进程的数量为2，xrange(4)会相继产生四个对象[0, 1, 2, 4]，四个对象被提交到pool中，因pool指定进程数为3，所以0、1、2会直接送到进程中执行，当其中一个执行完事后才空出一个进程处理对象3，所以会出现输出“msg: hello 3”出现在”end”后。因为为非阻塞，主函数会自己执行自个的，不搭理进程的执行，所以运行完for循环后直接输出“mMsg: hark~ Mark~ Mark~~~~~~~~~~~~~~~~~~~~~~”，主程序在pool.join（）处等待各个进程的结束
+    :param Pool_num: 进程池进程数量
+    :param args:  传入要执行的函数名称
+    :return:
+    """
+    log.info(args)
+    log.info("主进程开始执行>>> pid={}".format(os.getpid()))
+    ps = Pool(Pool_num)  # 进程池的进程个数
+    result = []  # 各进程的return值
+    # ps.apply(worker,args=(i,))          # 同步执行
+    for i in range(0, len(args)):
+        result.append(ps.apply_async(args[i], args=(i,)))  # 异步执行
+
+    # 关闭进程池，停止接受其它进程
+    ps.close()
+    # 阻塞进程
+    ps.join()
+    # for res in result:
+    #     print (":::", res.get())
+    log.info("主进程终止")
+
+
+def multi_threads(*args):
+    """
+    Author:wangxiang
+    多线程，传参为函数名(该函数主要是传入多个函数，多线程执行)
+    :param args:
+    :return:
+    """
+    log.info(args)
+    log.info("主进程开始执行>>> pid={}".format(os.getpid()))
+    threads = []
+    for i in range(0, len(args)):
+        threads.append(threading.Thread(target=args[i]))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    log.info("主进程终止")
+
+
+def thread_para(num, *args):
+    """
+    多线程并行(并发执行同一个函数，)
+    :param num: 线程数
+    :param case_name: 要执行的函数名
+    :return:
+    """
+    log.info("开始主线程:{}".format(threading.current_thread().name))
+    threads = []
+
+    for i in range(num):
+        for i in range(0, len(args)):
+            threads.append(threading.Thread(target=args[i]))
+    for t in threads:
+        # t.setDaemon(False)
+        t.start()
+
+    # while True:
+    #     log.info("当前活动线程数量:{}".format(threading.active_count()))
+    #     if threading.active_count() == 1:
+    #         log.info("当前活动线程数量:{}".format(threading.active_count()))
+    #         break
+    for t in threads:
+        t.join()
+    log.info("主进程终止")
+
+
+def check_arg_type(f):
+    """
+    检查函数str类参数的数据类型
+    :param f: 被装饰的函数
+    :return:
+    """
+
+    @functools.wraps(f)
+    def wapper(*args, **kwargs):
+        func_args = inspect.getcallargs(f, *args, **kwargs)
+        print(type(func_args.get('s_ip')))
+        if type(func_args.get('s_ip')) is not str:
+            raise Exception("Enter a parameter of type str ! ")
+        return f(*args, **kwargs)
+
+    return wapper
+
+
+def deco_uninstall_Xstor(func):
+    """
+    尝试执行卸载命令；对于之前没安装过xstor的，进行异常捕获；避免测试脚本的执行中断
+    :param func:
+    :return:
+    """
+
+    def inner(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            log.info(e)
+
+    return inner
+
+
+def deco_create_storage_pool(func):
+    def inner(*args, **kwargs):
+        func(*args, **kwargs)
+        log.info("存储池:%s创建成功" % (kwargs['name']))
+
+    return inner
+
+
+def deco_create_lun(func):
+    def inner(*args, **kwargs):
+        func(*args, **kwargs)
+        log.info("lun:%s创建成功" % (kwargs['lun_name']))
+
+    return inner
+
+
+class TaskletTimeoutError(Exception):
+    pass
+
+
+class tasklet(object):
+    def __init__(self, timeout=60, maxretry=1):
+        self.timeout = timeout
+        self.maxretry = maxretry
+
+    def __call__(self, original_func):
+        decorator_self = self
+
+        def wrappee(*args, **kwargs):
+
+            count = decorator_self.maxretry
+            q = multiprocessing.Queue()
+            q.put(None)
+
+            real_args = args
+            real_kwargs = kwargs
+
+            def __run(func, real_args, real_kwargs):
+                result = original_func(*real_args, **real_kwargs)
+                q.get()
+                q.put(result)
+
+            while count > 0:
+                proc_args = (original_func, real_args, real_kwargs)
+                proc_task = multiprocessing.Process(target=__run, args=proc_args)
+                proc_task.start()
+
+                proc_task.join(decorator_self.timeout)
+                if proc_task.is_alive():
+                    proc_task.terminate()
+                    count -= 1
+                    continue
+
+                return q.get()
+
+            raise TaskletTimeoutError(u'timeout : %d seconds X %d retry times.' \
+                                      % (decorator_self.timeout, decorator_self.maxretry))
+
+        return wrappee
+
+
+def judge_target(func, target):
+    """
+    判断创建完成后的从get_option取出来的值是否和预期值(target)一样
+    :param func: 传入get_option函数
+    :param target:传入预期值
+    :return:
+    """
+    # print func
+    # print target
+    if func == target:
+        log.info("%s is judge sucess " % (target))
+    else:
+        log.error("%s is judge failed" % (target))
+        exit(1)
+
+
+class assert_cls(object):
+    _instance_lock = threading.Lock()
+
+    def __init__(self, useage="判断预期和结果"):
+        self.useage = useage
+        self.fecture = "该类用单例模式实现"
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(assert_cls, "_instance"):
+            with assert_cls._instance_lock:
+                if not hasattr(assert_cls, "_instance"):
+                    assert_cls._instance = object.__new__(cls)
+        return assert_cls._instance
+
+    def assertEqual(self, first, second, failed_msg='judge failed'):
+        """
+
+        :param first:
+        :param second:
+        :param failed_msg:
+        :return:
+        """
+        log.info(first)
+        log.info(second)
+        if not first == second:
+            log.info('{}'.format(failed_msg))
+            os._exit(1)
+
+    def assert_less_than(self, first, second, three=None, percentage=None, liding_scales=0.05,
+                         failed_msg='judge failed', suc_msg=None):
+        """
+
+        :param first:数值1
+        :param second:数值2
+        :param three:数值3
+        :param percentage: 百分比
+        :param liding_scales: 浮动值,默认 5%
+        :param failed_msg:判定错误提示信息
+        :param suc_msg:判定成功提示信息
+        :return:
+        """
+        first = first * (percentage - liding_scales)
+        three = three * (percentage + liding_scales)
+        log.info(first)
+        log.info(second)
+        log.info(three)
+        if all([first, second, three]):
+            if not first <= second <= three:
+                log.info('{}'.format(failed_msg))
+                os._exit(1)
+            else:
+                log.info("{}".format(suc_msg))
+        elif all([first, second]):
+            if not first <= second:
+                log.info('{}'.format(failed_msg))
+                os._exit(1)
+            else:
+                log.info("{}".format(suc_msg))
+
+    def assertNotequal(self, first, second, failed_msg='judge failed', suc_msg="judge success"):
+        """
+
+        :param first:
+        :param second:
+        :param failed_msg:
+        :return:
+        """
+        log.info(first)
+        log.info(second)
+        if not first != second:
+            log.info('{}'.format(failed_msg))
+            os._exit(1)
+        else:
+            log.info(suc_msg)
+
+    def assertIN(self, first, second, failed_msg='judge failed', suc_msg=''):
+        """
+
+        :param first:
+        :param second:
+        :param failed_msg:
+        :return:
+        """
+
+        if not first in second:
+            log.info('{}'.format(failed_msg))
+            os._exit(1)
+        else:
+            log.info(suc_msg)
+
+
+class MyThread(threading.Thread):
+    """
+    Autohr:wangxiang
+    返回各线程的执行结果
+    """
+
+    def __init__(self, func, args=()):
+        super(MyThread, self).__init__()
+        self.func = func
+        self.args = args
+
+    def run(self):
+        self.result = self.func(*self.args)
+
+    def get_result(self):
+        try:
+            return self.result  # 如果子线程不使用join方法，此处可能会报没有self.result的错误
+        except Exception:
+            return None
+
+
+def timer(wait_time, interval=5, log_interval=1):
+    """
+    Author:wangxiang
+    等待时间倒计时器
+    :param wait_time (int): 等待时间
+    :param interval (int):  打印时间间隔
+    :return:
+    """
+    log.info("Fault Will be executed after {} s ,Please wait ...".format(wait_time))
+    if all([wait_time]):
+        wait = 0
+        while wait < wait_time:
+            time.sleep(1)
+            if wait_time % interval == 0:  # 默认5秒打印
+                if log_interval:
+                    log.info("Will be Continue after {} s ,Please wait ...".format(wait_time))
+            wait_time -= 1
+
+
+def pass_flag(tip_type="case"):
+    """
+    定义一个用于提示case成功结束的API
+    :return:
+    """
+    if tip_type == "case":
+        log.info("'\033[46m##################The case executes successfully !################ ...\033[0m'")
+    if tip_type == "deploy":
+        log.info("'\033[46m##################Environment deployment successful !################ ...\033[0m'")
+
+
+if __name__ == '__main__':
+    s1 = assert_cls()
+    s2 = assert_cls()
+    print s1.useage
+    print s1.fecture
+    print s1
+    print s2

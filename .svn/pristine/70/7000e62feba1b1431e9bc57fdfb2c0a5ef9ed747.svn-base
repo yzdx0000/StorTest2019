@@ -1,0 +1,21 @@
+echo -e "use this commond to copy new test scripts：          sh auto_execute.sh  copy  20180926-094922.tgz"
+echo -e "\n 其中 ,20180926-094922.tgz  为你的具体包名"
+time=$(date "+%Y%m%d-%H%M%S")
+if [[ "$1" == "zip" ]];
+then
+    tar -zcvf /root/${time}.tgz /home/StorTest/scripts /home/StorTest/test_cases/libs  /home/StorTest/test_cases/cases/test_case/X1000 /home/StorTest/conf/x1000.conf
+elif [[ "$1" == "copy" ]];
+then
+if [ -f $2 ]
+then
+cd /root
+tar zxvf $2
+\cp  -ar home/StorTest/scripts/*  /home/StorTest/scripts
+\cp  -ar home/StorTest/test_cases/cases/test_case/X1000/*   /home/StorTest/test_cases/cases/test_case/X1000/
+\cp  -ar home/StorTest/test_cases/libs/*  /home/StorTest/test_cases/libs
+#\cp  -ar home/StorTest/conf/x1000.conf   /home/StorTest/conf/x1000.conf
+else
+echo "need  file.tgz"
+exit 1
+fi
+fi

@@ -1,0 +1,37 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：删除桶模块
+#使用方法：调用函数，指定ostor_ip、桶名、证书id。
+#如：output = bucket_del("10.10.222.6","test1","000023GNCOR3TGZU00001ZRM69FDH4O2")
+#作者：王建磊
+#创建时间：2018/03/21
+#**********************************************#
+import os,sys
+import commands
+import AuthSignature
+
+#获取sig函数
+def create_sig(sk,bucketname):
+	StringToSign = "DELETE" + "\n" + "" + "\n" + "" + "\n" + "" + "\n" + "" + "/"+bucketname
+	sig = AuthSignature.mk_sig(sk,StringToSign)
+	sig = AuthSignature.mk_sig_code(sig)
+	return sig
+
+#创建桶命令生成函数
+def bucket_del_cmd(ip,bucketname,AK,SK):
+	sig = create_sig(SK,bucketname)
+	part1 = "curl -i http://" 	#拼串片段，无需关注。
+	part2 = ":20480/" 							 	#拼串片段，无需关注。
+	part3 = " -XDELETE -H \"Authorization: AWS "		#拼串片段，无需关注。
+	part4 = ":"
+	cmd = ''.join((part1,ip,part2,bucketname,part3,AK,part4,sig,"\""))#生成创建桶的指令
+	return cmd
+
+#创建桶函数
+def bucket_del(ip,bucketname,AK,SK):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	cmd = bucket_del_cmd(ip,bucketname,AK,SK)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	return output
+
+#调试代码
+#if __name__ == '__main__':

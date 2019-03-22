@@ -1,0 +1,9 @@
+sd=default,journal=C:\Users\Administrator\Desktop\pythoncode\journal,offset=2048
+sd=sd1,lun=\\.\PhysicalDrive1,range=(0,9G)
+sd=sd2,lun=\\.\PhysicalDrive2,range=(0,9G)
+sd=sd3,lun=\\.\PhysicalDrive3,range=(0,9G)
+wd=default,xfersize=(4k,20,8k,10,32k,30,128k,40),rdpct=100,seekpct=50
+wd=wd1,sd=sd1
+wd=wd2,sd=sd2
+wd=wd3,sd=sd3
+rd=run1,wd=wd*,iorate=100,elapsed=60000,maxdata=27G,threads=32,interval=1

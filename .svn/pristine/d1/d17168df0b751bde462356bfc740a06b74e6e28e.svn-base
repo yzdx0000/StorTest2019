@@ -1,0 +1,56 @@
+#-*- coding:utf-8 -*
+import _sshlistaccounts_lyz1
+import _delete_account_lyz
+import commands
+import _sshListcertificatesHaveReturn_lyz1
+import _delete_certificate
+import _getAllBucketOfCertificateid_lyz
+import _getAllBucketOfCertificateid_lyz
+import _delete_object_lyz
+import _delete_Bucket_lyz1
+import _getAllObjectsOfBucket_lyz
+######################################
+#函数作用：删除一个系统的所有account
+#函数参数：主mgrip
+#####################################
+def deleteOneAccount(mgrip,oossip,accountid,accountname):
+    print 'accountname is %s' %accountname
+    print 'accountid is %s' %accountid
+    cers = _sshListcertificatesHaveReturn_lyz1.sshListcertificatesHaveReturn(mgrip, accountid)
+    if cers==-1:
+        return -1
+    print '获取证书成功cers is %s' %cers
+    if cers != []:
+        buckets=_getAllBucketOfCertificateid_lyz.getAllBucketOfCertificateid(oossip,cers[0])
+        if buckets==-1:
+            return -1
+        print '获取桶成功'
+        for bucket in buckets:
+            objects=_getAllObjectsOfBucket_lyz.getAllObjectOfBucket(oossip,bucket,cers[0])
+            if objects==-1:
+                return -1
+            print '获取对象成功'
+            print  'all objects is %s' %objects
+            if objects!=[]:
+                for object in objects:
+                    rede=_delete_object_lyz.deleteObject(oossip,bucket,object,cers[0])
+                    if rede==-1:
+                        return -1
+            print '*********************************************'
+            objectsbefore = _getAllObjectsOfBucket_lyz.getAllObjectOfBucket(oossip, bucket, cers[0])
+            print 'before deletebucket objectsbefore is %s' %objectsbefore
+            rede1=_delete_Bucket_lyz1.delete_bucket(oossip,bucket,cers[0])
+            if rede1==-1:
+                return -1
+        for cer in cers:
+            redd=_delete_certificate.deleteCertificate(mgrip, cer)
+            if redd==-1:
+                return -1
+    red=_delete_account_lyz.acc_del(mgrip, accountid)
+    if red==-1:
+        return -1
+    print '*************************************************'
+    print 'account %s delete ok' %accountname
+if __name__=="__main__":
+    deleteOneAccount('100.100.100.16','100.100.100.18','00003P6A8M6GV51S','lyz8')
+

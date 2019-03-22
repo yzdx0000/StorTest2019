@@ -1,0 +1,49 @@
+# -*- coding:utf-8 -*
+import os,sys,commands
+import _checkresult_lyz
+#该脚本用来设置桶的acl
+#其中,des_accountuids,dstaccount_emails,operationss都是列表，且operationss的每一个元素都是列表
+def setBucketAcl(oossip,bucketname,ownercertificateid,owner_accountuid,owneraccount_email,des_accountuids,dstaccount_emails,operationss):
+	#cmd="curl -i http://%s:20480/%s?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>'" %(oossip, bucketname, ownercertificateid, owner_accountuid, owneraccount_email, des_accountuid, dstaccount_email,operation)
+	cmd="curl -i http://%s:20480/%s?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList>" %(oossip, bucketname, ownercertificateid, owner_accountuid, owneraccount_email)
+	print 'des_accountuids is %s' % des_accountuids
+	for i in range(len(des_accountuids)):
+		print 'len is %s' %len(des_accountuids)
+		print 'des_accountuid is %s' % des_accountuids[i]
+		des_accountuid=des_accountuids[i]
+		print  'dstaccount_emails is %s' %dstaccount_emails
+		dstaccount_email=dstaccount_emails[i]
+		operations=operationss[i]
+		for operation in operations:
+			cmd=cmd+"<Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant>" %(des_accountuid,dstaccount_email,operation)
+	cmd=cmd+"</AccessControlList></AccessControlPolicy>'"
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	re=_checkresult_lyz.checkresult(status,output)
+	if re == -1:
+		return -1
+def setBucketAclHaveLog(oossip,bucketname,ownercertificateid,owner_accountuid,owneraccount_email,des_accountuids,dstaccount_emails,operationss,logger):
+	#cmd="curl -i http://%s:20480/%s?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>'" %(oossip, bucketname, ownercertificateid, owner_accountuid, owneraccount_email, des_accountuid, dstaccount_email,operation)
+	cmd="curl -i http://%s:20480/%s?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList>" %(oossip, bucketname, ownercertificateid, owner_accountuid, owneraccount_email)
+	logger.info('des_accountuids is %s' % des_accountuids)
+	for i in range(len(des_accountuids)):
+		logger.info('len is %s' %len(des_accountuids))
+		logger.info('des_accountuid is %s' % des_accountuids[i])
+		des_accountuid=des_accountuids[i]
+		logger.info('dstaccount_emails is %s' %dstaccount_emails)
+		dstaccount_email=dstaccount_emails[i]
+		operations=operationss[i]
+		for operation in operations:
+			cmd=cmd+"<Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant>" %(des_accountuid,dstaccount_email,operation)
+	cmd=cmd+"</AccessControlList></AccessControlPolicy>'"
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	re=_checkresult_lyz.checkresultHaveLog(status,output,logger)
+	if re == -1:
+		return -1
+if __name__=="__main__":
+	#setBucketAcl('10.2.40.18','bucketsrc','000020ZYJHQEABCM00001ZRM2AH1T7XG','000020ZYJHQEABCM00001ZJXZXL623PS','aa@sugon.com',['000023GN82J64MKK00001ZJXZXL623PS'],['lyz7@sugon.com'],[['READ','READ_ACP','WRITE_ACP']])
+	setBucketAcl('10.2.40.18', 'acl1031',  '000024OZMBDHHAHA000025XC0GHKSMWE', '000024OZMBDHHAHA00001ZJXZXL623PS','lyz8@sugon.com', ['000020ZYG4SAATAI00001ZJXZXL623PS'], ['lyz4@sugon.com'],[['FULL_CONTROL']])
+	#setBucketAcl('10.2.40.18', 'acl1031', '000023GN82J64MKK00001YJ9NMQXN6S0', '000024OZMBDHHAHA00001ZJXZXL623PS', 'lyz8@sugon.com', ['000023GN82J64MKK00001ZJXZXL623PS','000025XC0DKQ5JSU00001ZJXZXL623PS'], ['lyz7@sugon.com','lyz6@sugon.com'],[['READ', 'READ_ACP', 'WRITE_ACP'],['READ','READ_ACP']])

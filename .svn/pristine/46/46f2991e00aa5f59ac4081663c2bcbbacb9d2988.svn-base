@@ -1,0 +1,39 @@
+# -*- coding:utf-8 -*- #可以加入中文注释
+#creat accounts auto  创建账户并获取账户邮箱和账户accountuid，此脚本专门服务桶的ACL授权
+import os
+import sys 
+import commands
+def get_useremails_lst():
+	users = []
+	useremails = []
+	for i in range(3,6):                              #定义桶列表元素循环，主要是桶名字的后缀
+        	a='xiaopang'                                     #桶名字的前缀
+        	users.append(a+str(i))             #将字符和数字组合成桶名
+        	useremails.append(a+str(i)+"@sugon.com")
+	return users,useremails
+if __name__=="__main__":
+	users_lst,useremails_lst =  get_useremails_lst()                     
+	accounts=zip(users_lst, useremails_lst)                             #将账户名字和email组成二维列表
+	accountid_lst = []                                          #定义账户列表
+	for account in accounts:                                    #定义二次循环
+        	user=account[0]                                     
+        	useremail=account[1]
+		c="parastor_pos addaccount accountname=%s email=%s quota=0" %(user,useremail) #创建账户的指令
+
+		rc, stdout = commands.getstatusoutput(c)    #使用commands模块执行Linux shell命令     
+		print stdout
+def target_accountuid():
+	users_lst,useremails_lst =  get_useremails_lst()
+	accounts=zip(users_lst, useremails_lst)
+	accountuid_lst = []
+	for account in accounts:
+		user=account[0]
+		useremail=account[1]
+		c="parastor_pos addaccount accountname=%s email=%s quota=0" %(user,useremail)
+		rc, stdout = commands.getstatusoutput(c)
+		stdout_list = stdout.split('\n')                      #将上条指令输出的结果按行划分
+		for line in stdout_list:                              #定义列表元素循环
+			if 'accountuid' in line:
+                        	accountuid = line.split('#')[2].split(':')[1]
+                        	accountuid_lst.append(accountuid)
+		return accountuid_lst

@@ -1,0 +1,49 @@
+#-*- coding:utf-8 -*
+import os,sys,time,commands
+import _create_account
+import common
+import _create_certificate
+import _create_bucket
+def stabilityForKillProcess(mgrip,oossip,acountname,accountemail,bucketname):
+    #步骤1：创建一个账户
+    output=_create_account.acc_add(mgrip,acountname,accountemail)
+    if output==-1:
+        return -1
+    accountdit=common.splitaccountinfo(output, accountemail)
+    if accountdit == -1:
+        return -1
+    keys=accountdit.keys()
+    accountid=accountdit[keys[0]][0]
+    print 'accountid is %s' %accountid
+    #步骤2：创建一个certificate
+    certificateid=_create_certificate.cer_add(mgrip,accountid)
+    if certificateid == -1:
+        return -1
+    #步骤3：创建一个桶
+    rec=_create_bucket.bucket_add(oossip,bucketname,certificateid)
+    if rec == -1:
+        return -1
+    return certificateid
+def stabilityForKillProcess1(mgrip,oossip,acountname,accountemail,bucketname):
+    #步骤1：创建一个账户
+    output=_create_account.acc_add(mgrip,acountname,accountemail)
+    if output==-1:
+        return -1
+    accountdit=common.splitaccountinfo(output, accountemail)
+    if accountdit == -1:
+        return -1
+    keys=accountdit.keys()
+    accountid=accountdit[keys[0]][0]
+    print 'accountid is %s' %accountid
+    #步骤2：创建一个certificate
+    certificateid=_create_certificate.cer_add(mgrip,accountid)
+    if certificateid == -1:
+        return -1
+    #步骤3：创建一个桶
+    rec=_create_bucket.bucket_add(oossip,bucketname,certificateid)
+    if certificateid == -1:
+        return -1
+    return accountid,certificateid
+
+
+

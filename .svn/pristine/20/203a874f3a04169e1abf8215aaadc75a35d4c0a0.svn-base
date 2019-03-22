@@ -1,0 +1,44 @@
+#-*-coding:utf-8 -*
+#本函数用来测试xml解析功能
+import os
+import getoutputpath_lyz
+import xml.dom.minidom
+def get_xml():
+    output=getoutputpath_lyz.getoutputpath()
+    fileAllObjectsallpath=os.path.join(output,'fileAllObjects')
+    f = open(fileAllObjectsallpath)
+    lines = f.readlines()
+    count = 0
+    for line in lines:
+        if line.startswith('<?xml'):
+            break
+        else:
+            count = count + 1
+    xml_lst = lines[count:]
+    f.close()
+    xml_string = ''.join(xml_lst)
+    #print xml_string
+    return xml_string
+dom=xml.dom.minidom.parse('/opt/lyz/s3/s3autoscriptsFinal/S3Lib/fileAllObjects.xml')
+def xmlanalyze():
+    #步骤1：获取dom对象
+    dom = xml.dom.minidom.parse('/opt/lyz/s3/s3autoscriptsFinal/S3Lib/fileAllObjects.xml')
+    #dom = xml.dom.minidom.parse('fileAllObjects.xml')
+    #步骤2：获取文档对象（根元素）
+    root=dom.documentElement
+    #步骤3：获取特定名字的子节点内容
+    contents=root.getElementsByTagName('Contents')
+    content=contents[0]
+    key=content.getElementsByTagName('Key')[0]
+    objectname=key.firstChild.nodeValue
+    print objectname
+if __name__=="__main__":
+    xmlanalyze()
+
+
+
+
+
+
+
+

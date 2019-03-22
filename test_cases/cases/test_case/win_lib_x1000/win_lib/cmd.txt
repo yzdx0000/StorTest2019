@@ -1,0 +1,12 @@
+option echo off
+option batch on 
+option confirm off
+open sftp://root:111111@10.2.41.201:22
+cd /root/
+put C:\Users\Administrator\Desktop\pythoncode\vdbench\output
+mv output output_jn
+option transfer binary
+option synchdelete off
+remote
+close
+exit

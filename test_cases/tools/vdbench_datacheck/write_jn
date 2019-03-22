@@ -1,0 +1,11 @@
+hd=default,vdbench=/home/vdbench50406_snap,shell=ssh,user=root
+hd=h1,system=10.2.41.106
+
+fsd=default,depth=2,width=2,files=100,size=(64k,30,128k,35,256k,30,1m,5)
+fsd=fsd1,anchor=/mnt/volume1/snap/snap_13_0_1_17/1,journal=/tmp/1
+
+fwd=default,threads=100,xfersize=(4k,50,64k,30,1m,20)
+fwd=fwd1,fsd=fsd1,hd=h1,operation=write
+
+rd=default,fwdrate=max,elapsed=180,interval=1,warmup=10,pause=50
+rd=rd1,fwd=fwd*,format=no

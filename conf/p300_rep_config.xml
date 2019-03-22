@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <!-- 远程复制测试路径 -->
+    <rep_master_test_path>/mnt/parastor/rep</rep_master_test_path>
+    <rep_slave_test_path>/mnt/parastor/rep</rep_slave_test_path>
+    <rep_third_cluster_test_path>/mnt/parastor/rep</rep_third_cluster_test_path>
+
+    <!-- 远程复制从端节点ip -->
+    <slave_nodes>
+        <node>
+            <ctrl_ip>10.22.132.36</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.22.132.37</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.22.132.38</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.22.132.39</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.22.132.40</ctrl_ip>
+        </node>
+    </slave_nodes>
+
+    <!-- 远程复制从端客户端ip -->
+    <slave_clients>
+        <client>
+            <ctrl_ip>10.22.132.40</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.22.132.36</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.22.132.37</ctrl_ip>
+        </client>
+    </slave_clients>
+
+    <!-- 远程复制从端卷名 -->
+    <slave_volumes>
+        <volume>parastor</volume>
+    </slave_volumes>
+
+    <!-- 远程复制第三端节点ip -->
+    <third_cluster_nodes>
+        <node>
+            <ctrl_ip>10.22.132.36</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.22.132.37</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.22.132.38</ctrl_ip>
+        </node>
+    </third_cluster_nodes>
+
+    <!-- 远程复制第三端卷名 -->
+    <third_cluster_volumes>
+        <volume>parastor</volume>
+    </third_cluster_volumes>
+
+</testconfig>

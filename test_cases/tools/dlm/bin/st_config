@@ -1,0 +1,11 @@
+[parastor]
+version = P300
+mgrip = 10.2.41.101
+smgrip = 30.0.37.7
+cmgrip = 30.0.37.6
+mpinp = 10
+filenum = 256
+subfilenum = 8
+bufcnt = 256
+client_dir = /mnt/volume1/dlm
+

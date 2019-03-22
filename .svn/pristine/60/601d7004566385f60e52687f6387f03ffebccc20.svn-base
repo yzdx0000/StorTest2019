@@ -1,0 +1,377 @@
+#!/usr/bin/python
+# -*-coding:utf-8 -*
+import os
+import requests
+import time
+
+import utils_path
+import log
+import common
+import prepare_clean
+
+##########################################################################
+#
+# Author: lichengxu
+# date 2018-12-26
+# @summary：
+#    运行 cosbench 并判断各种状态
+# @steps:
+#    1、导入待运行的脚本；
+#    2、运行 cosbench
+#    9、清理环境
+#
+# @changelog：
+##########################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[
+    0]                 # 本脚本名字
+FILE_NAME = FILE_NAME.replace('-', '_')
+
+'''
+定义两个全局变量：
+IF_MAKE_FAULT： 控制是否开始做故障
+IF_CONTINUE_FAULT：判断cosbench状态，是否继续下一次故障
+'''
+# global IF_MAKE_FAULT
+# global IF_CONTINUE_FAULT
+
+
+class CosbenchTest(object):
+    def __init__(self):
+        self.start_flag = True
+        self.stop_flag = False
+        self._running_flag = False
+
+        self.IF_MAKE_FAULT = False
+        self.IF_CONTINUE_FAULT = True
+        self.prepare_start_time = []
+        self.prepare_end_time = []
+        self.main_start_time = []
+        self.main_end_time = []
+
+    def stop(self, client_ip, cosbench_path):
+        """停止cosbench"""
+        self.stop_flag = True
+        self.cancel_cosbench(client_ip, cosbench_path)
+
+    def get_active_workloads(self, ip):
+        """
+         :author:              lichengxu
+         :date:                2018.12.11
+         :description:         获取正在运行的workloads ID
+         :param sk:            (str)ip
+         :return:               返回正在运行的workload id列表
+         """
+        try:
+            url = 'http://%s:19088/controller/cli/activeworkload.action' % ip
+            response = requests.get(url)
+            data = response.json()
+            ActiveWorkloads = data.get('ActiveWorkloads')
+            ids = []
+            for work in ActiveWorkloads:
+                id = work.get('ID')
+                ids.append(id)
+            return ids
+        except ValueError as e:
+            print e
+
+    def run_cosbench(
+            self,
+            account_name,
+            cosbench_path,
+            oOss_ip,
+            file_path,
+            node_ip=None):
+        """
+        :author:              lichengxu
+        :date:                2018.12.11
+        :description:         运行cosbench
+        :param oOss_ip:       (str)oOss_ip
+        :param file_path:     (str)ids
+        :return:              返回执行cosbench 的workloadID
+        """
+        # account_name = FILE_NAME.replace('_', '-')
+        account_email = account_name + "@sugon.com"
+        prepare_clean.s3_test_clean([account_email])
+
+        workload_id = ""
+        if os.path.exists(cosbench_path):
+            create_file_path = os.path.join(cosbench_path, 'create_s3_xml.py')
+            if os.path.exists(create_file_path):
+                cli_path = os.path.join(cosbench_path, 'cli.sh')
+                cmd = "python %s %s %s %s %s" % (
+                    create_file_path, file_path, account_name, oOss_ip, cli_path)
+                # log.info("cmd: %s" % cmd)
+                rc, stdout = common.run_command_shot_time(cmd, node_ip)
+                common.judge_rc(rc, 0, "cmd run failed!")
+                log.info("cosbench workload run success!")
+                # 处理返回值，返回任务ID
+                data = stdout.splitlines()
+                workload_id = ""
+                for line in data:
+                    if "Accepted" in line:
+                        workload_id = line.split()[-1]
+            else:
+                log.error("create_s3_xml.py not found!")
+        else:
+            log.error("please install Cosbench!")
+        return workload_id
+
+    def cancel_cosbench(self, client_ip, cosbench_path, node_ip=None):
+        """
+        :author:              lichengxu
+        :date:                2018.12.20
+        :description:         停止cosbench
+        :param client_ip:       (str)client_ip
+        :param cosbench_path:     (str)cosbench_path
+        :node_ip
+        :return:
+        """
+        ids = self.get_active_workloads(client_ip)
+        work_id = ids[0]
+        if os.path.exists(cosbench_path):
+            cli_path = os.path.join(cosbench_path, 'cli.sh')
+            cmd = "sh %s cancel %s anonymous:cosbench@127.0.0.1:19088" % (
+                cli_path, work_id)
+            log.info("cmd: %s" % cmd)
+            rc, stdout = common.run_command_shot_time(cmd, node_ip)
+            common.judge_rc(rc, 0, "cmd run failed!")
+        else:
+            log.error("cosbench path not exist")
+
+        log.info("cancel workload success")
+
+    def get_workload_detail_by_id(self, ip, id):
+        """
+         :author:              lichengxu
+         :date:                2018.12.11
+         :description:         判断当前运行的任务是否在main阶段
+         :param sk:            (str)ip
+         :param sk:            (str)ids
+         :return:              当前任务状态，任务处于哪个阶段，prepare运行时间，main运行时间
+         """
+
+        url = "http://%s:19088/controller/cli/workloaddetails.action?id=%s" % (
+            ip, id)
+        log.info("url: %s" % url)
+        response = requests.get(url)
+        WorkloadDetails = response.json()
+        details = WorkloadDetails.get('WorkLoadDetails')
+
+        StagesInfo = details.get('StagesInfo')
+        work_state = details.get("State").encode()
+
+        pro_status = None
+
+        for stage in StagesInfo:
+            log.info(stage)
+            if stage.get('Name') == 'init':
+                if stage.get('State') == 'AUTHING':
+                    log.info("init authing")
+                    self.prepare_start_time.append(time.time())
+                elif stage.get('State') == 'SUBMITTING':
+                    log.info("init submitting!")
+                    self.prepare_start_time.append(time.time())
+                elif stage.get('State') == 'WAITING':
+                    log.info("init waiting!")
+                    self.prepare_start_time.append(time.time())
+                elif stage.get('State') == 'LAUNCHED':
+                    log.info("init launched")
+                    self.prepare_start_time.append(time.time())
+                elif stage.get('State') == 'RUNNING':
+                    log.info("init running!")
+                    self.prepare_start_time.append(time.time())
+                    pro_status = stage.get('Name')
+                elif stage.get('State') == 'COMPLETED':
+                    log.info("init completed!")
+                elif stage.get('State') == 'FAILED':
+                    log.error("init stage has failed!!!")
+                    break
+                else:
+                    continue
+
+            elif stage.get('Name') == 'prepare':
+                if stage.get('State') == 'WAITING':
+                    log.info("prepare waiting!")
+                    self.prepare_start_time.append(time.time())
+                elif stage.get('State') == 'RUNNING':
+                    log.info("prepare running!")
+                    self.prepare_end_time.append(time.time())
+                    self.main_start_time.append(time.time())
+                    pro_status = stage.get('Name')
+                elif stage.get('State') == 'COMPLETED':
+                    log.info("prepare completed!")
+                    continue
+                elif stage.get('State') == 'FAILED':
+                    log.error("prepare stage has failed!!!")
+                    break
+                else:
+                    continue
+
+            elif stage.get('Name') == 'main':
+                if stage.get('State') == 'WAITING':
+                    log.info("main waiting!")
+                    self.main_start_time.append(time.time())
+                elif stage.get('State') == 'RUNNING':
+                    log.info("main running!")
+                    self.main_end_time.append(time.time())
+                    pro_status = stage.get('Name')
+                elif stage.get('State') == 'COMPLETED':
+                    log.info("main completed!")
+                    continue
+                elif stage.get('State') == 'FAILED':
+                    log.error("main stage has failed!!!")
+                    break
+                else:
+                    continue
+
+            elif stage.get('Name') == 'cleanup':
+                if stage.get('State') == 'WAITING':
+                    log.info("cleanup waiting!")
+                elif stage.get('State') == 'RUNNING':
+                    log.info("cleanup running!")
+                    self.main_end_time.append(time.time())
+                    pro_status = stage.get('Name')
+                elif stage.get('State') == 'COMPLETED':
+                    log.info("cleanup completed!")
+                    continue
+                else:
+                    continue
+
+            elif stage.get('Name') == 'dispose':
+                if stage.get('State') == 'WAITING':
+                    log.info("dispose waiting!")
+                elif stage.get('State') == 'RUNNING':
+                    log.info("dispose running!")
+                    pro_status = stage.get('Name')
+                elif stage.get('State') == 'COMPLETED':
+                    log.info("dispose completed!")
+                    continue
+                else:
+                    continue
+            else:
+                log.info("workload has terminated!")
+                break
+        main_run_time = 0
+        prepare_run_time = 0
+
+        if len(self.main_start_time) != 0 and len(self.main_end_time) != 0:
+            prepare_run_time = self.prepare_end_time[-1] - \
+                self.prepare_start_time[-1]
+            main_run_time = self.main_end_time[-1] - self.main_start_time[-1]
+        return work_state, pro_status, prepare_run_time, main_run_time
+
+    def cosbench_check_prepare(
+            self,
+            client_ip,
+            oOss_ip,
+            account_name,
+            cosbench_path,
+            file_path,
+            prepare_base_time,
+            main_base_time):
+        '''
+        : cosbench 运行结果循环检测，并判断是否开始/结束故障
+        :param client_ip:
+        :param oOss_ip:
+        :param cosbench_path:
+        :param file_path:
+        :param prepare_base_time:
+        :param main_base_time:
+        :return:
+        '''
+        self._running_flag = True
+        rc = 0
+        workload_id = self.run_cosbench(
+            account_name, cosbench_path, oOss_ip, file_path)
+        while True:
+            work_state, pro_status, prepare_run_time, main_run_time = \
+                self.get_workload_detail_by_id(client_ip, workload_id)
+            log.info(
+                "result: %s, %s, %s " %
+                (work_state, prepare_run_time, main_run_time))
+            if work_state == "TERMINATED":
+                log.error("workload has terminated")
+                if pro_status == 'init':
+                    rc = -1
+                break
+            elif work_state == "FINISHED":
+                log.info("workload has finished")
+                log.info("cosbench finished, please stop fault")
+                self.IF_CONTINUE_FAULT = False
+                break
+            elif work_state == "QUEUING":
+                time.sleep(30)
+            elif work_state == "PROCESSING":
+                if (pro_status == 'prepare') and (
+                        prepare_run_time < prepare_base_time):
+                    log.info("work is in prepare stage, please start fault")
+                    self.IF_MAKE_FAULT = True
+                elif (pro_status == 'main') and (main_run_time < main_base_time):
+                    log.info(" work is in main stage...")
+                elif (prepare_run_time > prepare_base_time) or (main_run_time > main_base_time):
+                    rc = -3
+                    break
+                time.sleep(30)
+            else:
+                log.info("work_state: %s" % work_state)
+                time.sleep(300)
+        return rc
+
+    def cosbench_check_main(
+            self,
+            client_ip,
+            oOss_ip,
+            account_name,
+            cosbench_path,
+            file_path,
+            prepare_base_time,
+            main_base_time):
+        '''
+        : cosbench 运行结果循环检测，并判断是否开始/结束故障
+        :param client_ip:
+        :param oOss_ip:
+        :param cosbench_path:
+        :param file_path:
+        :param prepare_base_time:
+        :param main_base_time:
+        :return:
+        '''
+        self._running_flag = True
+        rc = 0
+        workload_id = self.run_cosbench(
+            account_name, cosbench_path, oOss_ip, file_path)
+        while True:
+            work_state, pro_status, prepare_run_time, main_run_time = \
+                self.get_workload_detail_by_id(client_ip, workload_id)
+            log.info(
+                "result: %s, %s, %s " %
+                (work_state, prepare_run_time, main_run_time))
+            if work_state == "TERMINATED":
+                log.error("workload has terminated")
+                if pro_status == 'init':
+                    rc = -1
+                break
+            elif work_state == "FINISHED":
+                log.info("workload has finished")
+                log.info("cosbench finished, please stop fault")
+                self.IF_CONTINUE_FAULT = False
+                break
+            elif work_state == "QUEUING":
+                time.sleep(30)
+            elif work_state == "PROCESSING":
+                if (pro_status == 'prepare') and (
+                        prepare_run_time < prepare_base_time):
+                    log.info("work is in prepare stage, please start fault")
+                    self.IF_MAKE_FAULT = True
+                elif (pro_status == 'main') and (main_run_time < main_base_time):
+                    log.info(" work is in main stage...")
+                    self.IF_MAKE_FAULT = True
+                elif (prepare_run_time > prepare_base_time) or (main_run_time > main_base_time):
+                    rc = -3
+                    break
+                time.sleep(30)
+            else:
+                log.info("work_state: %s" % work_state)
+                time.sleep(300)
+        return rc

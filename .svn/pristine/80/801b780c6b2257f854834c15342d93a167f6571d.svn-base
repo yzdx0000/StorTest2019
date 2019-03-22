@@ -1,0 +1,57 @@
+##### 机器压力性能摸底:5 hours #####
+X1000/stress_io/stress_test.py
+# 每一轮压力测试时间:188 hours(8 days)
+
+##### 第一轮压力测试 #####
+X1000/stress_io/7-01-01-01.py
+X1000/stress_io/7-01-01-02.py
+X1000/stress_io/7-01-01-03.py
+X1000/stress_io/7-01-01-04.py
+X1000/stress_io/7-02-01-01.py
+X1000/stress_io/7-02-01-02.py
+X1000/stress_io/7-02-01-03.py
+X1000/stress_io/7-02-01-04.py
+X1000/stress_io/7-03-01-01.py
+X1000/stress_io/7-03-01-02.py
+X1000/stress_io/7-03-01-03.py
+X1000/stress_io/7-03-01-04.py
+X1000/stress_io/7-04-01-01.py
+X1000/stress_io/7-04-01-02.py
+X1000/stress_io/7-04-01-03.py
+X1000/stress_io/7-04-01-04.py
+
+##### 第二轮压力测试 #####
+X1000/stress_io/7-01-01-01.py
+X1000/stress_io/7-01-01-02.py
+X1000/stress_io/7-01-01-03.py
+X1000/stress_io/7-01-01-04.py
+X1000/stress_io/7-02-01-01.py
+X1000/stress_io/7-02-01-02.py
+X1000/stress_io/7-02-01-03.py
+X1000/stress_io/7-02-01-04.py
+X1000/stress_io/7-03-01-01.py
+X1000/stress_io/7-03-01-02.py
+X1000/stress_io/7-03-01-03.py
+X1000/stress_io/7-03-01-04.py
+X1000/stress_io/7-04-01-01.py
+X1000/stress_io/7-04-01-02.py
+X1000/stress_io/7-04-01-03.py
+X1000/stress_io/7-04-01-04.py
+
+##### 第三轮压力测试 #####
+X1000/stress_io/7-01-01-01.py
+X1000/stress_io/7-01-01-02.py
+X1000/stress_io/7-01-01-03.py
+X1000/stress_io/7-01-01-04.py
+X1000/stress_io/7-02-01-01.py
+X1000/stress_io/7-02-01-02.py
+X1000/stress_io/7-02-01-03.py
+X1000/stress_io/7-02-01-04.py
+X1000/stress_io/7-03-01-01.py
+X1000/stress_io/7-03-01-02.py
+X1000/stress_io/7-03-01-03.py
+X1000/stress_io/7-03-01-04.py
+X1000/stress_io/7-04-01-01.py
+X1000/stress_io/7-04-01-02.py
+X1000/stress_io/7-04-01-03.py
+X1000/stress_io/7-04-01-04.py

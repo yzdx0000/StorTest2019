@@ -1,0 +1,44 @@
+#!/usr/bin/python
+#-*-coding:utf-8 -*
+
+import os,sys
+import utils_path
+import common2
+import log
+import get_config
+import ReliableTest
+import threading
+import login
+import time
+import commands
+import common
+import error
+print "he;;"
+conf_file = common2.CONF_FILE    #配置文件路径
+clean_env = common2.CLEAN_ENV
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]      #获取本脚本名，去掉.py后缀
+print file_name
+log_file_path = log.get_log_path(file_name)     #获取日志目录，即test_cases/Log/Case_log
+log.init(log_file_path, True)       #初始化日志文件
+print "hello1"
+deploy_ips = get_config.get_env_ip_info(conf_file)
+client_ips = get_config.get_allclient_ip()
+#res = error.down_node()
+#print res
+osan = common2.oSan()
+disk = breakdown.disk()
+#disks = disk.get_rw_diskid_by_node_id(s_ip="10.22.129.3",node_id=1,disk_type="data")
+#rep = disk.get_jnl_replica(s_ip="10.22.129.21")
+#print rep
+#disk_state = disk.get_disk_state(s_ip="10.22.129.21",disk_id=9)
+#while "ZOMBIE" not in disk_state:
+#    disk_state = disk.get_disk_state(s_ip="10.22.129.21",disk_id=9)
+print "hello"
+jnl_nodes_id = disk.get_jnl_node_id()
+print jnl_nodes_id
+nodeids = osan.get_nodes(deploy_ips[1])
+node_no_jnl_ids = list(set(nodeids).difference(set(jnl_nodes_id)))
+print 'hello'
+print node_no_jnl_ids
+print node_no_jnl_ids

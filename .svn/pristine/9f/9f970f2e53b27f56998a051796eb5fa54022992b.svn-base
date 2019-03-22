@@ -1,0 +1,3 @@
+sd=default,journal=C:\Users\Administrator\Desktop\pythoncode\journal,offset=8192,align=3072
+wd=default,xfersize=(4k,20,8k,10,32k,30,128k,40),rdpct=100,seekpct=50
+rd=run1,wd=wd*,iorate=150,elapsed=1200,maxdata=2G,threads=16,interval=1

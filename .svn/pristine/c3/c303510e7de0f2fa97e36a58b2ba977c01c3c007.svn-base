@@ -1,0 +1,53 @@
+#!/usr/bin/python
+# -*- coding:utf-8 -*-
+#***********************************************************
+#实现功能：get_objects用于下载一个桶中的多个对象
+#使用方法：先调用_analysexml_lp.analyzeobject_xml得到对象组成的列表，然后使用get_objects从列表中下载指定数量的对象
+#所需参数:objstartnum，objendnum，mgrip，oossip，bucketname，downpath，accountname，email
+#作者：刘萍
+#创建时间：2018/01/12
+#***********************************************************
+import os
+import sys
+import commands
+import _analysexml_lp
+import _readconffile_lp
+import _getrelatedid_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+
+def get_objects_logger(start,end,mgrip,oossip,bucketname,downpath,accountname,email,logger):
+    (objnames,objsizes)=_analysexml_lp.analyzeobject_xml_logger(mgrip,oossip,bucketname,accountname,email,logger)
+    print objnames
+    length=len(objnames)
+    (accountid,accountuid,certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,accountname,email,logger)
+    j=0
+    if ((end-start+1)<= len(objnames)) and (end < len(objnames)) and (start < len(objnames)):
+	for i in range(start,end+1):
+	    cmd='curl -s http://'+oossip+':20480'+'/'+bucketname+'/'+objnames[i]+' -o '+downpath+'/'+objnames[i]+' -H "Authorization:AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	    logger.info(cmd)
+	    (status,output)=commands.getstatusoutput(cmd)
+	    logger.info(output)
+	    if(status==0):
+		cmd='cd '+downpath+';ls -l '+objnames[i]
+		logger.info(cmd)
+		(status1,output1)=commands.getstatusoutput(cmd)
+		logger.info(output1)
+		size=output1.split()[4]
+		if(size==objsizes[i]):
+		    j+=1
+		    if(j<=end):
+                        logger.info("get %s success in %s" % (objnames[i],bucketname)) 
+                        rm_code=os.system('rm -rf '+downpath+'/'+objnames[i])
+		else:
+		    logger.info("the object %s is not same in %s" %(objnames[i],bucketname))
+                    return -1
+            else:
+                logger.info("get %s in %s fail" % (objnames[i],bucketname))
+                return -1	
+    else:
+        logger.info("waring:please input right index,it need < "+str(length))
+        return -1
+

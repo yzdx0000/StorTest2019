@@ -1,0 +1,42 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：根据账户名获取账户id模块
+#使用方法：调用"query_database(mgr_ip,acc_name)"函数，指定主MGR的ip、账户名即可。
+#作者：王建磊
+#创建时间：2017/11/07
+#更新时间：2017/11/07
+#**********************************************#
+
+#第三方模块，需手动安装，python不自带该模块（psycopg2）
+import psycopg2
+import sys
+
+#连接数据库，查询数据表，根据账户名获取账户信息，从而得到账户id
+#输入mgr_ip、账户名，获得账户uid、accid和email
+def query_database(mgr_ip,acc_name):
+	conn = psycopg2.connect(database="pos_iam",user="postgres",host=mgr_ip,port="5432")
+	cur = conn.cursor()
+	sqlcmd = "select * from acct_table_1 where acct_name='"+acc_name+"';"
+	cur.execute(sqlcmd)
+	rows = cur.fetchall()
+	if rows == []:
+		print "The data of account \"%s\" doesn't exist."%acc_name
+		return 0,0,0
+	else:
+		arn=rows[0][-5]
+		uid=arn[arn.find("::")+2:45]
+		accid=uid[:16]
+		acctid=rows[0][-12]
+		email=rows[0][-3]
+	conn.commit()
+	cur.close()
+	conn.close()
+	return acctid,accid,email
+
+def obtain_accid(mgr_ip,acc_name):
+	acctid,accid,email = query_database(mgr_ip,acc_name)
+	return accid
+	
+if __name__ == '__main__':
+	uid,accid,email = query_database(sys.argv[1],sys.argv[2])
+	print uid,accid,email

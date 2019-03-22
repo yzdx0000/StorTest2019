@@ -1,0 +1,12 @@
+该目录下为高可用job故障测试
+所有的故障设置详见job_fault.xml，配置文件中所有的YES都会执行,(YES,0)代表预期成功，(YES,-1)代表失败后重试
+
+故障类型为：
+fault1    拔盘故障
+fault2    磁盘重建
+fault3    拔元数据盘
+fault4    下点电故障
+fault5    节点重建
+fault6    主oJmgs故障
+fault7    zk故障
+fault8    其他进程故障

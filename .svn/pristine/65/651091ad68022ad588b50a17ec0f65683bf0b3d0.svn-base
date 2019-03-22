@@ -1,0 +1,11 @@
+#!/usr/bin/env expect
+set ip [lindex $argv 0]
+set u_name [lindex $argv 1]
+set pw [lindex $argv 2]
+set cmd [lindex $argv 3]
+set timeout 600
+spawn ssh $u_name@$ip "$cmd"
+expect "*assword:"
+send "$pw\r"
+expect eof
+#interact

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="test1212" description="sample benchmark for s3">
+ 
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW13S0VVW2M5LTL2ZI2EL1TO9IPQEEFKML18N2ECRFNHL93J40;secretkey=1577c419da23a0c2b37089ffc03861344e4a4c3a;endpoint=http://20.2.42.71:20480;path_style_access=true;timeout=600000;" />
+ 
+  <workflow>
+<workstage name="init">
+      <work type="init" workers="64" config="cprefix=zhtest1_xml;containers=r(1,10)" />
+    </workstage>
+    <workstage name="prepare">
+      <work type="prepare" workers="100" config="cprefix=zhtest1_xml;oprefix=apple;containers=r(1,10);objects=r(1,80);sizes=h(1|64|50,128|512|50)KB" />
+    </workstage>
+ 
+    <workstage name="main">
+      <work name="main1" workers="100" runtime="18000">
+        <operation type="write" ratio="70" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(1,10);sizes=h(1|64|50,128|512|50)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(11,20);hashCheck=False" />
+        </work>
+      <work name="main2" workers="100" runtime="18000">
+        <operation type="write" ratio="60" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(21,30);sizes=h(1|64|50,128|512|50)KB;hashCheck=False" />
+        <operation type="read" ratio="40" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(31,40);hashCheck=False" />
+        </work>
+      <work name="main3" workers="100" runtime="18000">
+        <operation type="write" ratio="30" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(41,50);sizes=h(1|64|50,128|512|50)KB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(51,60);hashCheck=False" />
+        </work>
+      <work name="main4" workers="100" runtime="18000">
+        <operation type="write" ratio="40" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(61,70);sizes=h(1|64|50,128|512|50)KB;hashCheck=False" />
+        <operation type="read" ratio="60" config="cprefix=zhtest1_xml;oprefix=apple;containers=u(1,10);objects=u(71,80);hashCheck=False" />
+      </work>
+    </workstage>
+ 
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zhtest1_xml;oprefix=apple;containers=r(1,10);objects=r(1,80)" />
+    </workstage>
+ 
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zhtest1_xml;containers=r(1,10)" />
+    </workstage>
+ 
+  </workflow>
+ 
+</workload>

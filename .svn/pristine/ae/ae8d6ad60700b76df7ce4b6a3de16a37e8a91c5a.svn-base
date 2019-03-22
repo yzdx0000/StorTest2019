@@ -1,0 +1,17 @@
+data_errors=1
+
+hd=default,vdbench=/home/vdbench50406/,shell=ssh,user=root
+hd=h1,system=VM101
+
+
+fsd=default,depth=2,width=4,files=10,size=1m
+fsd=fsd1,anchor=/mnt/volume1/wuchf
+#fsd=fsd1,anchor=/mnt/volume1/.snapshot/wuchf
+
+fwd=default,threads=10,xfersize=4k
+fwd=fwd1,fsd=fsd1,hd=h1
+
+
+rd=default,fwdrate=max,elapsed=30,interval=1,warmup=2,pause=2
+rd=rd1,fwd=fwd*,format=only,forrdpct=100
+

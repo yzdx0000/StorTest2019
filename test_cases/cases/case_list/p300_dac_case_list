@@ -1,0 +1,69 @@
+###############################################################################
+# !!!!!!每一行只配置一个用例，否则除第一个以外的用例都不会执行!!!!!!
+# 可以有空行
+# 单行注释请在每一行的 最开始 使用#，只要此行最开始使用了#，剩余字符均不生效
+#
+# 多行注释请使用 /*开始  */结束(!!!!!注释请占一行!!!!!!)
+/*
+/basic_function/5nodes_system_install.py
+/basic_function/1-0-5-8_mod-nodepoolname.py
+#*/ (这个结束符被注释掉，所以不生效，也就是说#的优先级高于/*和*/)
+/basic_function/5nodes_system_install.py
+*/  11.py(此结束符生效，而且这一行剩余字符均不生效，!!!!!!11.py是不会执行的!!!!!!)
+# /* 和 */不可以在一行中（/* 11.py */，这种不支持，只能识别开始的/*，后面的内容不支持）
+################################################################################
+
+##########p300_dac_case_list主要测试dac功能########
+P300/DAC/dac_multi_client/dac_multi_client.py #需要先在windows端运行那个脚本
+P300/DAC/nfs_scripts/23-0-4-1.py
+P300/DAC/nfs_scripts/23-0-4-2.py
+P300/DAC/nfs_scripts/23-0-4-3.py
+P300/DAC/nfs_scripts/23-0-4-4.py
+#P300/DAC/nfs_scripts/23-0-7-1.py #先不跑，预计要10来个小时
+P300/DAC/nfs_scripts/23-0-8-1.py
+P300/DAC/nfs_scripts/23-0-8-2.py
+P300/DAC/nfs_scripts/23-0-8-5.py
+P300/DAC/nfs_scripts/23-0-8-6.py
+P300/DAC/nfs_scripts/23-0-9-1.py
+P300/DAC/nfs_scripts/23-0-9-2.py
+P300/DAC/nfs_scripts/23-0-9-3.py
+#P300/DAC/nfs_scripts/23-5-0-1.py #预计2小时
+P300/DAC/nfs_scripts/nfs_minimun_set/dac_nfs_acl_all.py
+
+P300/DAC/posix_scripts/23-0-3-1.py
+P300/DAC/posix_scripts/23-0-3-2.py
+P300/DAC/posix_scripts/23-0-3-3.py
+P300/DAC/posix_scripts/23-0-3-4.py
+#P300/DAC/posix_scripts/23-0-6-1.py #先不跑预计要1天
+#P300/DAC/posix_scripts/23-0-7-4.py #先不跑预计要1天
+P300/DAC/posix_scripts/23-0-8-7.py
+P300/DAC/posix_scripts/23-0-8-8.py
+P300/DAC/posix_scripts/23-0-8-9.py
+P300/DAC/posix_scripts/23-0-8-10.py
+P300/DAC/posix_scripts/23-0-8-11.py
+P300/DAC/posix_scripts/23-0-8-12.py
+P300/DAC/posix_scripts/23-0-9-4.py
+P300/DAC/posix_scripts/23-0-9-5.py
+P300/DAC/posix_scripts/23-0-9-6.py
+P300/DAC/smb_scripts/dac_smb_acl_all.py
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

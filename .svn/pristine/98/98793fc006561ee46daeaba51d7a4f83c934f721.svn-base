@@ -1,0 +1,16 @@
+# -*- coding: utf-8 -*
+#!/usr/bin/env python
+"此脚本是根据当前脚本所在路径来获得conf的绝对路径"
+import os
+def getconfpath(confname):
+    current_path = os.path.abspath('')
+    current_uppath= os.path.dirname(current_path)
+    confpath=os.path.join(current_uppath,'conf')
+    #confpath是配置文件所在的目录
+    policyconfpath=os.path.join(confpath,confname)
+    return policyconfpath
+if __name__=="__main__":
+    policyconfpath=getconfpath('policy.conf')
+    print policyconfpath
+
+

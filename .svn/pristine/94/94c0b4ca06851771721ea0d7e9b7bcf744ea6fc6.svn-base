@@ -1,0 +1,55 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：日志模块
+#说明：提供文件名，和需要写入的内容。日志前缀：【时间+类型】
+#使用方法：调用create_log()函数，提供日志名，日志类型，日志内容。
+#作者：王建磊
+#创建时间：2017/10/19
+#更新时间：2017/10/19
+#**********************************************#
+import os,sys
+import commands
+import time
+
+#类：输出彩色字符。无实际功能性作用可忽略
+class bcolors:
+	HEADER = '\033[0;95m'
+        OKBLUE = '\033[0;94m'
+        OKGREEN = '\033[0;92m'
+        WARNING = '\033[0;93m'
+        FAIL = '\033[0;91m'
+        ENDC = '\033[0m'
+
+        def disable(self):
+            self.HEADER = ''
+            self.OKBLUE = ''
+            self.OKGREEN = ''
+            self.WARNING = ''
+            self.FAIL = ''
+            self.ENDC = ''
+
+#获取当前时间函数。返回时间字符串。
+def get_current_time():
+        mon=time.localtime().tm_mon	#月
+        day=time.localtime().tm_mday	#日
+        hour=time.localtime().tm_hour	#时
+        min=time.localtime().tm_min	#分
+        sec=time.localtime().tm_sec	#秒
+        current_time=str(mon) + '_' + str(day) + '_' + str(hour) + '_' + str(min) + '_' + str(sec) + "  "
+        return current_time
+
+#创建日志函数
+def create_log(log_name,log_type,log_mesg):	#参数：日志名、日志的类、日志的内容
+	if(os.path.isfile(log_name)):		#判断文件是否存在，不存在则创建。若存在则追加写。
+		print("log file \"%s\" get ready."%log_name)
+	else:
+		os.mknod(log_name)
+		print("log file \"%s\" has been created."%log_name)
+	f=open(log_name,"a+")
+	time_str = get_current_time()
+	mesg = time_str + "[" + log_type + "]" + ":  " + log_mesg + "\n"	#日志实际的消息
+	f.write(mesg)
+	f.close()
+
+#调试代码
+#create_log("test.log","info","hello world!")

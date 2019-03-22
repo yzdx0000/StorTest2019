@@ -1,0 +1,138 @@
+#!/usr/bin/python
+# -*- coding:utf-8 -*-
+#===================================
+# latest update: 2018-03-28
+# author: diws
+#===================================
+import io
+import json
+import sys
+import os
+import commands
+sys.path.append("/home/StorTest/test_cases/libs")
+import common
+import log
+import get_config
+import commands
+
+#读取配置文件
+#获取路径：/home/StorTest/scripts
+current_path_1 = os.path.dirname(os.path.abspath(__file__))
+#获取路径：/home/StorTest/
+current_path = os.path.dirname(current_path_1)
+#获取路径：/home/StorTest/conf
+conf_path = os.path.join(current_path,'conf')
+conf_file = conf_path+'/'+sys.argv[1]
+if not os.path.exists(conf_file):
+    print 'File %s does not exist.' %(os.path.exists)
+    exit(1)
+deploy_ips = get_config.get_env_ip_info(conf_file)       #获取IP列表
+node_num = len(deploy_ips)               #计算集群节点数，选择相应的配置文件
+client_ips = get_config.get_allclient_ip() #获取客户端IP
+nfs_server_ip = get_config.get_jenkins_ip(conf_file)        #Jenkins节点
+nfs_server_exp_path = get_config.get_jenkins_path(conf_file)      #Jenkins所在目录，一般都是/home/StorTest
+print nfs_server_exp_path
+#初始化日志
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]      #获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)     #获取日志目录，即test_cases/Log/Case_log
+log.init(log_file_path, True)       #初始化日志文件
+#获取测试分支
+branch = sys.argv[2]
+if branch == "P300" or branch == "p300":
+    src_path = nfs_server_exp_path + "/src_code/P300"
+    install_file = nfs_server_exp_path + "/scripts/install_P300.sh"
+    install_xml_file = nfs_server_exp_path + "/conf/deploy_p300_" + str(node_num) + ".xml"
+elif branch == "X1000" or branch == "x1000" or branch == "XStor" or branch == "xstor":
+    src_path = nfs_server_exp_path + "src_code/X1000"
+    install_file = nfs_server_exp_path + "/scripts/install_X1000.sh"
+    install_xml_file = nfs_server_exp_path + "/conf/deploy_x1000_" + str(node_num) + ".xml"
+else:
+    log.error("Got wrong branch: %s" %(branch))
+    exit(-1)
+
+#####################################################Step 0#####################################################
+#检查所有测试节点是否有core，如果有，则退出自动部署环境
+#cmd = "ssh %s 'cd /home/parastor/log;file core* &'" %(install_node)
+if len(deploy_ips) != 0:
+    for ip in deploy_ips:
+        cmd = "ssh %s 'cd /home/parastor/log;file core* '" %(ip)
+        out1 = commands.getoutput(cmd)
+        core1 = out1.split()
+        if 'from' in core1:
+            print " %s has core" %(ip)
+            exit(1)
+
+if len(client_ips) != 0:
+    for ip in client_ips:
+        cmd = "ssh %s 'cd /home/parastor/log;file core* '" % (ip)
+        out2 = commands.getoutput(cmd)
+        core2 = out2.split()
+        if 'from' in core2:
+            print " %s has core" % (ip)
+            exit(1)
+
+#####################################################Step 1#####################################################
+#重启所有测试节点
+#cmd = "ssh %s 'echo b > /proc/sysrq-trigger &'" %(install_node)
+#common.command(cmd)
+if len(deploy_ips) != 0:
+    for ip in deploy_ips:
+        cmd = "ssh %s 'echo b > /proc/sysrq-trigger &'" %(ip)
+        common.command(cmd)
+if len(client_ips) != 0:
+    for ip in client_ips:
+        cmd = "ssh %s 'echo b > /proc/sysrq-trigger &'" %(ip)
+        common.command(cmd)
+#####################################################Step 2#####################################################
+#更新代码到指定目录下，更新完成后，执行quickmk.sh进行编译、打包
+#cmd = "cd %s;echo git >> git" %(src_path)
+#common.command(cmd)
+#cmd = "cd %s;echo mk >> mk" %(src_path)
+#common.command(cmd)
+#####################################################Step 3#####################################################
+#检查测试点IP是否正常
+if len(deploy_ips) != 0:
+    for ip in deploy_ips:
+        common.check_ip(ip)
+if len(client_ips) != 0:
+    for ip in client_ips:
+        common.check_ip(ip)
+#执行挂载命令
+if len(deploy_ips) != 0:
+    for ip in deploy_ips:
+        cmd = "ssh %s 'mount | grep %s | wc -l'" %(ip,nfs_server_exp_path)
+        (status, output) = commands.getstatusoutput(cmd)
+        if output == "0":
+            cmd = "ssh %s 'mkdir -p %s;mount -t nfs %s:%s %s'" %(ip, nfs_server_exp_path, nfs_server_ip, nfs_server_exp_path, nfs_server_exp_path)
+            common.command(cmd)
+            cmd = "ssh %s 'grep -c mount /etc/rc.local'" %(ip)
+            (status, output) = commands.getstatusoutput(cmd)
+            print output
+            if output == "0":
+                cmd = "ssh %s 'echo mount -t nfs %s:%s %s >> /etc/rc.local'" %(ip, nfs_server_ip, nfs_server_exp_path, nfs_server_exp_path)
+                (status, output) = commands.getstatusoutput(cmd)
+        else:
+            print "%s already mounted." %(ip) 
+#执行挂载命令
+if len(client_ips) != 0:
+    for ip in client_ips:
+        cmd = "ssh %s 'mount | grep %s | wc -l'" %(ip,nfs_server_exp_path)
+        (status, output) = commands.getstatusoutput(cmd)
+        if output == "0":
+            cmd = "ssh %s 'mkdir -p %s;mount -t nfs %s:%s %s'" %(ip, nfs_server_exp_path, nfs_server_ip, nfs_server_exp_path, nfs_server_exp_path)
+            common.command(cmd)
+            cmd = "ssh %s 'grep -c mount /etc/rc.local'" %(ip)
+            (status, output) = commands.getstatusoutput(cmd)
+            print output
+            if output == "0":
+                cmd = "ssh %s 'echo mount -t nfs %s:%s %s >> /etc/rc.local'" %(ip, nfs_server_ip, nfs_server_exp_path, nfs_server_exp_path)
+                (status, output) = commands.getstatusoutput(cmd)
+        else:
+            print "%s already mounted." %(ip) 
+#####################################################Step 4#####################################################
+#安装ParaStor
+cmd = "ssh %s 'sh %s %s'" %(deploy_ips[0], install_file, install_xml_file)
+common.command(cmd)
+cmd = "ssh %s 'sh %s/install_P300_client.sh %s'" %(deploy_ips[0], current_path_1, client_ips)
+common.command(cmd)

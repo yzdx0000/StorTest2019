@@ -1,0 +1,2053 @@
+# -*-coding:utf-8 -*
+
+#######################################################
+# 脚本作者：duyuli
+# 日期：2018-11-23
+# 脚本说明：界面自动化库函数
+#######################################################
+
+import time
+import os
+import log
+import get_config
+import quota_common
+from selenium import webdriver
+from selenium.webdriver import ActionChains                   # double_click
+from selenium.webdriver.common.keys import Keys               # check_box 类型反选
+from selenium.webdriver.support.select import Select          # 下来菜单选择
+
+from selenium.webdriver.support.wait import WebDriverWait     # 智能等待
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.common.by import By
+
+from selenium.common.exceptions import TimeoutException       # 导入指定异常
+
+quota_volume_name = os.path.basename(quota_common.BASE_QUOTA_PATH)                # volume1
+quota_create_path = quota_volume_name + ':/' + quota_common.QUOTA_PATH_BASENAME   # volume1:/quota_test_dir
+
+# 获取web_ip、浏览器名称
+web_ip = get_config.get_web_ip()
+explorer_name = get_config.get_explorer_name()
+
+def init_web_driver():
+    # 初始化浏览器
+    global driver
+
+    if explorer_name == "firefox":
+        driver = webdriver.Firefox()
+
+    if explorer_name == "chrome":
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument('--no-sandbox')      # 启动浏览器添加的参数，root用户时添加
+        chrome_options.add_argument('disable-infobars')  # 不弹出浏览器自带信息提示
+        driver = webdriver.Chrome(chrome_options=chrome_options)
+        driver.set_window_size(1300, 700)                # 默认窗口大小不利于观测，设置窗口大小
+
+    driver.get("https://%s:6080" % web_ip)
+
+    # 选择语言，输入用户名，密码
+    Select(find_element_by_xpath("//*[@id='login_select_language']")).select_by_value("en_US")
+    Select(find_element_by_xpath("//*[@id='login_select_language']")).select_by_value("zh_CN")
+
+    # 切换语言会自动进行刷新，确保刷新成功后再操作
+    for i in range(10):
+        attr = find_element_by_xpath("//*[@id='login_name']").get_attribute("placeholder")
+        if attr in "输入您的用户名":
+            break
+        time.sleep(0.5)
+
+    find_element_by_xpath("//*[@id='login_name']", js_send_keys="optadmin")
+    find_element_by_xpath("//*[@id='login_pwd']", js_send_keys="111111")
+    find_element_by_xpath("//*[@id='login-btn']").click()
+
+    # 点击连接
+    find_element_by_xpath("//a[contains(text(),'连接')]").click()
+
+    return
+
+def quit_web_driver():
+    global driver
+
+    # 以防止上一个动作未执行完毕，强制等待
+    time.sleep(2)
+    driver.quit()
+    return
+
+def implicit_wait(xpath, time_out=30, presence=True, visibility=False):
+    """
+    智能等待，只要出现了字段就进行下一步操作,加入超时报错屏幕截图保存
+    author:duyuli
+    :param visibility: 所有对用户可见，使用较少，某些特殊情况下才会用到
+    :param presence:所有加载完，经常使用
+    :param xpath: //*[@id='xxxxxx']
+    :param time_out: 默认最大等待时间
+    :return:
+    """
+    global driver
+    location_login = (By.XPATH, xpath)
+
+    if visibility:
+        presence = False
+        WebDriverWait(driver, time_out, 1).until(expected_conditions.visibility_of_all_elements_located(location_login))
+
+    if presence:
+        try:
+            WebDriverWait(driver, time_out, 1).until(
+                expected_conditions.presence_of_all_elements_located(location_login))
+        except TimeoutException:
+            # 超时异常则保存图片到日志目录下，方便分析
+            time_now = time.strftime("%y-%m-%d_%H-%M-%S")
+            driver.get_screenshot_as_file(get_config.get_testlog_path() + "/" + time_now + ".png")
+            raise
+
+    return
+
+def find_element_by_xpath(xpath, elements_num=0, time_out=30, check=False, visibility=False, js_send_keys=None):
+    """
+    经常使用，1、重写一个方法加入时间的优化
+             2、加入js文本框输入方法
+             3、检查上一个动作是否完成
+    author:duyuli
+    :param js_send_keys: 采用js语法替代selenuim的send_keys(),原因是chrome输入带数字1时失效
+    :param visibility:另一种方式等待界面加载
+    :param check:是否检查上一个动作完成
+    :param xpath:
+    :param elements_num: 默认取多个对象中的第一个
+    :param time_out:
+    :return:
+    """
+    global driver
+    implicit_wait(xpath, time_out=time_out, visibility=visibility)
+
+    if check:
+        check_element_done()
+
+    obj = driver.find_elements_by_xpath(xpath)[elements_num]
+    if js_send_keys:
+        driver.execute_script("arguments[0].focus()", obj)  # 定位光标，相当于先点击一下的效果
+        return driver.execute_script("arguments[0].value='%s'" % js_send_keys, obj)
+    return obj
+
+def check_element_done(xpath="//*[@id='frame-main-top-panel']", time_out=30):
+    """
+    通过捕获异常的方式，判断是否执行完成，一般用在公共函数的结尾
+    author:duyuli
+    :param xpath:
+    :param time_out:
+    :return:
+    """
+    global driver
+    count = 1
+    while True:
+        # noinspection PyBroadException
+        try:
+            driver.find_element_by_xpath(xpath).click()
+        except Exception:
+            # log.info("check for %s s" % (count * 5))
+            if count > time_out:
+                log.info("check time out")
+                raise Exception("time out")
+            count += 1
+            time.sleep(1)
+            continue
+        break
+
+def check_href_on_or_off(xpath, check=False):
+    """
+    检查折叠链接是否展开
+    author:duyuli
+    :param check:
+    :param xpath:
+    :return:
+    """
+    obj = find_element_by_xpath(xpath, check=check)
+    class_attribute = obj.get_attribute("class")
+
+    # 关闭状态
+    if "icon-angle-right" in class_attribute:
+        return False, obj
+
+    # 展开状态
+    if "icon-angle-down" in class_attribute:
+        return True, obj
+
+def check_href_until_on(xpath, check=False):
+    """
+    检查折叠链接直到展开,解决点击链接偶尔不能展开的情况，多点几次
+    author:duyuli
+    :param check:
+    :param xpath:
+    :return:
+    """
+    for i in range(5):
+        is_on_or_off, obj = check_href_on_or_off(xpath=xpath, check=check)
+        if is_on_or_off is False:
+            obj.click()
+        is_on_or_off, obj = check_href_on_or_off(xpath=xpath, check=check)
+        if is_on_or_off:
+            return
+        time.sleep(0.5)
+    raise Exception("check href until on failed")
+
+def get_driver_obj():
+    # 用于非common文件driver的调用
+    global driver
+    return driver
+
+def locate_manage_operation():
+    # 定位到管理运维
+    xpath = "//*[@id='ofs_maintain']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_job_manage():
+    # 管理运维--->任务管理
+    locate_manage_operation()
+    xpath = "//*[@id='ofs_jobengine']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_source_manage():
+    # 定位到资源管理
+    xpath = "//*[@id='ofs_resourcepartitioning']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_file():
+    # 定位到文件：  资源管理 ---> 文件
+    locate_source_manage()
+    xpath = "//*[@id='ofs_res_file']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_dir_quota():
+    # 定位到目录配额:  资源管理 ---> 文件 ---> 目录配额
+    locate_file()
+    find_element_by_xpath("//*[@id='ofs_quota']/a", check=True).click()
+    return
+
+def locate_node_pool():
+    # 资源管理--->节点池
+    locate_source_manage()
+    find_element_by_xpath("//*[@id='ofs_nodepool']/a", check=True).click()
+    return
+
+def locate_storage_pool():
+    # 资源管理--->存储池
+    locate_source_manage()
+    find_element_by_xpath("//*[@id='ofs_storagepool']/a", check=True).click()
+    return
+
+def locate_access_manage():
+    # 定位到访问管理
+    xpath = "//*[@id='ofs_access']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_auth_provider():
+    # 访问管理--->认证服务器
+    locate_access_manage()
+    find_element_by_xpath("//*[@id='ofs_authprovider']/a", check=True).click()
+    return
+
+def locate_access_zone():
+    # 访问管理--->访问分区
+    locate_access_manage()
+    find_element_by_xpath("//*[@id='ofs_accesszone']/a", check=True).click()
+    return
+
+def locate_subnet():
+    # 访问管理--->业务子网
+    locate_access_manage()
+    find_element_by_xpath("//*[@id='ofs_subnet']/a", check=True).click()
+    return
+
+def locate_user_group():
+    # 访问管理--->用户/用户组
+    locate_access_manage()
+    find_element_by_xpath("//*[@id='ofs_usergroup']/a", check=True).click()
+    return
+
+def locate_protocol_manage():
+    # 协议管理
+    xpath = "//*[@id='ofs_protocol']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_protocol_file():
+    # 协议管理--->文件
+    locate_protocol_manage()
+    xpath = "//*[@id='ofs_protocol_file']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_smb():
+    # 协议管理--->文件--->smb
+    locate_protocol_file()
+    find_element_by_xpath("//*[@id='ofs_smb']/a", check=True).click()
+    return
+
+def locate_nfs():
+    # 协议管理--->文件--->nfs
+    locate_protocol_file()
+    find_element_by_xpath("//*[@id='ofs_nfs']/a", check=True).click()
+    return
+
+def locate_ftp():
+    # 协议管理--->文件--->ftp
+    locate_protocol_file()
+    find_element_by_xpath("//*[@id='ofs_ftp']/a", check=True).click()
+    return
+
+def locate_posix():
+    # 协议管理--->文件--->posix
+    locate_protocol_file()
+    find_element_by_xpath("//*[@id='ofs_posix']/a", check=True).click()
+    return
+
+def locate_protocol_object():
+    # 协议管理--->对象
+    locate_protocol_manage()
+    xpath = "//*[@id='ofs_protocol_object']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_alarm_event():
+    # 告警事件
+    xpath = "//*[@id='ofs_alarm']/a/child::node()[last()]"
+    check_href_until_on(xpath, check=True)
+    return
+
+def locate_current_alarms():
+    # 告警事件--->实时告警
+    locate_alarm_event()
+    find_element_by_xpath("//*[@id='ofs_currentalarms']/a", check=True).click()
+    return
+
+def locate_all_events():
+    # 告警事件--->所有事件
+    locate_alarm_event()
+    find_element_by_xpath("//*[@id='ofs_allevents']/a", check=True).click()
+    return
+
+def create_quota(path, auth_provider_name=None, user_type=None, user_or_group_name=None,
+                 logical_quota_cal_type=None, logical_hard_threshold=None, logical_soft_threshold=None,
+                 logical_grace_time=None, logical_suggest_threshold=None,
+                 filenr_quota_cal_type=None, filenr_hard_threshold=None, filenr_soft_threshold=None,
+                 filenr_grace_time=None, filenr_suggest_threshold=None):
+    """
+    :author:duyuli
+    :path :      eg  volume:/quota_test_dir
+    :time:20181123
+    :阈值设定单位：  logical_hard_threshold（GB）
+                    logical_grace_time（天）
+                    filenr_hard_threshold（千）
+    :return:
+    """
+    global driver
+    log.info("begin to create quota")
+
+    # 定位到配额
+    locate_dir_quota()
+
+    volume_name = path.split(":")[0]
+    path_list = path.split(":")[1].split("/")[1:]
+
+    # 创建配额
+    find_element_by_xpath("//*[@id='quota_bn_create']", check=True).click()
+
+    # 创建配额 -> 路径
+    find_element_by_xpath("//*[@id='quota_operate_path_input']/div/i").click()
+
+    # 选择卷,选择卷时需要双击
+    obj_stdout = find_element_by_xpath("//*[@class='default-cell' and @title='%s']" % volume_name)
+    ActionChains(driver).double_click(obj_stdout).perform()
+
+    # 选择具体路径
+    for path_quota in path_list:
+        obj_stdout = find_element_by_xpath("//*[@class='default-cell' and @title='%s']" % path_quota)
+        ActionChains(driver).double_click(obj_stdout).perform()
+
+    # 单击确定路径
+    find_element_by_xpath("//*[@id='fs_file_path_browse_window-btn-0']").click()
+
+    # 选择认证服务器
+    if auth_provider_name:
+        Select(find_element_by_xpath(
+            "//*[@id='ofs_quota_operate_auth_provider_combo']")).select_by_visible_text(auth_provider_name)
+
+        # 选择用户、用户组
+        Select(find_element_by_xpath("//*[@id='ofs_quota_operate_user_type_combo']")).select_by_value(user_type)
+        find_element_by_xpath("//*[@id='quota_operate_user_input']/div/child::node()[last()]").click()
+
+        # 勾选用户或用户组
+        find_element_by_xpath("//*[@title='%s']/../../div/label/input" % user_or_group_name).send_keys(Keys.SPACE)
+
+        # 点击确定
+        find_element_by_xpath("//*[@id='ofs_auth_get_user_list_window-btn-0']").click()
+
+    # 拖动滚动条
+    js = "$(\"div[id='ofs_quota_create_window']\").find('.mCSB_container').css('top', '-390px')"
+    driver.execute_script(js)
+
+    # 选择不同类型的配额，逻辑空间阈值
+    if logical_quota_cal_type == "QUOTA_COMPUTE":
+        Select(find_element_by_xpath("//*[@id='logical_quota_cal_type_combo']")).select_by_value("QUOTA_COMPUTE")
+
+    if logical_quota_cal_type == "QUOTA_LIMIT":
+        Select(find_element_by_xpath("//*[@id='logical_quota_cal_type_combo']")).select_by_value("QUOTA_LIMIT")
+
+        if logical_hard_threshold:
+            # 采用js（不用send_keys()）主要是解决send.keys()在chrome浏览器中兼容性不好的情况
+            js_hard = "$('#logical_hard_threshold_field').val(%s)" % logical_hard_threshold
+            driver.execute_script(js_hard)
+
+        if logical_soft_threshold:
+            js_soft = "$('#logical_soft_threshold_field').val(%s)" % logical_soft_threshold
+            driver.execute_script(js_soft)
+
+            js_time = "$('#logical_grace_time_field').val(%s)" % logical_grace_time
+            driver.execute_script(js_time)
+
+        if logical_suggest_threshold:
+            js_suggest = "$('#logical_suggest_threshold_field').val(%s)" % logical_suggest_threshold
+            driver.execute_script(js_suggest)
+
+    # 选择不同类型的配额，inode阈值
+    if filenr_quota_cal_type == 'QUOTA_COMPUTE':
+        Select(find_element_by_xpath("//*[@id='filenr_quota_cal_type_combo']")).select_by_value("QUOTA_COMPUTE")
+
+    if filenr_quota_cal_type == 'QUOTA_LIMIT':
+        Select(find_element_by_xpath("//*[@id='filenr_quota_cal_type_combo']")).select_by_value("QUOTA_LIMIT")
+
+        if filenr_hard_threshold:
+            js_nr_hard = "$('#filenr_hard_threshold_field').val(%s)" % filenr_hard_threshold
+            driver.execute_script(js_nr_hard)
+
+        if filenr_soft_threshold:
+            js_nr_soft = "$('#filenr_soft_threshold_field').val(%s)" % filenr_soft_threshold
+            driver.execute_script(js_nr_soft)
+
+            js_time = "$('#filenr_grace_time_field').val(%s)" % filenr_grace_time
+            driver.execute_script(js_time)
+
+        if filenr_suggest_threshold:
+            js_nr_suggest = "$('#filenr_suggest_threshold_field').val(%s)" % filenr_suggest_threshold
+            driver.execute_script(js_nr_suggest)
+
+    # 单击确定创建配额
+    find_element_by_xpath("//*[@id='ofs_quota_create_window-btn-0']").click()
+
+    # 等待创建完成
+    check_element_done()
+
+    return
+
+def delete_quota(path):
+    """
+    :author:duyuli
+    :time:20181123
+    :path : eg   volume:/quota_test_dir
+    :return:
+    """
+    log.info("begin to delete quota")
+
+    # 定位到配额
+    locate_dir_quota()
+
+    # 勾选指定路径配额
+    find_element_by_xpath("//*[@class='default-cell' and @title='%s']/../../div/label/input" % path, check=True).click()
+
+    # 勾选删除
+    find_element_by_xpath("//*[@id='quota_bn_delete']").click()
+
+    # 点击确定
+    find_element_by_xpath("//*[contains(@id,'btn-0')]").click()
+
+    # 等待删除成功
+    check_element_done()
+
+    return
+
+def create_access_zone(name, auth_provider_name=None, nodes_all=False, node_hostname_list=None, enable_nas=False,
+                       nfs=False, smb=False, ftp=False, s3=False):
+    """
+    author:duyuli
+    :param s3:
+    :param ftp:
+    :param smb:
+    :param nfs:
+    :param enable_nas:
+    :param name: 访问分区名称
+    :param auth_provider_name: 认证服务器
+    :param nodes_all: 是否全选
+    :param node_hostname_list: 指定选择的节点  eg ["vm151", "vm152", "vm153"]
+    :return:
+    tips: 若要使能nas，请指明nfs=True，smb=True等等
+    """
+    global driver
+    log.info("begin to create access zone")
+
+    # 定位到访问分区
+    locate_access_zone()
+
+    # 单击创建
+    find_element_by_xpath("//*[@id='access_zone_bn_create']/i", check=True).click()
+
+    # 输入name
+    find_element_by_xpath("//*[@id='ofs_access_zone_create_name_id']", js_send_keys=name)
+
+    # 选择认证服务器
+    if auth_provider_name:
+        Select(find_element_by_xpath(
+            "//*[@id='ofs_access_zone_create_auth_provider_id']")).select_by_visible_text(auth_provider_name)
+
+    # 点开节点列表
+    find_element_by_xpath("//*[@id='ofs_access_zone_create_node_list']/div/i").click()
+
+    # 选择节点
+    if nodes_all:
+        for i in range(10):    # 避免全选点击后子项未加载完成的情况
+            if len(driver.find_elements_by_xpath("//*[@type='checkbox']")) > 2:
+                find_element_by_xpath("//*[@title='节点名称']/../..//input").send_keys(Keys.SPACE)
+                break
+            time.sleep(0.5)
+
+    if node_hostname_list:
+        for hostname in node_hostname_list:
+            find_element_by_xpath("//*[@title='%s']/../..//input" % hostname).send_keys(Keys.SPACE)
+
+    # 确定节点
+    find_element_by_xpath("//*[@id='accessZoneCreateNodeListWindow-btn-0']").click()
+
+    # 回到上层窗口下一步
+    find_element_by_xpath("//*[@id='access_zone_create_window_step1-btn-0']").click()
+
+    smb_xpath = "//*[@id='protocolSetting-nas-smb-box']"
+    nfs_xpath = "//*[@id='protocolSetting-nas-nfs-box']"
+    ftp_xpath = "//*[@id='protocolSetting-nas-ftp-box']"
+    s3_xpath = "//*[@id='protocolSetting-object-s3-box']"
+
+    smb_obj = find_element_by_xpath(smb_xpath)
+    nfs_obj = find_element_by_xpath(nfs_xpath)
+    ftp_obj = find_element_by_xpath(ftp_xpath)
+    s3_obj = find_element_by_xpath(s3_xpath)
+
+    if nfs or smb or ftp or s3:
+        enable_nas = True
+
+    # 无nas
+    if enable_nas is False:
+        if smb_obj.is_selected():
+            find_element_by_xpath(smb_xpath).send_keys(Keys.SPACE)   # box 类型反选
+
+        if nfs_obj.is_selected():
+            find_element_by_xpath(nfs_xpath).send_keys(Keys.SPACE)
+
+        if ftp_obj.is_selected():
+            find_element_by_xpath(ftp_xpath).send_keys(Keys.SPACE)
+
+        if s3_obj.is_selected():
+            find_element_by_xpath(s3_xpath).send_keys(Keys.SPACE)
+
+    # 有部分或全部nas
+    if smb:
+        if smb_obj.is_selected() is False:
+            find_element_by_xpath(smb_xpath).send_keys(Keys.SPACE)
+    else:
+        if smb_obj.is_selected():
+            find_element_by_xpath(smb_xpath).send_keys(Keys.SPACE)
+
+    if nfs:
+        if nfs_obj.is_selected() is False:
+            find_element_by_xpath(nfs_xpath).send_keys(Keys.SPACE)
+    else:
+        if nfs_obj.is_selected():
+            find_element_by_xpath(nfs_xpath).send_keys(Keys.SPACE)
+
+    if ftp:
+        if ftp_obj.is_selected() is False:
+            find_element_by_xpath(ftp_xpath).send_keys(Keys.SPACE)
+    else:
+        if ftp_obj.is_selected():
+            find_element_by_xpath(ftp_xpath).send_keys(Keys.SPACE)
+
+    if s3:
+        if s3_obj.is_selected() is False:
+            find_element_by_xpath(s3_xpath).send_keys(Keys.SPACE)
+    else:
+        if s3_obj.is_selected():
+            find_element_by_xpath(s3_xpath).send_keys(Keys.SPACE)
+
+    # 单击完成
+    find_element_by_xpath("//*[@id='access_zone_create_window_step2-btn-1']").click()
+
+    # 单击确定创建  starts-with  contains
+    find_element_by_xpath("//div[contains(@id,'btn-0') and starts-with(@id,'comfirm')]").click()
+
+    # 等待创建完成
+    log.info("wait enable nas")
+    check_element_done(time_out=300)
+    return
+
+def delete_access_zone(name):
+    """
+    :param name:
+    :return:
+    """
+    log.info("begin to delete access zone")
+
+    # 定位到访问分区
+    locate_access_zone()
+
+    is_enable_nas_start_stat = False
+
+    # 勾选待删除的访问分区
+    find_element_by_xpath("//div[starts-with(text(),'%s')]/../../div/label/input" % name, check=True).click()
+
+    # 点击服务设置
+    find_element_by_xpath("//*[@id='access_zone_bn_protocol_setting']").click()
+
+    # smb nfs ftp s3 等服务置为空
+    smb_xpath = "//*[@id='protocolSetting-nas-smb-box']"
+    nfs_xpath = "//*[@id='protocolSetting-nas-nfs-box']"
+    ftp_xpath = "//*[@id='protocolSetting-nas-ftp-box']"
+    s3_xpath = "//*[@id='protocolSetting-object-s3-box']"
+
+    smb_obj = find_element_by_xpath(smb_xpath)
+    nfs_obj = find_element_by_xpath(nfs_xpath)
+    ftp_obj = find_element_by_xpath(ftp_xpath)
+    s3_obj = find_element_by_xpath(s3_xpath)
+
+    if smb_obj.is_selected():
+        is_enable_nas_start_stat = True
+        find_element_by_xpath(smb_xpath).send_keys(Keys.SPACE)   # box 类型反选
+    if nfs_obj.is_selected():
+        is_enable_nas_start_stat = True
+        find_element_by_xpath(nfs_xpath).send_keys(Keys.SPACE)
+    if ftp_obj.is_selected():
+        is_enable_nas_start_stat = True
+        find_element_by_xpath(ftp_xpath).send_keys(Keys.SPACE)
+    if s3_obj.is_selected():
+        is_enable_nas_start_stat = True
+        find_element_by_xpath(s3_xpath).send_keys(Keys.SPACE)
+
+    # 单击确定
+    find_element_by_xpath("//*[@id='protocolSettingWindow-btn-0']").click()
+
+    if is_enable_nas_start_stat is True:
+        # 勾选警告
+        find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+        # 点击确定
+        find_element_by_xpath("//*[contains(@id,'btn-0')]").click()
+
+        # disable_nas 等待时间
+        log.info("wait disable nas")
+        check_element_done("//*[@id='access_zone_operation_banner']", time_out=180)
+
+    # 重新勾选待删除的访问分区
+    obj = find_element_by_xpath("//div[starts-with(text(),'%s')]/../../div/label/input" % name)
+    if obj.is_selected():
+        pass
+    else:
+        find_element_by_xpath("//div[starts-with(text(),'%s')]/../../div/label/input" % name).send_keys(Keys.SPACE)
+
+    # 单击删除
+    find_element_by_xpath("//*[@id='access_zone_bn_delete']").click()
+
+    # 确认删除
+    find_element_by_xpath("//*[contains(@id,'btn-0')]").click()
+
+    # 等待访问分区删除成功
+    check_element_done()
+
+    return
+
+def create_group_user(group_name, user_name, auth_provider_name):
+    log.info("begin to create group user")
+
+    # 定位到用户/用户组
+    locate_user_group()
+
+    # 选择域名服务器
+    Select(find_element_by_xpath(
+        "//*[@id='user_group_main_tab_combo_id']", check=True)).select_by_visible_text(auth_provider_name)
+
+    # 点击用户组
+    find_element_by_xpath("//*[@id='tabCard']/li[2]/a").click()
+
+    # 点击创建用户组
+    find_element_by_xpath("//*[@id='group_tab_bn_create']/i").click()
+
+    # 输入用户组name
+    find_element_by_xpath("//*[@id='ofs_user_group_group_create_group_name_id']", js_send_keys=group_name)
+
+    # 点击确定创建用户组
+    find_element_by_xpath("//*[@id='group_create_window-btn-0']").click()
+
+    # 检查用户组创建完成
+    check_element_done("//*[@id='frame-main-top-panel']")
+
+    # 点击用户按钮
+    find_element_by_xpath("//*[@id='tabCard']/li[1]/a").click()
+
+    # 点击创建用户
+    find_element_by_xpath("//*[@id='user_tab_bn_create']/i").click()
+
+    # 输入用户name，passwd， 选择主组
+    find_element_by_xpath("//*[@id='ofs_user_group_user_create_username_id']", js_send_keys=user_name)
+    find_element_by_xpath("//*[@id='ofs_user_group_user_create_password_id']", js_send_keys="111111")
+    find_element_by_xpath("//*[@id='ofs_user_group_user_create_main_group']/div/i").click()
+    find_element_by_xpath("//*[@title='%s']/../../div/label/input" % group_name).click()
+
+    # 点击确定选择主组
+    find_element_by_xpath("//*[@id='user_group_main_group_list_window-btn-0']").click()
+
+    # 点击确定创建用户
+    find_element_by_xpath("//*[@id='user_create_window-btn-0']").click()
+
+    # 等待创建完成
+    check_element_done(xpath="//*[@id='tabCard']")
+
+    return
+
+def delete_group_user(group_name, user_name, auth_provider_name, all_user=True):
+    log.info("begin to delete group user")
+
+    # 定位到用户/用户组
+    locate_user_group()
+
+    # 选择域名服务器
+    Select(find_element_by_xpath(
+        "//*[@id='user_group_main_tab_combo_id']", check=True)).select_by_visible_text(auth_provider_name)
+
+    # 点击用户按钮
+    find_element_by_xpath("//*[@id='tabCard']/li[1]/a").click()
+
+    # 勾选指定删除的用户名
+    if all_user:
+        find_element_by_xpath("//*[@id='subnet_grid']/div[2]/div/div/div/div/div/div/label/input").send_keys(Keys.SPACE)
+    else:
+        find_element_by_xpath("//*[@title='%s']/../../div/label/input" % user_name).send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='user_tab_bn_delete']/i").click()
+
+    # 勾选警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确定删除用户
+    find_element_by_xpath("//*[contains(@id,'btn-0')]").click()
+
+    # 点击关闭
+    for i in range(31):
+        if i == 30:
+            raise Exception("close user delete failed")
+        if find_element_by_xpath("//*[@id='executeStatus-0']").text == "成功":
+            find_element_by_xpath("//*[contains(@id,'btn-0')]").click()
+            break
+        else:
+            time.sleep(1)
+
+    # 点击用户组按钮
+    find_element_by_xpath("//*[@id='tabCard']/li[2]/a").click()
+
+    # 点击指定用户组
+    find_element_by_xpath("//*[@title='%s']" % group_name).click()
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='group_tab_bn_delete']/i").click()
+
+    # 勾选警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确定删除group
+    find_element_by_xpath("//*[contains(@id,'btn-0')]").click()
+
+    # 等待删除成功
+    check_element_done()
+
+    return
+
+def modify_quota(path, logical_quota_cal_type=None, logical_hard_threshold=None, logical_soft_threshold=None,
+                 logical_grace_time=None, logical_suggest_threshold=None,
+                 filenr_quota_cal_type=None, filenr_hard_threshold=None, filenr_soft_threshold=None,
+                 filenr_grace_time=None, filenr_suggest_threshold=None):
+    global driver
+    log.info("modefy quota")
+
+    # 定位到配额
+    locate_dir_quota()
+
+    # 勾选指定路径配额
+    find_element_by_xpath("//*[@title='%s']/../../div/label/input" % path, check=True).send_keys(Keys.SPACE)
+
+    # 点击修改
+    find_element_by_xpath("//*[@id='quota_bn_modify']/i").click()
+
+    # 拖动滚动条
+    js = "$(\"div[id='ofs_quota_update_window']\").find('.mCSB_container').css('top', '-390px')"
+    driver.execute_script(js)
+
+    # 选择不同类型的配额，逻辑空间阈值
+    if logical_quota_cal_type == "QUOTA_COMPUTE":
+        Select(find_element_by_xpath("//*[@id='logical_quota_cal_type_combo']")).select_by_value("QUOTA_COMPUTE")
+
+    if logical_quota_cal_type == "QUOTA_LIMIT":
+        Select(find_element_by_xpath("//*[@id='logical_quota_cal_type_combo']")).select_by_value("QUOTA_LIMIT")
+
+        if logical_hard_threshold:
+            js = "$('#logical_hard_threshold_field').val(%s)" % logical_hard_threshold
+            driver.execute_script(js)
+
+        if logical_soft_threshold:
+            js_soft = "$('#logical_soft_threshold_field').val(%s)" % logical_soft_threshold
+            driver.execute_script(js_soft)
+
+            js_time = "$('#logical_grace_time_field').val(%s)" % logical_grace_time
+            driver.execute_script(js_time)
+
+        if logical_suggest_threshold:
+            js_time = "$('#logical_suggest_threshold_field').val(%s)" % logical_suggest_threshold
+            driver.execute_script(js_time)
+
+    # 选择不同类型的配额，inode阈值
+    if filenr_quota_cal_type == 'QUOTA_COMPUTE':
+        Select(find_element_by_xpath("//*[@id='filenr_quota_cal_type_combo']")).select_by_value("QUOTA_COMPUTE")
+
+    if filenr_quota_cal_type == 'QUOTA_LIMIT':
+        Select(find_element_by_xpath("//*[@id='filenr_quota_cal_type_combo']")).select_by_value("QUOTA_LIMIT")
+
+        if filenr_hard_threshold:
+            js_time = "$('#filenr_hard_threshold_field').val(%s)" % filenr_hard_threshold
+            driver.execute_script(js_time)
+
+        if filenr_soft_threshold:
+            js_time = "$('#filenr_soft_threshold_field').val(%s)" % filenr_soft_threshold
+            driver.execute_script(js_time)
+
+            js_time = "$('#filenr_grace_time_field').val(%s)" % filenr_grace_time
+            driver.execute_script(js_time)
+
+        if filenr_suggest_threshold:
+            js_time = "$('#filenr_suggest_threshold_field').val(%s)" % filenr_suggest_threshold
+            driver.execute_script(js_time)
+
+    # 单击确定创建配额
+    find_element_by_xpath("//*[@id='ofs_quota_update_window-btn-0']").click()
+
+    # 等待创建完成
+    check_element_done()
+
+    return
+
+def check_alarms(name, timeout=600):
+    global driver
+
+    # 定位到实时告警
+    locate_current_alarms()
+
+    count = 1
+    while True:
+        # 超时则退出
+        if count * 3 >= timeout:
+            log.info("check alarms timeout")
+            raise Exception("check alarms failed")
+
+        obj = driver.find_elements_by_xpath("//*[starts-with(text(),'%s')]" % name)
+        if len(obj) != 0:
+            log.info("check alarms right")
+            break
+        else:
+            time.sleep(3)
+            count += 1
+
+            # 有可能上次刷新还未显示完毕
+            check_element_done(time_out=timeout)
+
+            driver.find_element_by_xpath("//*[@id='ofs_alarm_active_refresh']").click()
+    return
+
+def check_events(event_name, time1, timeout=300):
+    global driver
+
+    # 定位到事件
+    locate_all_events()
+
+    # 点开100条/页
+    find_element_by_xpath("//*[@class='kuma-select2-arrow']").click()
+
+    # 选择100条/页
+    find_element_by_xpath("//*[starts-with(text(),'100条/页')]").click()
+
+    count = 1
+    while True:
+        # 超时则退出
+        if count * 3 >= timeout:
+            log.info("check alarms timeout")
+            raise Exception("check alarms failed")
+
+        obj = driver.find_elements_by_xpath("//*[starts-with(text(),'%s')]" % event_name)
+
+        if len(obj) != 0:
+            # 判断时间在脚本执行后
+            time2 = find_element_by_xpath("//*[starts-with(text(),'%s')]/../../../div[4]/div" % event_name).text
+            if check_time_earlier_or_later(time1, time2) > 0:
+                log.info("check events right")
+                break
+
+        time.sleep(3)
+        count += 1
+
+        # 有可能上次刷新还未显示完毕
+        check_element_done(time_out=timeout)
+
+        driver.find_element_by_xpath("//*[@id='ofs_all_event_refresh']").click()
+    return
+
+def create_smb_share(path, access_zone_name, share_name, auth_access_control, user_name=None, group_name=None):
+    """
+    :param path:                 volume1:smb_share
+    :param access_zone_name:     testzone
+    :param share_name:           share_smb
+    :param auth_access_control:  ro
+                                  rw
+                                  full_control
+    :param user_name:            user_name
+    :param group_name:           group_name
+    :return:
+    """
+    global driver
+    log.info("create smb share")
+
+    # 定位到smb
+    locate_smb()
+
+    path_list = []
+    volume_name = path.split(":")[0]
+    path_list.append(volume_name)
+    path_list.extend(path.split(":")[1].split("/")[1:])
+
+    # 选择访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='ofs_accesszone_selector']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 点击创建
+    find_element_by_xpath("//*[@id='smb_bn_create']").click()
+
+    # 填写共享名称
+    find_element_by_xpath("//*[@id='smb_operate_step1_name']", js_send_keys=share_name)
+
+    # 点击共享目录
+    find_element_by_xpath("//*[@id='smb_operate_step1_path_div']//i[@class='icon-search']").click()
+
+    # 选择共享目录
+    for dir_smb in path_list:
+        obj = find_element_by_xpath("//*[@title='%s']" % dir_smb)
+        ActionChains(driver).double_click(obj).perform()
+
+    # 点击确定共享目录
+    find_element_by_xpath("//*[@id='fs_file_path_browse_window-btn-0']").click()
+
+    # 点击下一步
+    find_element_by_xpath("//*[@id='ofs_smb_create_window-btn-0']").click()
+
+    # 点击完成共享
+    find_element_by_xpath("//*[@id='ofs_smb_create_step2_window-btn-1']").click()
+
+    # 点击确定完成
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'comfirm')]").click()
+
+    # 勾选该smb共享
+    obj = find_element_by_xpath("//*[@title='%s']/../..//input[@type='checkbox']" % path)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击添加用户
+    find_element_by_xpath("//*[@id='smb_auth_bn_add_div']/i").click()
+
+    # 选中用户或用户组
+    user_or_group_name = None
+    if user_name:
+        obj = find_element_by_xpath("//*[@id='ofs_auth_user_type_user']")
+        if obj.is_selected() is False:
+            obj.send_keys(Keys.SPACE)
+        user_or_group_name = user_name
+
+    if group_name:
+        obj = find_element_by_xpath("//*[@id='ofs_auth_user_type_group']")
+        if obj.is_selected() is False:
+            obj.send_keys(Keys.SPACE)
+        user_or_group_name = user_name
+
+    # 点击搜索名称
+    find_element_by_xpath("//*[@id='ofs_auth_user_searcher_div']//i").click()
+
+    # 选中用户组或用户
+    find_element_by_xpath("//*[@title='%s']/../../div/label/input" % user_or_group_name).send_keys(Keys.SPACE)
+
+    # 点击确定用户用户组
+    find_element_by_xpath("//*[@id='ofs_auth_get_user_list_window-btn-0']").click()
+
+    # 选择权限
+    Select(find_element_by_xpath("//*[@id='ofs_auth_access_control_checkbox']")).select_by_value(auth_access_control)
+
+    # 点击确定添加
+    find_element_by_xpath("//*[@id='ofs_smb_add_auth_window-btn-0']").click()
+
+    # 点击确定
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'comfirm')]").click()
+
+    # 检查完成
+    check_element_done()
+
+    return
+
+def delete_smb_share(path):
+    log.info("delete smb share")
+
+    # 定位到smb
+    locate_smb()
+
+    # 勾选指定路径的smb
+    obj = find_element_by_xpath("//*[@title='%s']/../..//input[@type='checkbox']" % path, check=True)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='smb_bn_delete']").click()
+
+    # 勾选警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确认删除
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'riskComfirm')]").click()
+
+    # 检查完成
+    check_element_done()
+
+    return
+
+def create_nfs_share(path, access_zone_name, share_name, auth_access_control, client_nfs_ip):
+    """
+    :param path:                   eg    volume1:/quota_test_dir
+    :param access_zone_name:       eg    testzone
+    :param share_name:             eg    nfs_share
+    :param auth_access_control:    eg    ro
+                                    eg    rw
+    无删除和重命名权限               eg    rw_nodelsacl
+    :param client_nfs_ip:          eg    *
+                                    eg    10.2.42.102/22
+    :return:
+    """
+    global driver
+    log.info("create nfs share")
+
+    # 定位到nfs
+    locate_nfs()
+
+    path_list = []
+    volume_name = path.split(":")[0]
+    path_list.append(volume_name)
+    path_list.extend(path.split(":")[1].split("/")[1:])
+
+    # 选择访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='ofs_nfs_access_selector']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 点击创建
+    find_element_by_xpath("//*[@id='nfs_bn_create']").click()
+
+    # 填写共享名称
+    find_element_by_xpath("//*[@id='nfs_operate_step1_name']", js_send_keys=share_name)
+
+    # 点击共享目录
+    find_element_by_xpath("//*[@id='nfs_operate_step1_path_div']//i[@class='icon-search']").click()
+
+    # 选择共享目录
+    for dir_nfs in path_list:
+        obj = find_element_by_xpath("//*[@title='%s']" % dir_nfs)
+        ActionChains(driver).double_click(obj).perform()
+
+    # 点击确定共享目录
+    find_element_by_xpath("//*[@id='fs_file_path_browse_window-btn-0']").click()
+
+    # 点击下一步
+    find_element_by_xpath("//*[@id='ofs_nfs_create_window-btn-0']").click()
+
+    # 点击完成共享
+    find_element_by_xpath("//*[@id='ofs_nfs_create_step2_window-btn-1']").click()
+
+    # 点击确定完成
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'comfirm')]").click()
+
+    # 勾选该nfs共享
+    obj = find_element_by_xpath("//*[@title='%s']/../..//input[@type='checkbox']" % path)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击添加nfs客户端
+    find_element_by_xpath("//*[@id='nfs_client_bn_add_div']/i").click()
+
+    # 填写nfs client ip
+    find_element_by_xpath("//*[@id='ofs_nfs_client_ip_address']", js_send_keys=client_nfs_ip)
+
+    # 选择权限
+    Select(find_element_by_xpath("//*[@id='ofs_nfs_client_permission_level']")).select_by_value(auth_access_control)
+
+    # 点击确定添加
+    find_element_by_xpath("//*[@id='ofs_nfs_add_client_window-btn-0']").click()
+
+    # 点击确定
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'comfirm')]").click()
+
+    # 检查完成
+    check_element_done()
+
+    return
+
+def delete_nfs_share(path):
+    log.info("delete nfs share")
+
+    # 定位到nfs
+    locate_nfs()
+
+    # 勾选指定路径的nfs
+    obj = find_element_by_xpath("//*[@title='%s']/../..//input[@type='checkbox']" % path, check=True)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='nfs_bn_delete']").click()
+
+    # 勾选警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确认删除
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'riskComfirm')]").click()
+
+    # 检查完成
+    check_element_done()
+
+    return
+
+def create_ftp_share(path, access_zone_name, user_name):
+    global driver
+    log.info("create ftp share")
+
+    # 定位到ftp
+    locate_ftp()
+
+    path_list = []
+    volume_name = path.split(":")[0]
+    path_list.append(volume_name)
+    path_list.extend(path.split(":")[1].split("/")[1:])
+
+    # 选择访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='ofs_accesszone_selector']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 点击创建
+    find_element_by_xpath("//*[@id='ftp_bn_create']").click()
+
+    # 点击共享目录
+    find_element_by_xpath("//*[@id='ftp_operate_path_div']//i[@class='icon-search']").click()
+
+    # 选择共享目录
+    for dir_ftp in path_list:
+        obj = find_element_by_xpath("//*[@title='%s']" % dir_ftp)
+        ActionChains(driver).double_click(obj).perform()
+
+    # 点击确定共享目录
+    find_element_by_xpath("//*[@id='fs_file_path_browse_window-btn-0']").click()
+
+    # 点击下一步
+    find_element_by_xpath("//*[@id='ofs_ftp_create_window-btn-0']").click()
+
+    # 点击添加用户
+    find_element_by_xpath("//*[@id='ftp_operate_step2_add_bn']").click()
+
+    # 点击搜索
+    find_element_by_xpath("//*[@id='ofs_auth_user_searcher_div']//i").click()
+
+    # 勾选指定用户
+    find_element_by_xpath("//*[@title='%s']/../..//input" % user_name).send_keys(Keys.SPACE)
+
+    # 点击确定用户
+    find_element_by_xpath("//*[@id='ofs_auth_get_user_list_window-btn-0']").click()
+
+    # 点击确定授权
+    find_element_by_xpath("//*[@id='ofs_ftp_add_auth_window-btn-0']").click()
+
+    # 点击完成共享
+    find_element_by_xpath("//*[@id='ofs_ftp_create_step2_window-btn-1']").click()
+
+    # 勾选警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确定
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'riskComfirm')]").click()
+
+    # 点击关闭执行结果
+    for i in range(31):
+        if i == 30:
+            raise Exception("close user delete failed")
+        if find_element_by_xpath("//*[@id='executeStatus-0']").text == "成功":
+            find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'msgbox')]").click()
+            break
+        else:
+            time.sleep(1)
+
+    return
+
+def delete_ftp_share(path):
+    log.info("delete ftp share")
+
+    # 定位到ftp
+    locate_ftp()
+
+    # 勾选指定路径的nfs
+    obj = find_element_by_xpath("//*[@title='%s']/../..//input[@type='checkbox']" % path, check=True)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='ftp_bn_delete']").click()
+
+    # 勾选警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确认删除
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'riskComfirm')]").click()
+
+    # 检查完成
+    check_element_done()
+
+    return
+
+def get_cluster_time():
+    for i in range(10):
+        time_cluster = find_element_by_xpath("//*[@id ='ofs_current_connect_cluster_time']", check=True).text
+        if "20" in time_cluster:
+            return time_cluster
+        else:
+            time.sleep(1)
+    raise Exception("get cluster time failed")
+
+def check_time_earlier_or_later(time1, time2):
+    # 用来判断集群时间格式，用于检查事件
+    # time1     eg:   2018-12-03 15:27:31
+
+    list_time1 = time1.split()[0].split("-")
+    list_time1.extend(time1.split()[1].split(":"))
+
+    list_time2 = time2.split()[0].split("-")
+    list_time2.extend(time2.split()[1].split(":"))
+
+    int_time1, int_time2, a = 0, 0, 1
+
+    for i in range(1, 7):
+        int_time1 = int_time1 + int(list_time1[6 - i]) * a
+        int_time2 = int_time2 + int(list_time2[6 - i]) * a
+        a *= 60
+
+    return int_time2 - int_time1
+
+def create_posix_auth(volume_name, client_ips_list):
+    """
+    输入单个或者多个ip的list
+    :param volume_name: volume1
+    :param client_ips_list: eg   ["10.2.42.101-110", "10.2.42.101"]
+    :return:
+    """
+    log.info("add client posix authorize")
+
+    # 定位到POSIX
+    locate_posix()
+
+    # 点击添加按钮
+    find_element_by_xpath("//*[@id='posix_bn_create']", check=True).click()
+
+    # 点击选择文件系统
+    find_element_by_xpath("//*[@id='posix_select_volume_button']").click()
+
+    # 勾选文件系统
+    find_element_by_xpath("//*[@title='%s']/../..//input" % volume_name).send_keys(Keys.SPACE)
+
+    # 点击确定
+    find_element_by_xpath("//*[@id='posix_volume_window-btn-0']").click()
+
+    # 输入授权的ip
+    text = "\\n".join(client_ips_list)
+    find_element_by_xpath("//*[@id='posix_config_ip_input']", js_send_keys=text)
+
+    # 点击确定添加
+    find_element_by_xpath("//*[@id='posix_add_window-btn-0']").click()
+
+    # 检查创建完成
+    check_element_done()
+
+    return
+
+def delete_posix_auth(client_ips_list):
+    """
+    输入单个或者多个ip的list
+    :param client_ips_list: ["10.2.42.101-110", "10.2.42.101"]
+    :return:
+    """
+    log.info("delete client auth")
+
+    # 定位到POSIX
+    locate_posix()
+
+    # 10.2.42.101,10.2.42.106-110
+    client_ips = ",".join(client_ips_list)
+
+    # 勾选指定授权ip
+    obj = find_element_by_xpath("//*[@title='%s']/../..//input" % client_ips, check=True)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='posix_bn_delete']").click()
+
+    # 点击确认删除
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id,'comfirm')]").click()
+
+    # 检查删除成功
+    check_element_done()
+
+    return
+
+def create_subnet(access_zone_name, subnet_name, svip, mask, eth_name, domain_name, ip_address_pool_list):
+    """
+    创建业务子网，并添加vip池
+    :param access_zone_name:      testzone
+    :param subnet_name:           subnet
+    :param svip:                  10.2.41.1
+    :param mask:                  255.255.252.0
+    :param eth_name:              ens192
+    :param domain_name:           www.domaindomain.com
+    :param ip_address_pool_list:  ["10.2.41.1", "10.2.41.10-21"]  支持单个IP地址和ip地址段
+    :return:
+    """
+    log.info("create subnet and add ip address pool")
+
+    # 定位到业务子网
+    locate_subnet()
+
+    # 选择访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='subnet_combo_box_current_access_zone_id']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 点击创建
+    find_element_by_xpath("//*[@id='subnet_bn_create']").click()
+
+    # 填写子网名称
+    find_element_by_xpath("//*[@id='ofs_subnet_create_name_id']", js_send_keys=subnet_name)
+
+    # 填写SVIP
+    find_element_by_xpath("//*[@id='ofs_subnet_create_service_vip_id']", js_send_keys=svip)
+
+    # 填写子网掩码
+    find_element_by_xpath("//*[@id='ofs_subnet_create_subnet_mask_id']", js_send_keys=mask)
+
+    # 点击搜索网卡
+    find_element_by_xpath("//*[@id='ofs_subnet_create_nic_selected']//i").click()
+
+    # 勾选指定网卡名称
+    find_element_by_xpath("//*[@title='%s']/../..//input" % eth_name).send_keys(Keys.SPACE)
+
+    # 点击确定网卡
+    find_element_by_xpath("//*[@id='subnet_create_nic_list_window-btn-0']").click()
+
+    # 点击确定业务子网
+    find_element_by_xpath("//*[@id='subnetCreateWindow-btn-0']").click()
+
+    # 等待创建子网完成
+    check_element_done()
+
+    # 选中指定名称的subnet
+    obj = find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % subnet_name)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击创建ip地址池
+    find_element_by_xpath("//*[@id='vip_addr_pool_bn_create']").click()
+
+    # 填写ip地址池域名
+    find_element_by_xpath("//*[@id='ofs_vip_addr_pool_create_domain_name_id']", js_send_keys=domain_name)
+
+    # 填写ip地址，入参为list表
+    text = "\\n".join(ip_address_pool_list)
+    find_element_by_xpath("//*[@id='ofs_vip_addr_pool_create_ip_address_id']", js_send_keys=text)
+
+    # 点击确定增加ip地址池
+    find_element_by_xpath("//*[@id='VIPAddrPoolCreateWindow-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def modify_subnet(access_zone_name, subnet_name, subnet_name_modify=None, svip=None, mask=None, eth_name=None):
+    """
+    修改业务子网
+    :param subnet_name_modify:    待修改的业务子网名称
+    :param access_zone_name:      testzone
+    :param subnet_name:           subnet
+    :param svip:                  10.2.41.1
+    :param mask:                  255.255.252.0
+    :param eth_name:              ens192
+    :return:
+    """
+    log.info("modefy subnet")
+
+    # 定位到业务子网
+    locate_subnet()
+
+    # 选择访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='subnet_combo_box_current_access_zone_id']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 选择指定修改的subnet
+    obj = find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % subnet_name)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击修改
+    find_element_by_xpath("//*[@id='subnet_bn_update']").click()
+
+    # 填写子网名称
+    if subnet_name_modify:
+        find_element_by_xpath("//*[@id='ofs_subnet_create_name_id']", js_send_keys=subnet_name_modify)
+
+    # 填写SVIP
+    if svip:
+        find_element_by_xpath("//*[@id='ofs_subnet_create_service_vip_id']", js_send_keys=svip)
+
+    # 填写子网掩码
+    if mask:
+        find_element_by_xpath("//*[@id='ofs_subnet_create_subnet_mask_id']", js_send_keys=mask)
+
+    # 点击搜索网卡
+    if eth_name:
+        find_element_by_xpath("//*[@id='ofs_subnet_create_nic_selected']//i").click()
+
+        # 勾选指定网卡名称
+        find_element_by_xpath("//*[@title='%s']/../..//input" % eth_name).send_keys(Keys.SPACE)
+
+        # 点击确定网卡
+        find_element_by_xpath("//*[@id='subnet_create_nic_list_window-btn-0']").click()
+
+    # 点击确定业务子网
+    find_element_by_xpath("//*[@id='subnetCreateWindow-btn-0']").click()
+
+    # 等待修改子网完成
+    check_element_done()
+
+    return
+
+def delete_subnet(access_zone_name, subnet_name):
+    """
+    删除业务子网（会先删除对应的vip池）
+    :param access_zone_name:testzone
+    :param subnet_name:subnet
+    :return:
+    """
+    global driver
+    log.info("delete subnet")
+
+    # 定位到业务子网
+    locate_subnet()
+
+    # 选择访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='subnet_combo_box_current_access_zone_id']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 勾选待删除的业务子网
+    obj = find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % subnet_name)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 循环删除该业务子网下所有的vip地址池
+    xpath = "//*[@id='vip_addr_pool_display']//*[@type='radio']"
+    time.sleep(3)
+
+    while True:
+        obj_list = driver.find_elements_by_xpath(xpath)
+        # 如果业务子网下没有vip池
+        if not obj_list:
+            break
+
+        if obj_list[0].is_selected() is False:
+            obj_list[0].send_keys(Keys.SPACE)
+
+        # 点击删除vip地址池
+        find_element_by_xpath("//*[@id='vip_addr_pool_bn_delete']").click()
+
+        # 勾选警告
+        find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+        # 点击确定删除vip地址池
+        find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id, 'riskComfirm')]").click()
+
+        # 检查删除成功
+        check_element_done()
+
+    # 点击删除subnet
+    find_element_by_xpath("//*[@id='subnet_bn_delete']").click()
+
+    # 点击确认删除subnet
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id, 'comfirm')]").click()
+
+    # 检查删除子网成功
+    check_element_done()
+
+    return
+
+def add_vip_pool(access_zone_name, subnet_name, domain_name, ip_address_list):
+    """
+    添加指定vip池
+    :param access_zone_name:
+    :param subnet_name:
+    :param domain_name:  ip地址池的域名
+    :param ip_address_list:  ["10.2.41.1", "10.2.41.50-60"] 支持单个地址和地址段
+    :return:
+    """
+    log.info("add vip address pool")
+
+    # 定位到业务子网
+    locate_subnet()
+
+    # 选择指定访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='subnet_combo_box_current_access_zone_id']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 勾选指定的业务子网
+    obj = find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % subnet_name)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 点击增加ip地址池
+    find_element_by_xpath("//*[@id='vip_addr_pool_bn_create']").click()
+
+    # 填写ip地址池域名
+    find_element_by_xpath("//*[@id='ofs_vip_addr_pool_create_domain_name_id']", js_send_keys=domain_name)
+
+    # 填写ip地址，入参为list表
+    text = "\\n".join(ip_address_list)
+    find_element_by_xpath("//*[@id='ofs_vip_addr_pool_create_ip_address_id']", js_send_keys=text)
+
+    # 点击确定增加ip地址池
+    find_element_by_xpath("//*[@id='VIPAddrPoolCreateWindow-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def delete_vip_pool(access_zone_name, subnet_name, domain_name):
+    """
+    删除指定的vip池，直接删除subnet也能自动删除对应的vip池
+    :param access_zone_name:
+    :param subnet_name:
+    :param domain_name:
+    :return:
+    """
+    log.info("delete vip pool")
+
+    # 定位到业务子网
+    locate_subnet()
+
+    # 选择指定访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='subnet_combo_box_current_access_zone_id']")).select_by_visible_text(access_zone_name)
+
+    # 勾选指定的业务子网
+    obj = find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % subnet_name)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 选择指定删除的vip池
+    find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % domain_name).send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='vip_addr_pool_bn_delete']").click()
+
+    # 勾选删除警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").click()
+
+    # 点击确定删除
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id, 'riskComfirm')]").click()
+
+    # 检查删除成功
+    check_element_done()
+
+    return
+
+def modify_vip_pool(access_zone_name, subnet_name, domain_name, domain_name_modify=None, ip_address_list=None):
+    """
+    修改vip池
+    :param access_zone_name:
+    :param subnet_name:
+    :param domain_name:
+    :param domain_name_modify:
+    :param ip_address_list:
+    :return:
+    """
+    log.info("modify vip pool")
+
+    # 定位到业务子网
+    locate_subnet()
+
+    # 选择指定访问分区
+    Select(find_element_by_xpath(
+        "//*[@id='subnet_combo_box_current_access_zone_id']", check=True)).select_by_visible_text(access_zone_name)
+
+    # 勾选指定的业务子网
+    obj = find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % subnet_name)
+    if obj.is_selected() is False:
+        obj.send_keys(Keys.SPACE)
+
+    # 选择指定修改的vip池
+    find_element_by_xpath("//*[starts-with(text(),'%s')]/../..//input" % domain_name).send_keys(Keys.SPACE)
+
+    # 点击修改
+    find_element_by_xpath("//*[@id='vip_addr_pool_bn_update']").click()
+
+    # 填写ip地址池域名
+    if domain_name_modify:
+        find_element_by_xpath("//*[@id='ofs_vip_addr_pool_create_domain_name_id']", js_send_keys=domain_name_modify)
+
+    # 填写ip地址，入参为list表
+    text = "\\n".join(ip_address_list)
+    find_element_by_xpath("//*[@id='ofs_vip_addr_pool_create_ip_address_id']", js_send_keys=text)
+
+    # 点击确定修改ip地址池
+    find_element_by_xpath("//*[@id='VIPAddrPoolCreateWindow-btn-0']").click()
+
+    # 勾选修改警告
+    find_element_by_xpath("//*[@id='riskCheckbox']").send_keys(Keys.SPACE)
+
+    # 点击确认警告
+    find_element_by_xpath("//*[contains(@id,'btn-0') and starts-with(@id, 'riskComfirm')]").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def add_auth_provider_ad(name, domain_name, dns_addresses, username, password, services_for_unix=None, check=False):
+    """
+    添加ad认证服务器
+    :param name:服务器名称
+    :param domain_name:adtest
+    :param dns_addresses:10.2.41.251
+    :param username:administrator
+    :param password:111111
+    :param services_for_unix:RFC2307
+    :param check:是否测试连接
+    :return:
+    """
+    log.info("add authorize provider AD")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击AD按钮
+    find_element_by_xpath("//a[starts-with(text(), 'AD')]", check=True).click()
+
+    # 点击添加
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_add_button']").click()
+
+    # 填写认证服务器相关信息
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_name_id']", js_send_keys=name)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_domain_name_id']", js_send_keys=domain_name)
+    find_element_by_xpath(
+        "//*[@id='ofs_auth_provider_ad_operation_primary_dns_ipaddress_id']", js_send_keys=dns_addresses)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_domain_admin_name_id']", js_send_keys=username)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_domain_admin_password_id']", js_send_keys=password)
+
+    if services_for_unix:
+        Select(find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ad_operation_services_for_unix_id']")).select_by_visible_text(services_for_unix)
+
+    if check:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_test_connection']").click()
+        implicit_wait("//*[starts-with(text(), '连接成功')]")
+
+        # 点击确定,如果未连接成功，会超时报错
+        find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'info')]").click()
+
+    # 点击确认添加认证服务器
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_window-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def update_auth_provider_ad(name_being_updated, name=None, domain_name=None,
+                            dns_addresses=None, username=None, password=None, check=False):
+    """
+    修改AD认证服务器
+    :param name_being_updated:待修改的服务器名称
+    :param name:服务器名称
+    :param domain_name:adtest
+    :param dns_addresses:10.2.41.251
+    :param username:administrator
+    :param password:111111
+    :param check:是否测试连接
+    :return:
+    """
+    log.info("update AD authorize provider")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击AD按钮
+    find_element_by_xpath("//a[starts-with(text(), 'AD')]", check=True).click()
+
+    # 勾选指定待修改的名称
+    obj_update = find_element_by_xpath("//*[@title='%s']/../..//input" % name_being_updated)
+    if obj_update.is_selected() is False:
+        obj_update.send_keys(Keys.SPACE)
+
+    # 点击修改
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_update_button']").click()
+
+    # 填写认证服务器相关信息
+    if name:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_name_id']", js_send_keys=name)
+    if domain_name:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_domain_name_id']", domain_name)
+    if dns_addresses:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ad_operation_primary_dns_ipaddress_id']", js_send_keys=dns_addresses)
+    if username:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_domain_admin_name_id']", js_send_keys=username)
+    if password:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_domain_admin_password_update_id']/..//i").click()
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ad_operation_domain_admin_password_update_id']", js_send_keys=password)
+
+    if check:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_test_connection']").click()
+        implicit_wait("//*[starts-with(text(), '连接成功')]")
+
+        # 点击确定,如果未连接成功，会超时报错
+        find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'info')]").click()
+
+    # 点击确认添加认证服务器
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_operation_window-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def delete_auth_provider_ad(name):
+    log.info("delete AD authorize provider")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击AD按钮
+    find_element_by_xpath("//a[starts-with(text(), 'AD')]", check=True).click()
+
+    # 勾选指定待删除的名称
+    obj_name = find_element_by_xpath("//*[@title='%s']/../..//input" % name)
+    if obj_name.is_selected() is False:
+        obj_name.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ad_delete_button']").click()
+
+    # 点击确定删除
+    find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'comfirm')]").click()
+
+    # 检查删除完成
+    check_element_done()
+
+    return
+
+def add_auth_provider_ldap(name, base_dn, ip_addresses, port=None, bind_dn=None, bind_password=None,
+                           domain_password=None, user_search_path=None, group_search_path=None, check=None):
+    """
+    添加ldap认证服务器
+    :param name:
+    :param base_dn:dc=test,dc=com
+    :param ip_addresses:10.2.41.181
+    :param port:
+    :param bind_dn:
+    :param bind_password:
+    :param domain_password:
+    :param user_search_path:ou=user,dc=abc,dc=com
+    :param group_search_path:ou=group,dc=abc,dc=com
+    :param check:测试连接
+    :return:
+    """
+    log.info("add authorize provider LDAP")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击LDAP按钮
+    find_element_by_xpath("//a[starts-with(text(), 'LDAP')]", check=True).click()
+
+    # 点击添加
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_add_button']").click()
+
+    # 填写LDAP相关信息
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_name_id']", js_send_keys=name)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_primary_ipaddress_id']", js_send_keys=ip_addresses)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_base_dn_id']", js_send_keys=base_dn)
+    if port:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_port_id']", js_send_keys=port)
+    if bind_dn:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_bind_dn_id']", js_send_keys=bind_dn)
+    if bind_password:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_bind_password_id']", js_send_keys=bind_password)
+    if domain_password:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_domain_password_id']", js_send_keys=domain_password)
+    if user_search_path:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_user_search_path_id']", js_send_keys=user_search_path)
+    if group_search_path:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_group_search_path_id']", js_send_keys=group_search_path)
+
+    if check:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_test_connection']").click()
+        implicit_wait("//*[starts-with(text(), '连接成功')]")
+
+        # 点击确定,如果未连接成功，会超时报错
+        find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'info')]").click()
+
+    # 点击确认添加认证服务器
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_window-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def update_auth_provider_ldap(name_to_be_update, name, base_dn=None, ip_addresses=None, port=None, bind_dn=None,
+                              bind_password=None, domain_password=None, user_search_path=None,
+                              group_search_path=None, check=None):
+    """
+    修改ldap认证服务器
+    :param name_to_be_update:需要修改的服务器名称
+    :param name:修改后的名称
+    :param base_dn:
+    :param ip_addresses:
+    :param port:
+    :param bind_dn:
+    :param bind_password:
+    :param domain_password:
+    :param user_search_path:
+    :param group_search_path:
+    :param check:
+    :return:
+    """
+    log.info("update authorize provider ldap")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击LDAP按钮
+    find_element_by_xpath("//a[starts-with(text(), 'LDAP')]", check=True).click()
+
+    # 勾选指定的ldap认证服务器名称
+    obj_update = find_element_by_xpath("//*[@title='%s']/../..//input" % name_to_be_update)
+    if obj_update.is_selected() is False:
+        obj_update.send_keys(Keys.SPACE)
+
+    # 点击修改
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_update_button']").click()
+
+    # 填写ldap相关信息
+    if name:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_name_id']", js_send_keys=name)
+    if ip_addresses:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_primary_ipaddress_id']", js_send_keys=ip_addresses)
+    if base_dn:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_base_dn_id']", js_send_keys=base_dn)
+    if port:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_port_id']", js_send_keys=port)
+    if bind_dn:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_bind_dn_id']", js_send_keys=bind_dn)
+    if bind_password:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_bind_password_update']//i").click()
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_bind_password_update_id']", js_send_keys=bind_password)
+    if domain_password:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_domain_password_update']//i").click()
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_domain_password_update_id']", js_send_keys=domain_password)
+
+    if user_search_path:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_user_search_path_id']", js_send_keys=user_search_path)
+
+    if group_search_path:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_ldap_operation_group_search_path_id']", js_send_keys=group_search_path)
+
+    if check:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_test_connection']").click()
+        implicit_wait("//*[starts-with(text(), '连接成功')]")
+
+        # 点击确定,如果未连接成功，会超时报错
+        find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'info')]").click()
+
+    # 点击确认添加认证服务器
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_operation_window-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def delete_auth_provider_ldap(name):
+    log.info("delete authorize provider ldap")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击LDAP按钮
+    find_element_by_xpath("//a[starts-with(text(), 'LDAP')]", check=True).click()
+
+    # 勾选待删除的服务器名称
+    obj_delete = find_element_by_xpath("//*[@title='%s']/../..//input" % name)
+    if obj_delete.is_selected() is False:
+        obj_delete.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='ofs_auth_provider_ldap_delete_button']").click()
+
+    # 点击确认删除LDAP
+    find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'comfirm')]").click()
+
+    # 检查删除成功
+    check_element_done()
+
+    return
+
+def add_auth_provider_nis(name, domain_name, ip_addresses, check=None):
+    """
+    添加NIS服务器
+    :param name:
+    :param domain_name:nistest
+    :param ip_addresses:10.2.41.247
+    :param check:
+    :return:
+    """
+    log.info("add authorize provider nis")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击NIS按钮
+    find_element_by_xpath("//a[starts-with(text(), 'NIS')]", check=True).click()
+
+    # 点击添加
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_add_button']").click()
+
+    # 输入NIS认证服务器相关信息
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_name_id']", js_send_keys=name)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_domain_name_id']", js_send_keys=domain_name)
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_primary_ipaddress_id']", js_send_keys=ip_addresses)
+    if check:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_test_connection']").click()
+        implicit_wait("//*[starts-with(text(), '连接成功')]")
+
+        # 点击确定,如果未连接成功，会超时报错
+        find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'info')]").click()
+
+    # 点击确认添加认证服务器
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_window-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def update_auth_provider_nis(name_to_be_updated, name=None, domain_name=None, ip_addresses=None, check=None):
+    """
+    修改NIS认证服务器
+    :param name_to_be_updated: 需要修改的认证服务器的名称
+    :param name:
+    :param domain_name:
+    :param ip_addresses:
+    :param check:
+    :return:
+    """
+    log.info("update authorize provider nis")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击NIS按钮
+    find_element_by_xpath("//a[starts-with(text(), 'NIS')]", check=True).click()
+
+    # 勾选指定的nis认证服务器名称
+    obj_update = find_element_by_xpath("//*[@title='%s']/../..//input" % name_to_be_updated)
+    if obj_update.is_selected() is False:
+        obj_update.send_keys(Keys.SPACE)
+
+    # 点击修改
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_update_button']").click()
+
+    # 输入NIS认证服务器相关信息
+    if name:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_name_id']", js_send_keys=name)
+    if domain_name:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_domain_name_id']", js_send_keys=domain_name)
+    if ip_addresses:
+        find_element_by_xpath(
+            "//*[@id='ofs_auth_provider_nis_operation_primary_ipaddress_id']", js_send_keys=ip_addresses)
+    if check:
+        find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_test_connection']").click()
+        implicit_wait("//*[starts-with(text(), '连接成功')]")
+
+        # 点击确定,如果未连接成功，会超时报错
+        find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'info')]").click()
+
+    # 点击确认添加认证服务器
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_operation_window-btn-0']").click()
+
+    # 检查添加完成
+    check_element_done()
+
+    return
+
+def delete_auth_provider_nis(name_to_be_deleted):
+    log.info("delete authorize provider nis")
+
+    # 定位到认证服务器
+    locate_auth_provider()
+
+    # 点击NIS按钮
+    find_element_by_xpath("//a[starts-with(text(), 'NIS')]", check=True).click()
+
+    # 勾选指定的nis认证服务器名称
+    obj_update = find_element_by_xpath("//*[@title='%s']/../..//input" % name_to_be_deleted)
+    if obj_update.is_selected() is False:
+        obj_update.send_keys(Keys.SPACE)
+
+    # 点击删除
+    find_element_by_xpath("//*[@id='ofs_auth_provider_nis_delete_button']").click()
+
+    # 点击确认删除NIS
+    find_element_by_xpath("//*[contains(@id, 'btn-0') and starts-with(@id, 'comfirm')]").click()
+
+    # 检查删除成功
+    check_element_done()
+
+    return

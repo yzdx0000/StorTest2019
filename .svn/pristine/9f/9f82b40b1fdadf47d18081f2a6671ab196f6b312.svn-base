@@ -1,0 +1,40 @@
+# -*-coding:utf-8 -*
+import os
+import utils_path
+import log
+import common
+import get_config
+import web_common
+import prepare_clean
+
+#######################################################
+# 函数功能：界面自动化-----多用例循环跑
+# 脚本作者：duyuli
+# 日期：2018-12-27
+#######################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                  # 本脚本名字
+script_path = "/home/StorTest/test_cases/cases/test_case/P300/WEB"
+script_file_list = ["web_testlink_4_5_6_11_12_25_28.py",
+                    "web_testlink_1-1-1-45.py"]   # 卸载集群（重启方式）
+
+def case():
+    count = 0
+    while True:
+        count += 1
+        log.info("##################### run for %s times #####################" % count)
+        for script_file in script_file_list:
+            log.info("start %s" % script_file)
+            cmd = "python %s" % script_path + "/%s" % script_file
+            common.run_command_shot_time(cmd)
+        log.info("############################################################")
+
+def main():
+    prepare_clean.test_prepare(FILE_NAME, env_check=False)
+    case()
+    prepare_clean.test_clean()
+    log.info("%s succeed" % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

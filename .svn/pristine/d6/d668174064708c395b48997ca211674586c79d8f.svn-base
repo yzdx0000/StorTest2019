@@ -1,0 +1,35 @@
+#-*- coding:utf-8 -*
+#本脚本用来测试不同的certificate创建的桶的个数能不能超过100
+
+import os,sys,commands,time
+#import imports3libpath
+import _create_bucket
+import common
+import _putobjectBySplit_lyz
+import _cancleputobjectBySplit_lyz
+import _set_bucket_quota_lyz
+import _get_bucket_quota_lyz
+import _create_account
+import _create_many_accounts_lib_lyz
+import _sshlistaccounts_lyz1
+import _create_certificate
+import _delete_certificate
+import _set_bucketacl_lyz
+import _set_objectacl_lyz
+import _getAllObjectsOfBucket_lyz
+import _downloadObjectandPrint_lyz
+import _query_bucketacl_lyz
+import _query_objectacl_lyz
+import deletemanyaccount
+import _delete_account_lyz
+def allOPerations(mgrip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    #步骤1：创建1个账户
+    re=_create_account.acc_add(mgrip,accountname)
+    if re == -1:
+        return -1
+if __name__=="__main__":
+    #(mgrip, accountname, oossip, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,
+    #splitobjectpathdir, splitfilename, num)
+    #(mgrip, accountname, oossip, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota):
+    allOPerations('100.100.100.16','lyztestb','100.100.100.18','lyztestebub','lyztesteobb','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit','/opt/s3uploadfile','test',2,'objectsplitcancle',1024)
+    #_putobjectBySplit_lyz.upObjectBySplit('10.2.40.18', 'aaaa10271', 'objectsplit0', '000024P00B8AVJNI00001XAXLTGX5XFN', '/opt/s3uploadfile','test',2)

@@ -1,0 +1,44 @@
+#!/usr/bin/python
+import os,sys
+import commands
+import xml.dom.minidom
+
+def result2file(out):
+	f=open('output','w')
+	f.write(out)
+	f.close()
+def get_xml():
+	f = open('output')
+        lines = f.readlines()
+        count = 0
+        for line in lines:
+                if line.startswith('<?xml'):
+                        break
+                else:
+                        count = count + 1
+        xml_lst = lines[count:]
+        f.close()
+        xml_string = ''.join(xml_lst)
+        #print xml_string
+        return xml_string
+
+def analyze_xml():
+        xml_string = get_xml()
+        xml_info = xml.dom.minidom.parseString(xml_string)
+        contents_info = xml_info.getElementsByTagName('Contents')
+	objnames=[]
+        for content_info in contents_info:
+            Name = content_info.getElementsByTagName('Key')[0].firstChild.nodeValue
+            objnames.append(Name)
+	return objnames
+
+if __name__=="__main__":
+	cmd1='curl -s -i http://%s:20480/%s -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %('172.16.48.6','lpbuck2','000020ZYHTFHZKSU00001XAXBE3J66C6')
+	output1=os.popen(cmd1).read()
+        num1=output1.find('HTTP/1.1')
+        num2=output1[(num1+9):((num1+12))]
+        if(num2=='200'):
+		result2file(output1)
+		get_xml()
+		names=analyze_xml()
+		print names

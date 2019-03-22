@@ -1,0 +1,39 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于PUT上传多个对象###########
+#需要执行put_duoge_objects，参数包括：oOss节点ip，bucket名称，object名称，待上传文件名称和certificateid
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+import time
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+ 
+dir='/tmp/test/'
+file='file1'
+def put_object_cmd(ip,bucket_name,object_name,file_location,certificate_id):
+    cmd='curl -i http://'+str(ip)+':20480/'+str(bucket_name)+'/'+str(object_name)+' -X PUT -T '+str(file_location)+' -H \"Expect: \" -H \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\"'   #执行上传对象命令本身
+    return cmd
+
+def put_object_exc(ip,bucket_name,object_name,file_location,certificate_id):
+    cmd=put_object_cmd(ip,bucket_name,object_name,file_location,certificate_id)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+
+def put_duoge_objects(ip,bucket_name,object_name,file_location,certificate_id,obj_num):
+    for i in range(0,obj_num):
+    #    time.sleep(5)
+        obj_name=object_name+'_'+str(i)
+        put_object_exc(ip,bucket_name,obj_name,file_location,certificate_id)
+
+#函数自验*****
+if __name__=="__main__":
+#    put_object_exc(ds_ip,bucket_name,object_name,file_location,certificate_id)
+    all_argvs=read_conf_zh.get_argvs()
+    put_duoge_objects(all_argvs['oossip'],all_argvs['create_bucket_name'],all_argvs['put_object_name'],str(all_argvs['object_path'])+'file2',all_argvs['certificate_id'],30)

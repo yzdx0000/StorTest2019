@@ -1,0 +1,210 @@
+# -*-coding:utf-8 -*
+import os
+import time
+
+import utils_path
+import common
+import snap_common
+import log
+import shell
+import get_config
+import prepare_clean
+import random
+import nas_common
+import json
+"""
+Author:liangxy
+date 2018-08-14
+@summary：
+     缺陷自动化——配置LDAP认证服务到访问区,在两种nas状态下查看指定gid的用户信息。
+@steps:
+    1、添加ldap认证服务器到访问区
+    2、确定测试gid用户
+    3、在nas_disable下获取指定gid用户信息
+    4、在nas_enable下获取指定gid用户信息
+    5、返回结果
+@changelog：       
+        由指定gid进行检测改为用随机gid检测
+"""
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+MAX_WAIT_TIME = 600
+
+
+def nas_state_change(case_ip, flag=False):
+    """
+    author：LiangXiaoyu
+    function:改变访问区中的nas，根据参数开启或关闭nas
+    :param case_ip(str):访问区所在节点ip；
+    :param flag(bool):开启（True）或关闭（False）nas
+    :return:
+    @changelog：
+    """
+    class_action = "disable"
+    if flag is True:
+        class_action = "enable"
+    log.info("change nas status,flag:%s---%s" % (flag, class_action))
+    msg_get_az = nas_common.get_access_zones(None, case_ip)
+
+    if flag is True:
+        msg_nas = nas_common.enable_nas(msg_get_az["result"]["access_zones"][0]["id"])
+    else:
+        msg_nas = nas_common.disable_nas(msg_get_az["result"]["access_zones"][0]["id"])
+    action_nas_rst = msg_nas["detail_err_msg"]
+    if "" != action_nas_rst:
+        raise Exception("%s nas action failed and exit:\n%s" % (class_action, action_nas_rst))
+    else:
+        time_count = 0
+        while True:
+            msg_get_az = nas_common.get_access_zones(None, case_ip)
+            nas_status_active = msg_get_az["result"]["access_zones"][0]["nas_service_enabled"]
+            cmp_nas_status_active = cmp(flag, nas_status_active)
+
+            if 0 != int(cmp_nas_status_active):
+
+                if MAX_WAIT_TIME < time_count:
+                    raise Exception("wait for nas %s active too long:%d s" % (class_action, time_count))
+                log.info("%s  nas not active yet,waiting:" % class_action)
+                time.sleep(20)
+                time_count += 20
+                log.info("%d s" % time_count)
+            else:
+                log.info("%s nas done" % class_action)
+                break
+    return
+
+
+def get_add_one_ldap(case_ip, ldap_info_add):
+    """
+    author：LiangXiaoyu
+    function:检查集群中的LDAP数量，若存在，取第一个；若不存在，添加一个nas_common
+    :param case_ip(str)集群内ip； ldap_info_add(str):添加的ad认证服务器信息列表
+    :return: sys_ldap_id_org(int):Ldap认证服务器的id
+    @changelog：
+    """
+    '''get,获取ldap和az状态'''
+    msd_get_ldap = nas_common.get_auth_providers_ldap(None, case_ip)
+    ldap_total_sys_org = msd_get_ldap["result"]["total"]
+
+    '''没有ldap就添加ldap'''
+
+    if 0 == int(ldap_total_sys_org):
+
+        msg_add_ldap = nas_common.add_auth_provider_ldap(ldap_info_add[0], ldap_info_add[1], ldap_info_add[2])
+        msg_set_ntp = nas_common.set_ntp("true", ldap_info_add[2], 5, nas_common.RANDOM_NODE_IP)
+        add_ldap_result = msg_add_ldap["err_no"]
+        set_ntp_rst = msg_set_ntp["err_no"]
+        add_ldap_final = set_ntp_rst + add_ldap_result
+        msd_get_ldap = nas_common.get_auth_providers_ldap(None, case_ip)
+        info_ldap = "ldap :%s\nunix range is right ntp:%s)" % (msd_get_ldap, msg_add_ldap["detail_err_msg"])
+        common.judge_rc(add_ldap_final, 0, info_ldap)
+    '''不止一个ldap,只取第一个'''
+    sys_ldap_id_org = msd_get_ldap["result"]["auth_providers"][0]["id"]
+    log.info("ldap add:%d OK" % sys_ldap_id_org)
+    return sys_ldap_id_org
+
+
+def case():
+    log.info("case begin")
+    ob_node = common.Node()
+    case_node_id = random.choice(ob_node.get_nodes_id())
+    case_ip = ob_node.get_node_ip_by_id(case_node_id)
+
+    ldap_info_add = [FILE_NAME+"ldap", nas_common.LDAP_BASE_DN, nas_common.LDAP_IP_ADDRESSES]
+    ldap_group_user_test = nas_common.LDAP_USER_2_NAME
+    test_gid = 1004
+    test_str = ".result.auth_users"
+    log_err_dis = ""
+    log_err_en = ""
+    rst_disable_nas = 1
+    rst_enable_nas = 1
+    log.info(">1 添加ldap认证服务器,返回ldap认证服务器的id")
+    id_ldap = get_add_one_ldap(case_ip, ldap_info_add)
+    log.info(">2 创建访问分区，配置ldap认证")
+    msg_add_az = nas_common.create_access_zone(node_ids=case_node_id, name=FILE_NAME+"az", auth_provider_id=id_ldap)
+    az_id = msg_add_az["result"]
+    add_az_result = msg_add_az["detail_err_msg"]
+    info = ("add access_zone in node :%d" % case_node_id)
+    common.judge_rc(msg_add_az["err_no"], 0, info + add_az_result)
+    log.info(">3 disable nas，以gid获取ldap用户")
+    nas_state_change(case_ip, False)
+    msg_check_provider = nas_common.check_auth_provider(id_ldap)
+    info_che = "check_auth_provider:%d" % id_ldap
+    common.judge_rc(msg_check_provider["err_no"], 0, info_che)
+    rc, msg_get_users_ldap = nas_common.get_auth_users(id_ldap)
+
+    common.judge_rc(msg_get_users_ldap["err_no"], 0, msg_get_users_ldap["detail_err_msg"] + str(id_ldap))
+    test_id = random.choice(msg_get_users_ldap["result"]["auth_users"])
+    test_gid = test_id["primary_group_id"]
+    rc, msg_get_users_ldap = nas_common.get_auth_users(auth_provider_id=id_ldap, group_id=test_gid)
+    common.judge_rc(msg_get_users_ldap["err_no"], 0, msg_get_users_ldap["detail_err_msg"] + str(id_ldap))
+
+    msg_get_nephew = msg_get_users_ldap["result"]["auth_users"]
+    log.info("test user:%s" % ldap_group_user_test[0])
+    get_num = msg_get_users_ldap["result"]["total"]
+    log.info("get gid user total:%d" % get_num)
+    str_v = ""
+    if 1 > get_num:
+        rst_disable_nas = 0
+        log_err_dis = "get gid user total:%d" % get_num
+
+    else:
+        for name in msg_get_nephew:
+            key_lst = list(name.values())
+            for m_l in key_lst:
+                str_v = str(str_v) + str(m_l)
+            enter_include = test_str in str_v
+            if True is enter_include:
+                log.info("Found：%s" % name)
+                log_err_dis = "disable nas:" + test_str + " in " + str_v
+                rst_disable_nas = 0
+    log.info(">4 enable nas，以gid获取ldap用户")
+    nas_state_change(case_ip, True)
+    msg_check_provider = nas_common.check_auth_provider(id_ldap)
+    info_che = "check_auth_provider:%d" % id_ldap
+    common.judge_rc(msg_check_provider["err_no"], 0, info_che)
+    rc, msg_get_users_ldap = nas_common.get_auth_users(auth_provider_id=id_ldap, group_id=test_gid)
+    common.judge_rc(msg_get_users_ldap["err_no"], 0, msg_get_users_ldap["detail_err_msg"] + str(id_ldap))
+
+    msg_get_nephew = msg_get_users_ldap["result"]["auth_users"]
+    log.info("test user:%s" % ldap_group_user_test[0])
+    get_num = msg_get_users_ldap["result"]["total"]
+    log.info("get gid user total:%d" % get_num)
+    str_v = ""
+    if 1 > get_num:
+        rst_enable_nas = 0
+
+    else:
+        for name in msg_get_nephew:
+            key_lst = list(name.values())
+            for m_l in key_lst:
+                str_v = str(str_v) + str(m_l)
+            enter_include = test_str in str_v
+            if True is enter_include:
+                log.info("Found：%s" % name)
+                log_err_en = "enable nas" + test_str + " in " + str_v
+                rst_disable_nas = 0
+
+    nas_state_change(case_ip, False)
+    log.info(">5 清理环境，根据判断结果抛异常")
+    log.info("chosen test:(%s,%s)" % (test_id["name"], test_gid))
+    msg_dele_az = nas_common.delete_access_zone(az_id)
+    log_info = ("getusr(by gid)disable_nas reult:%s" % log_err_dis)
+    common.judge_rc(rst_disable_nas, 1, log_info)
+    log_info = ("getuser(by gid)enable_nas reult:%s" % log_err_en)
+    common.judge_rc(rst_enable_nas, 1, log_info)
+    info_clear = ("dele access zone ,id:%d" % az_id)
+    common.judge_rc(msg_dele_az["err_no"], 0, info_clear)
+
+    return
+
+
+def main():
+    prepare_clean.nas_test_prepare(FILE_NAME)
+    prepare_clean.nas_test_clean()
+    case()
+    prepare_clean.nas_test_clean()
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

@@ -1,0 +1,28 @@
+#-*- coding:utf-8 -*
+import _sshlistaccounts_lyz1
+import _delete_account_lyz
+import commands
+import _sshListcertificatesHaveReturn_lyz1
+import _delete_certificate
+def deleteAllAccount(mgrip):
+    print 'start'
+    dicts={}
+    dicts = _sshlistaccounts_lyz1.sshlistaccounts(mgrip)
+    accountname=dicts.keys()
+    print 'accountnames is %s' %accountname
+    accountids=[]
+    for name in accountname:
+        accountid=dicts[name][0]
+        print 'accountid is %s' %accountid
+        #accountids.append(accountid)
+        cers = _sshListcertificatesHaveReturn_lyz1.sshListcertificatesHaveReturn(mgrip, accountid)
+        print 'cers is %s' %cers
+        if cers != []:
+            for cer in cers:
+                _delete_certificate.deleteCertificate(mgrip, cer)
+                # (status,output)=commands.getstatusoutput('/home/parastor/bin/sysctl/parastor_pos delcertificate certificateid ='+cer)
+        _delete_account_lyz.acc_del(mgrip, accountid)
+        print 'account %s is deleted' %name
+if __name__=="__main__":
+    deleteAllAccount('10.2.40.16')
+

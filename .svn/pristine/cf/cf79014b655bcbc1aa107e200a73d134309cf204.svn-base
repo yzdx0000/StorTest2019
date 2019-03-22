@@ -1,0 +1,121 @@
+# -*- coding:utf-8 8-*
+#################################################
+#该脚本随机选择一个ds，给他宕机，然后再其他ds上执行s3操作，执行完成后给ds上电，在该ds上执行s3操作
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+import deleteAllAccount_lyz
+import random
+import conf_lyz
+import copy
+#参数说明：pathOfScript:要执行的脚本在从上的路径; stabilityScript:要执行的s3的稳定性脚本名称,然后是_stability1lib_lyz这个脚本需要的参数
+#dsips必须是一个列表，里面装着想要断网的所有的ds的ip（必须超过两个）；dsipmiips也是一个列表，和dsips一一对应
+def dsfaultAndS3(num,conffilename,masterip,dsips,dsipmiips,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    confo = conf_lyz.confrelate()
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo = _fault_all_lyz.statusrecovery()
+    # 前期准备：从配置文件中读取参数
+    # print 'masterip is :' %masterip
+    argvs = [masterip, dsips, dsipmiips, oossip, num]
+    print "argvs is : %s" % argvs
+    readargvs = confo.readmanyconf(conffilename, 'public', argvs)
+    masterip = readargvs[0]
+    dsipso = readargvs[1]
+    dsips=confo.confStringToList(dsipso)
+    dsipmiipso = readargvs[2]
+    dsipmiips = confo.confStringToList(dsipmiipso)
+    oossip = readargvs[3]
+    num = readargvs[4]
+    print dsips,dsipmiips
+    #print 'masterip is %s,slaveip is %s,slaveipmiip is %s,oossip is %s' % (masterip, slaveip, slaveipmiip, oossip)
+    argvs2 = [accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,
+              splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota]
+    readargvs2 = confo.readmanyconf(conffilename, 's3', argvs2)
+    accountname = readargvs2[0]
+    createBucketname = readargvs2[1]
+    putObjectname = readargvs2[2]
+    objectpath = readargvs2[3]
+    downobjectpath = readargvs2[4]
+    splitobjectname = readargvs2[5]
+    splitobjectpathdir = readargvs2[6]
+    splitfilename = readargvs2[7]
+    numofsplit = readargvs2[8]
+    cancleupobjectname = readargvs2[9]
+    quota = readargvs2[10]
+    print 'accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota is '
+    print accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota
+    num=int(num)
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo=_fault_all_lyz.statusrecovery()
+    sqlo=_fault_all_lyz.sql()
+    dsnum=len(dsips)
+    for i in range(num):
+        #随机选择一个点用来宕机
+        if dsnum>1:
+            rand = random.randint(0,(dsnum-1))
+        else:
+            rand=dsnum-1
+        print 'rand is %d' %rand
+        oossnodeid=rand+3
+        dsippoweroff=dsips[rand]
+        print 'dsippoweroff is %s' %dsippoweroff
+        dsipmiippoweroff=dsipmiips[rand]
+        print 'dsippoweroffmiip is %s' % dsipmiippoweroff
+        #随机选择另一个点用来执行s3操作
+        otherdsips=copy.deepcopy(dsips)
+        otherdsips.remove(dsippoweroff)
+        otherdsipmiips=copy.deepcopy(dsipmiips)
+        otherdsipmiips.remove(dsipmiippoweroff)
+        dsnum1=len(otherdsips)
+        if dsnum1>1:
+            rand1 = random.randint(0,(dsnum1-1))
+        else:
+            rand1=dsnum1-1
+        print 'rand1 is %d' %rand1
+        dsip = otherdsips[rand1]
+        print 'dsipf is %s' % dsip
+        dsipmiip = otherdsipmiips[rand1]
+        print 'dsipmiip is %s' % dsipmiip
+        re=_stability1lib_lyz.allOPerations(masterip, accountname, dsippoweroff, createBucketname, putObjectname, objectpath,
+                                         downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit,
+                                         cancleupobjectname, quota)
+        if re==-1:
+            return -1
+        #步骤1：给ds宕机
+        faulto.poweroff(dsipmiippoweroff)
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print '****************************宕机时间是%s******************************************************' %(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        print '****************************ds宕机第%s次成功，等待1分钟********************************************************' %(i)
+        time.sleep(60)
+        print '****************************宕机后1min的时间是%s******************************************************' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        #步骤2：在其他节点上执行s3操作
+        re1=_stability1lib_lyz.allOPerations(masterip, accountname, dsip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit,cancleupobjectname, quota)
+        if re==-1:
+            return -1
+        #步骤2：给ds开机
+        faulto.poweron(dsipmiippoweroff)
+        print '****************************等待ds %s 开机' %dsip
+        time.sleep(300)
+        #步骤3：等待ds开机成功
+        statusrecoveryo.ifpoweron(dsippoweroff)
+        print '****************************开机时间是%s******************************************************' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        # 步骤4：等待ds的oOss起来
+        statusrecoveryo.ifprocessStart(dsippoweroff, 'oOss')
+        time.sleep(10)
+        #等待ds的oOss状态ok
+        statusrecoveryo.waiteoossServiceok(masterip,oossnodeid)
+        # 等待连接数据库成功
+        sqlo.waitsqllink(dsippoweroff, masterip)
+        #步骤5：执行s3的指令集
+        _stability1lib_lyz.allOPerations(masterip,accountname,dsippoweroff,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota)
+        #deleteAllAccount_lyz.deleteAllAccount(slaveip,oossip)
+
+if __name__=="__main__":
+    #mgrfaultAndS3(masterip, slaveip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname,quota)
+    #mgrfaultAndS3(2,'100.100.100.16',['100.100.100.18','100.100.100.19'],['10.2.40.68','10.2.40.69'],'s1123c','100.100.100.18','bucket1123c','object1123c','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit1103o','/opt/s3uploadfile','test',2,'objectsplitcancle03o',1024)
+    dsfaultAndS3('num', 'faultconf_lyz.conf', 'masterip','dsips','dsipmiips', 'accountname', 'oossip', 'createBucketname', 'putObjectname', 'objectpath', 'downobjectpath', 'splitobjectname','splitobjectpathdir', 'splitfilename', 'numofsplit', 'cancleupobjectname', 'quota')

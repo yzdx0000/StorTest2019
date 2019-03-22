@@ -1,0 +1,48 @@
+# -*- coding:utf-8 -*
+###################################################
+#该脚本包含了一般的故障操作
+###################################################
+import os,sys,commands
+def  poweroff(ipmiip):
+    cmd='ipmitool -H '+ipmiip+' -I lan -U admin -P admin power off'
+    (status,output)=commands.getstatusoutput(cmd)
+    print output
+def poweron(ip):
+    cmd = 'ipmitool -H ' + ip + ' -I lan -U admin -P admin power on'
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+def ifdown(ip,eth):
+    cmd='ssh '+ip+' "ifdown '+eth+'"'
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+def ifup(eth,ip):
+    cmd = 'ssh ' + ip + ' "ifup ' + eth + '"'
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+def removeDisk(ip,node):
+    cmd='ssh '+ip+' "echo scsi remove-single-device '+node+' > /proc/scsi/scsi"'
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+def addDisk(ip,node):
+    cmd = 'ssh ' + ip + ' "echo scsi add-single-device ' + node + ' > /proc/scsi/scsi"'
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+def killprocess(ip,processname):
+    cmd='ssh '+ip+' killall -9 '+processname
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+def getVmidOfNodes(esxiip):
+    print esxiip
+    cmd='ssh  '+esxiip+' "vim-cmd vmsvc/getallvms"'
+    print cmd
+    (status,output) = commands.getstatusoutput(cmd)
+    print output
+def startib(ip):
+    cmd='/etc/init.d/opensmd start'
+    (status,ouput)=commands.getstatusoutput(cmd)
+
+def virtualpoweroff(esxiip,ip):
+    print 'aa'
+
+if __name__=="__main__":
+    getVmidOfNodes('10.2.20.202')

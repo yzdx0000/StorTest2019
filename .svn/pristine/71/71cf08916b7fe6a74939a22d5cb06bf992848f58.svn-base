@@ -1,0 +1,14 @@
+#-*- coding: utf-8 -*
+#!/usr/bin/env python
+'该脚本用来将lib的路径导入，从而实现在本目录中可以import lib目录下的模块'
+import os
+import sys
+current_path = os.path.abspath('')
+autoscroptspath = os.path.dirname(current_path)
+libpath = os.path.join(autoscroptspath, 'S3Lib')
+print "libpath is %s" % libpath
+sys.path.append(libpath)
+#print "append ok"
+#import testimport
+#testimport.pri()
+

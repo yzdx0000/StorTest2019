@@ -1,0 +1,155 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#一、标题：对象列表处理模块
+#二、使用方法：使用curl命令获取bucket对象列表，并重定向到文件filename中。写脚本时，先调用object_xml_trans_init(filename)进行初始化，会获得所有对象的name、桶id和size的字典。然后再调用obtain_objsize_objid(obj_name)函数，获取指定对象的size和桶id。
+#三、格式：1.object_xml_trans_init(filename):
+#(size_dict,id_dict,name_dict)=object_xml_trans_init(filename),输入需要初始化的文件名，根据提供的文件内容获得桶内所有对象的name、大小及所属桶id的字典。
+#      2.obtain_objsize_objid(obj_name):
+#(size_obj,id_obj)=obtain_objsize_objid(obj_name),根据对象名，返回该对象的大小和其所属桶的id
+#四、设计思路：
+#1.将xml文件进行解析，将其中的对象name、id、size按顺序写入文件（中间文档）。
+#2.将中间文档解析为字典，使对象名与其id、size一一对应。并删除中间文档。
+#3.编辑主调函数，实现返回对象信息的功能。
+#五、作者：王建磊
+#六、创建时间：2017/10/21
+#七、更新时间：2017/10/23 待更新
+#**********************************************#
+import xml.sax  #python库中xml文件处理模块
+import os,sys
+
+object_id = {}	#定义对象所属的桶的id列表，以文件名为key进行检索。
+object_size = {}	#定义对象的大小列表，以文件名为key进行检索。
+object_name = {}
+
+#创建存储对象名、对象id、对象大小的中间文档。
+fname = open("obj_name","a+")
+fid = open("obj_id","a+")
+fsize = open("obj_size","a+")
+
+#针对获取的对象列表，编辑的xml类，使得xml中的各个元素与该类中的tag一一对应。
+class ObjectHandler(xml.sax.ContentHandler): 
+	def __init__(self): 
+		self.CurrentData = "" 
+		self.Size = "" 
+		self.ID = "" 
+		self.DisPlayName = "" 
+  
+	# 元素开始事件处理 
+	def startElement(self, tag, attributes): 
+		self.CurrentData = tag 
+#		if tag == "Contents": 
+#			print "*****Contents*****"
+  
+	# 元素结束事件处理 
+	def endElement(self, tag): 
+		if self.CurrentData == "Size": 
+		#print "Size:", self.Size
+			fsize.write(self.Size)
+			fsize.write("\n")
+			fsize.write("\n")
+		if self.CurrentData == "ID": 
+		# print "object_id:", self.ID
+			fid.write(self.ID)
+			fid.write("\n")
+			fid.write("\n")
+		if self.CurrentData == "DisPlayName": 
+		#     print "object_name:", self.DisPlayName
+			fname.write(self.DisPlayName)
+
+	# 内容事件处理 
+	def characters(self, content): 
+		if self.CurrentData == "Size": 
+			self.Size = content 
+		if self.CurrentData == "ID": 
+			self.ID = content 
+		if self.CurrentData == "DisPlayName": 
+			self.DisPlayName = content 
+
+#转化打印信息,生成xml文件为obj.xml
+def get_xml(filename):
+	f = open(filename)
+	lines = f.readlines()
+	count = 0
+	for line in lines:
+		if line.startswith('<?xml'):
+			break
+		else:
+			count = count + 1
+	xml_lst = lines[count:]
+	f.close()
+	xml_info = ''.join(xml_lst)
+	f2 = open("obj.xml","a+")
+	f2.write(xml_info)
+	f2.close
+
+#解析对象xml文件函数   
+def read_obj_xml():
+	# 创建一个 XMLReader 
+	parser = xml.sax.make_parser() 
+	# turn off namepsaces 
+	parser.setFeature(xml.sax.handler.feature_namespaces, 0) 
+	# 重写 ContextHandler 
+	Handler = ObjectHandler() 
+	parser.setContentHandler(Handler)     
+	parser.parse("obj.xml") 
+
+#【主调函数】调用该函数，输入对象名，获取该对象的大小和id号
+def obtain_objsize_objid(obj_name):
+	objsize = object_size[obj_name]
+	objid = object_id[obj_name]
+	return objsize,objid
+
+#将生成的中间文件转化为字典
+def file_change_dict():
+	i = 0
+	fname = open("obj_name","a+")
+	fid = open("obj_id","a+")
+	fsize = open("obj_size","a+")
+	#筛选信息到字典中
+	while 1:
+		name = fname.readline()
+		name1 = name.strip().strip('\n')
+		size = fsize.readline()
+		size = size.strip().strip('\n')
+		id = fid.readline()
+		id = id.strip().strip('\n')
+		object_size[name1] = size
+		object_id[name1] = id
+		if name1 != "":
+			object_name[str(i)] = name1
+			i = i +1
+		if not name:
+			break
+	fname.close()
+	fsize.close()
+	fid.close()
+	object_size.pop("") #删除无内容的项
+	object_id.pop("")   #删除无内容的项
+	os.remove("obj_name")  #删除中间文件，下同。
+	os.remove("obj_id")
+	os.remove("obj_size")
+
+#创建收集对象信息的中间文件。
+def create_midle_file():
+	read_obj_xml()
+	fname.close()	#读取文件后关闭进行保存，下同。
+	fsize.close()
+	fid.close()
+
+#【主调函数】包进该模块后，调用该函数返回所有桶的name,id,size。
+def object_xml_trans_init(filename):
+	get_xml(filename)		#转化为xml文件
+	create_midle_file()	#读取xml文件内容
+	file_change_dict()	#将所有信息转化为字典保存。
+	os.remove("obj.xml")
+	return object_size,object_id,object_name	
+
+#调试代码
+if __name__ == "__main__": 
+	objname = "1020obj1_1"
+	object_xml_trans_init()
+	print "******************"
+	print object_size,object_id,object_name
+	(objsize,objid)=obtain_objsize_objid(objname)
+	print "The size of object %s is %s"%(objname,objsize)
+	print "The id of object %s's bucket is %s"%(objname,objid)

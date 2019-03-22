@@ -1,0 +1,127 @@
+#!/usr/bin/python
+#-*-coding:utf-8 -*
+"""
+:Date: 2018-11-21
+:Author: wuyq
+:Description:
+"1、创建VIP地址池，配置4倍节点个数的VIP，IP切换均衡策略使用连接数，自动均衡策略设置为自动
+2、查看自动均衡策略设置
+3、创建LUN和对应的映射，使同一节点A的4个VIP关联的LUN不同（可以通过指定LUN映射的target，构造两个网口上的两个VIP关联不同数量的LUN，
+   如eth2上VIP1和VIP2，VIP1关联1条LUN，VIP2关联2条LUN；eth3上VIP3和VIP4，VIP3关联1条LUN，VIP4关联4条LUN）
+4、主机端扫描并登录上面4个VIP的LUN
+5、等待自动均衡完成后，查看3个节点的VIP均衡情况
+6、修改VIP地址池的自动均衡策略为轮询
+7、等待自动均衡完成后，查看3个节点的VIP均衡情况
+8、下电节点A，查看VIP均衡情况
+9、等节点A恢复后启动自动修复，修复完成或查看VIP均衡情况"
+
+:Changerlog:
+"""
+import os
+import sys
+import commands
+import threading
+import random
+import time
+import utils_path
+import common
+import common2
+import Lun_managerTest
+import log
+import get_config
+import env_manage_lun_manage
+from get_config import config_parser as cp
+import error
+import breakdown
+
+# 重新部署系统
+conf_file = common2.CONF_FILE   # 配置文件路径
+osan = Lun_managerTest.oSan()
+reliable = breakdown.Os_Reliable()
+disk = breakdown.disk()
+node = common.Node()
+
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]      # 获取本脚本名，去掉.py后缀
+# error.rel_check_before_run(file_name, jnl_rep=3, node_num=3)
+log_file_path = log.get_log_path(file_name)
+log.init(log_file_path, True)
+# 重新部署系统
+env_manage_lun_manage.xstor_install()
+
+# 获取集群节点信息
+deploy_ips = get_config.get_env_ip_info(conf_file)
+client_ips = get_config.get_allclient_ip()
+sever_ips = deploy_ips[:]
+
+def case():
+    log.info("Step1:创建VIP地址池,配置4倍节点个数的VIP.VIP均衡策略:轮询,VIP均衡开关:关闭.")
+    subnet_id = osan.get_subnet_id(deploy_ips[0])
+    vip = cp('add_vip_address_pool', 'vips')
+    osan.add_vip_address_pool(s_ip=deploy_ips[0], subnet_id=subnet_id[0], domain_name='sugon.com', vip=vip,
+                              ip_failover_policy='IF_CONNECTION_COUNT', rebalance_policy='RB_AUTOMATIC')
+    osan.enable_san(s_ip=deploy_ips[0], access_zone_id=1)
+
+    time.sleep(30)
+    log.info("Step2:查看自动均衡策略设置是否符合预期.")
+    rebalance_policy, ip_failover_policy = osan.get_vip_policy(deploy_ips[0])
+    if rebalance_policy == 'RB_AUTOMATIC' and ip_failover_policy == 'IF_CONNECTION_COUNT':
+        log.info("自动均衡策略设置成功.")
+    else:
+        log.error("自动均衡策略设置失败.\n期望:均衡策略->轮询;均衡开关->关闭\n实际:均衡策略->%s;均衡开关->%s."
+                  % (ip_failover_policy, rebalance_policy))
+        os._exit(1)
+
+    time.sleep(30)
+    log.info("Step3:创建8条Lun,让业务网卡A上两个VIP分别映射1条Lun,业务网卡B上分别映射2,4条Lun")
+    for count in range(8):
+        lun_name = 'lun' + str(count + 1)
+        osan.create_lun(s_ip=deploy_ips[0], lun_name=lun_name, stor_pool_id=2, acc_zone_id=1)
+    eth1 = cp('create_subnet', 'network_interface')
+    eth2 = cp('create_subnet', 'network_interface1')
+    vips = osan.get_vips_by_node(deploy_ips[0], 1)
+    eth_vips1 = osan.get_vips_by_eth(deploy_ips[0], 1, eth1)
+    eth_vips2 = osan.get_vips_by_eth(deploy_ips[0], 1, eth2)
+    targets1 = [osan.get_target_by_vip(x) for x in eth_vips1]
+    targets2 = [osan.get_target_by_vip(x) for x in eth_vips2]
+    osan.create_host_group(deploy_ips[0], 'host_group1')
+    osan.add_host(deploy_ips[0], 'host1', 1)
+    osan.lun_map_by_target(s_ip=deploy_ips[0], lun_ids='1', target_id=targets1[0])
+    osan.lun_map_by_target(s_ip=deploy_ips[0], lun_ids='2,3', target_id=targets1[1])
+    osan.lun_map_by_target(s_ip=deploy_ips[0], lun_ids='4', target_id=targets2[0])
+    osan.lun_map_by_target(s_ip=deploy_ips[0], lun_ids='5,6,7,8', target_id=targets2[1])
+
+    time.sleep(30)
+    log.info("Step4:主机端执行登录操作,扫描并查看已登录4个VIP的lun")
+    log.info("a.添加启动器,修改主机端启动器名称.")
+    iqn = cp('add_initiator', 'iqn')
+    alias = cp('add_initiator', 'alias')
+    osan.add_initiator(s_ip=deploy_ips[0], h_id=1, iqn=iqn, alias=alias)
+    osan.write_iqn(client_ips[0], iqn)
+    log.info("b.发现iscsi启动器,添加target到iscsi会话.")
+    for vip in vips:
+        osan.discover_scsi(client_ips[0], vip)
+    log.info("c.登录target.")
+    osan.iscsi_login(client_ips[0], iqn)
+    log.info("d.扫描主机端,查看8个Lun是否登录成功")
+    xstor_dev=osan.ls_scsi_dev(client_ips[0])
+    if len(xstor_dev) == 8:
+        log.info("主机端扫描到所有已登录Lun")
+    else:
+        log.error("异常!主机端未扫描到8个Lun.info:%s" % ','.join(xstor_dev))
+        os._exit(1)
+
+    time.sleep(100)
+    log.info("Step5:等待自动均衡完成后,检查节点A的VIP分布情况")
+    eth1_vips = osan.get_vips_by_eth(deploy_ips[0], 1, eth1)
+    eth2_vips = osan.get_vips_by_eth(deploy_ips[0], 1, eth2)
+    luns_list1 = [len(osan.get_luns_by_vip(x)) for x in eth1_vips]
+    luns_list2 = [len(osan.get_luns_by_vip(x)) for x in eth2_vips]
+    if sum(luns_list1) == sum(luns_list2) and sum(luns_list1) == 4:
+        log.info("自动均衡成功.")
+    else:
+        log.error("异常!自动均衡未成功.info:%s,%s" % (luns_list1, luns_list2))
+        os._exit(1)
+
+if __name__ == '__main__':
+    case()

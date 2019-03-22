@@ -1,0 +1,24 @@
+1. 准备工作：
+    (1)、手动授权posix客户端，勾选acl和user_xattr选项；并挂载posix客户端，挂载路径需要与文件系统名称相同
+    (2)、nfs/posix客户端需要加入AD域
+    (3)、配置访问管理，包括AD认证服务器(u1属于g1,u2属于g2,u3属于g3,u4属于g1)、访问区、业务子网
+    (4)、修改配置文件unistor_test_config.xml标签<nodes>、<clients>、<mount_paths>
+    (5)、修改配置文件p300_nas_config.xml标签<vip_address_pool_info>下的<domain_names>、离散型vip地址<vip_addresses>
+                                        标签<nfs_client_info>下的<nfs_client_ip>、<nfs_mount_path>
+                                        标签<dac_ad_server_info>下的<ad_domain_names>、<ad_users>、<ad_user_pws>
+                                        标签<dac_smb_info>下的全部子标签
+                                        标签<access_zone_info>下的<access_zone_name>
+    (6). 通过Windows PowerShell，在smb客户端上运行 Z:\StorTest\test_cases\cases\test_case\win_lib\run_remote.py(Z为脚本挂载盘符，此处以Z为例，以实际挂载盘符为准)
+2. 运行dac_multi_client.py，即可执行DAC跨平台（posix/nfs/smb）自动化综合测试脚本，脚本执行的操作如下：
+    (1)、获取节点信息:posix客户端ip、nfs客户端ip、posix客户端挂载路径、nfs客户端挂载路径、ip池的ip；
+    (2)、将所需工具(创建文件并设置初始权限用)拷贝到posix客户端节点/tmp下；
+    (3)、创建测试目录并将权限修改为777；
+    (4)、创建nfs共享，配置客户端列表；创建smb共享，配置用户列表；
+    (5)、posix客户端创建文件并设置权限，挂载nfs客户端，而后在posix/nfs客户端进行权限验证；
+    (6)、挂载smb客户端，在smb客户端进行权限验证；
+    (7)、如权限验证成功，卸载nfs/smb客户端挂载目录，并删除nfs/smb授权；
+    (8)、测试成功，则删除测试目录中所有内容
+3. 若脚本执行成功，会自动清理环境，无需人为操作
+4. 若脚本执行失败，则脚本会记录错误信息，然后退出执行
+5. 若脚本执行失败，需要手动清理环境，可根据执行失败的位置，参照步骤2的说明操作
+

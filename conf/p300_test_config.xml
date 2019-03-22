@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <jenkins>
+        <ip>10.2.42.248</ip>
+        <path>/home/StorTest</path>
+    </jenkins>
+    <nodes>
+        <node>
+            <ctrl_ip>10.2.42.105</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.42.106</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.42.107</ctrl_ip>
+        </node>
+    </nodes>
+    <clients>
+        <client>
+            <ctrl_ip>10.2.42.105</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.42.106</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.42.107</ctrl_ip>
+        </client>
+    </clients>
+
+    <!-- 卷 -->
+    <volumes>
+        <volume>volume1</volume>
+    </volumes>
+
+    <!-- 文件系统目录 -->
+    <mount_paths>
+        <mount_path>/mnt/volume1</mount_path>
+    </mount_paths>
+
+    <!-- 快照测试路径 -->
+    <snap_test_path>/mnt/volume1/snap</snap_test_path>
+
+    <!-- 配额测试路径 -->
+    <quota_test_path>/mnt/volume1/quota_test_dir</quota_test_path>
+
+    <!-- NAS测试路径 -->
+    <nas_test_paths>
+        <nas_test_path>/mnt/volume</nas_test_path>
+    </nas_test_paths>
+
+    <!-- 私有客户端节点中客户端install.py脚本所在路径 -->
+    <client_install_path>/root/ofs3.0/client</client_install_path>
+
+    <!-- 缺陷脚本测试路径 -->
+    <defect_test_path>/mnt/volume1/defect_case</defect_test_path>
+
+    <!-- 重要!!!执行用例列表文件 -->
+    <caselist>/home/StorTest/test_cases/cases/case_list/case_list</caselist>
+
+    <!-- 脚本日志存放路径 -->
+    <test_log_path>/home/StorTest/test_cases/log/case_log</test_log_path>
+
+    <!-- 脚本执行结果存放路径 -->
+    <test_result_path>/home/StorTest/test_cases/log/case_result</test_result_path>
+
+    <!-- 工具路径 -->
+    <tools_path>/home/StorTest/test_cases/tools</tools_path>
+
+    <!-- vdbench工具的路径 -->
+    <vdbench_path>/home/StorTest/test_cases/tools/vdbench50406</vdbench_path>
+
+    <!-- 快照专用vdbench工具的路径 -->
+    <snap_vdbench_path>/home/vdbench50406</snap_vdbench_path>
+
+    <!-- 每天发新包的位置 -->
+    <new_pkg_position>10.2.14.252:/mnt/sdc/ofs3.0_pkg</new_pkg_position>
+    <!-- 升级后要跑的用例 -->
+    <upgrade_case_list>/home/StorTest/test_cases/cases/case_list/case_list</upgrade_case_list>
+    
+    <!-- 界面自动化相关配置参数 -->
+    <web>
+        <!-- webui的地址 -->
+        <webui_ip>10.2.41.231</webui_ip>
+
+        <!-- 浏览器名称：firefox、chrome -->
+        <explorer_name>firefox</explorer_name>
+
+        <!-- 节点名称（用于删除节点） -->
+        <web_node_name>vm153</web_node_name>
+
+        <!-- 节点ip（用于添加节点） -->
+        <web_node_ip>10.2.42.153,20.2.42.153,30.2.42.153</web_node_ip>
+
+        <!-- 集群安装包地址 -->
+        <web_pkg_position>/home/deploy</web_pkg_position>
+
+        <!-- 集群网卡名称分布 (用于子网中网卡的绑定) -->
+        <web_eth_names>
+            <web_eth_name_ctrl>ens160</web_eth_name_ctrl>
+            <web_eth_name_data>ens192</web_eth_name_data>
+            <web_eth_name_data>ens224</web_eth_name_data>
+            <web_eth_name_no_ip>ens256</web_eth_name_no_ip>
+        </web_eth_names>
+
+        <!-- 磁盘大小，用于部署集群选盘（单位GB） -->
+        <web_disk_size>10.00</web_disk_size>
+
+        <!-- 掩码长度（外网22， 内网20） -->
+        <web_network_mask>22</web_network_mask>
+    </web>
+
+    <!-- testlink配置 -->
+    <testlink>false</testlink>
+    <tlurl>http://10.2.43.156/testlink/lib/api/xmlrpc/v1/xmlrpc.php</tlurl>
+    <tldevkey>fc42bdf04768b6bff6c8c0c7cbb503e5</tldevkey>  <!-- admin的密钥 -->
+    <tlprojectname>parastor</tlprojectname>
+    <tlplanname>2019年1月测试任务</tlplanname>
+    <tlplatformname>2222</tlplatformname>
+	
+	<!--虚拟机上下电-->
+	<esxis>
+        <esxi>
+            <ip>10.2.40.13</ip>
+            <name>root</name>
+            <pwd>parastor;123</pwd>
+        </esxi>
+    </esxis>
+	<!--vir  or    phy-->
+    <machinetype>vir</machinetype>
+
+</testconfig>

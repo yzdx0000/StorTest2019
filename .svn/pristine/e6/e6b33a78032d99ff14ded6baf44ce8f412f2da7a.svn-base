@@ -1,0 +1,56 @@
+# -*-coding:utf-8 -*
+
+import os
+
+import utils_path
+import log
+import common
+import get_config
+import web_common
+import prepare_clean
+
+#######################################################
+# 函数功能：界面自动化-----创建、修改、删除AD认证服务器
+# 脚本作者：duyuli
+# 日期：2018-12-07
+#######################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                  # 本脚本名字
+ad_name = "adserver"
+ad_name_update = "adserver_update"
+
+
+def case():
+    driver = web_common.init_web_driver()
+
+    obj_web_acess = web_common.Access_Manage(driver)
+
+    # 添加AD认证服务器
+    obj_web_acess.add_auth_provider_ad(ad_name,
+                                       get_config.get_ad_domain_name()[0],
+                                       get_config.get_ad_dns_address()[0],
+                                       get_config.get_ad_user_name()[0],
+                                       get_config.get_ad_password()[0],
+                                       check=True)
+    # 修改AD认证服务器
+    obj_web_acess.update_auth_provider_ad(ad_name,
+                                          name=ad_name_update,
+                                          username=get_config.get_ad_user_name()[1],
+                                          password=get_config.get_ad_password()[0],
+                                          check=True)
+
+    # 删除AD认证服务器
+    obj_web_acess.delete_auth_provider_ad(ad_name_update)
+
+    web_common.quit_web_driver(driver)
+
+
+def main():
+    prepare_clean.test_prepare(FILE_NAME, env_check=False)
+    case()
+    prepare_clean.test_clean()
+    log.info("%s succeed" % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

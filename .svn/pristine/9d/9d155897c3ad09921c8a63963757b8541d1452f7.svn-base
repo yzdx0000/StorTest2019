@@ -1,0 +1,282 @@
+#! /usr/bin/python
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：功能测试，用例编号29-0-17-22
+#使用方法：python 29-0-17-22_wjl.py
+#在http模式下，设置桶的acl，并验证。
+#作者：王建磊
+#创建时间：2018/09/14
+#**********************************************#
+import sys, os
+import commands
+import json
+import time
+import ConfigParser
+import random
+
+current_pyth = os.getcwd()
+pwd = os.path.dirname(current_pyth)
+sys.path.append(pwd + "/S3Lib")
+
+import utils_path
+import common
+import s3_common
+import log
+import get_config
+import prepare_clean
+import result
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+FILE_NAME = FILE_NAME.replace('-', '_')
+account_name1 = FILE_NAME + "_"+"account_a"
+account_name2 = FILE_NAME + "_"+"account_b"
+email1 = account_name1 + "@sugon.com"
+email2 = account_name2 + "@sugon.com"
+
+# 创建账户及证书
+def create_acc_cer(account_name, email):
+	rc, account_id = s3_common.add_account(account_name, email, 0)
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "create account failed!!!")
+	rc, ak, sk = s3_common.add_certificate(account_id)
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "create certificate failed!!!")
+	return ak, sk, account_id
+
+# 获取sig函数
+def create_sig(sk, StringToSign):
+	sig = s3_common.mk_sig(sk, StringToSign)
+	sig = s3_common.mk_sig_code(sig)
+	return sig
+
+def judge_result(rc, filename):
+	if rc == 0:
+		pass
+	else:
+		result.result(filename, "-1")
+
+# 结果判断函数
+def juge(output):
+	result_sig = output[output.find("1.1 ") + 4:][:3]
+	print "result:%s" % result_sig
+	if result_sig == '403':
+		return 0
+	else:
+		return -1
+
+# 获取桶配额函数
+def bucket_get_quota(bucketname, AK, sig):
+	rc, opt = s3_common.get_bucket_quota_by_sig(bucketname, AK, sig)
+	return rc, opt
+
+# 设置桶配额函数
+def bucket_set_quota(bucketname, AK, quota, sig):
+	rc, opt = s3_common.update_bucket_quota_by_sig(bucketname, AK, quota, sig)
+	return rc, opt
+
+# 创建文件函数
+def create_file(obj_path, amount):
+	a = [0 for x in range(1024 * 1024)]
+	for i in range(len(a) - 10):
+		a[i] = 'a'
+	for j in range(10):
+		data = random.randint(0, 9)
+		a[len(a) - 10 + j] = str(data)
+	a = "".join(a)
+	f = open(obj_path, 'a+')
+	for k in range(amount):
+		f.write(a)
+	f.close()
+
+def case():
+	log.info("1> 开启签名认证")
+	rc, opt = s3_common.set_oss_http_auth("1")
+	time.sleep(12)
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "Open sig-mode failed!")
+
+	#创建账户a、b
+	log.info("2> 创建账户a，b")
+	ak1, sk1, account_id1 = create_acc_cer(account_name1, email1)
+	ak2, sk2, account_id2 = create_acc_cer(account_name2, email2)
+
+	#账户a\b,中分别创建桶
+	log.info("3> 分别在账户a,b中创建桶")
+	log.info("bucket create operation:")
+	bucket_name1 = FILE_NAME + '_bucket_a'
+	object_name1 = FILE_NAME + '_object_a'
+	bucket_name2 = FILE_NAME + '_bucket_b'
+	object_name2 = FILE_NAME + '_object_b'
+	rc1, opt1 = s3_common.add_bucket_by_sk(bucket_name1, ak1, sk1)
+	rc2, opt2 = s3_common.add_bucket_by_sk(bucket_name2, ak2, sk2)
+	judge_result(rc1, FILE_NAME)
+	judge_result(rc2, FILE_NAME)
+	common.judge_rc(rc, 0, "add bucket %s failed!!!" % bucket_name1)
+	common.judge_rc(rc, 0, "add bucket %s failed!!!" % bucket_name2)
+
+	#创建对象buc_a>obj_a,acc_b>obj_b
+	log.info("4> 分别在账户a,b的桶中创建对象")
+	create_file(FILE_NAME, 1)
+	rc, opt = s3_common.add_object_by_sk(bucket_name1, object_name1, FILE_NAME, ak1, sk1)
+	rc, opt = s3_common.add_object_by_sk(bucket_name2, object_name2, FILE_NAME, ak2, sk2)
+	common.run_command_shot_time("rm %s" % FILE_NAME)
+
+	#设置ACL
+	#设置读权限
+	log.info("5> 读权限的设置与验证")
+	log.info("********************读权限测试及验证********************")
+	ACL_TYPE = "READ"
+	string = "PUT" + "\n" + "" + "\n" + "application/x-www-form-urlencoded" + \
+	         "\n" + "" + "\n" + "" + "/"+bucket_name1+"?acl"
+	sig = create_sig(sk1,string)
+	log.info("******设置的读权限,start.******")
+	rc, opt = s3_common.set_bucket_acl(bucket_name1,ak1,account_id1,email1,
+	                                          account_id2,email2,ACL_TYPE,sig)
+	log.info("******设置的读权限,end.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+
+	#验证读权限
+	string = "GET" + "\n" + "" + "\n" + "" + "\n" + "" + "\n" + "" + "/" + bucket_name1
+	sig = create_sig(sk2,string)
+	log.info("******使用ak2读取buc1,start.******")
+	rc, opt = s3_common.get_obj_in_bucket(bucket_name1,ak2,sig)
+	log.info("******使用ak2读取buc1,end.******")
+	if "200 OK" in opt:
+		pass
+	else:
+		result.result(FILE_NAME, "-1")
+		common.judge_rc(-1, 0, "%s failed!" % FILE_NAME)
+
+#设置写权限
+	log.info("6> 写权限的设置与验证")
+	log.info("********************写权限设置及验证********************")
+	ACL_TYPE = "WRITE"
+	string = "PUT" + "\n" + "" + "\n" + "application/x-www-form-urlencoded" + "\n" + ""\
+	         + "\n" + "" + "/"+bucket_name1+"?acl"
+	sig = create_sig(sk1,string)
+	log.info("******设置的写权限,start.******")
+	rc, opt = s3_common.set_bucket_acl(bucket_name1,ak1,account_id1,email1,
+	                                          account_id2,email2,ACL_TYPE,sig)
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+	log.info("******设置的写权限,end.******")
+
+#验证写权限
+	create_file(FILE_NAME, 1)
+	log.info("******使用ak2向buc1写入数据,start.******")
+	rc, opt = s3_common.add_object_by_sk(bucket_name1, object_name1+"w", FILE_NAME, ak2, sk2)
+	common.run_command_shot_time("rm %s" % FILE_NAME)
+	log.info("******使用ak2向buc1写入数据,end.******")
+	if "200 OK" in opt:
+		pass
+	else:
+		result.result(FILE_NAME, "-1")
+		common.judge_rc(-1, 0, "%s failed!" % FILE_NAME)
+
+#设置读ACP权限
+	log.info("7> 读ACP权限的设置与验证")
+	log.info("********************读ACP设置及验证********************")
+	ACL_TYPE = "READ_ACP"
+	string = "PUT" + "\n" + "" + "\n" + "application/x-www-form-urlencoded" + "\n" + "" + "\n" \
+	         + "" + "/" + bucket_name1 + "?acl"
+	sig = create_sig(sk1,string)
+	log.info("******设置读ACP,start.******")
+	rc, opt = s3_common.set_bucket_acl(bucket_name1, ak1, account_id1, email1, account_id2,email2,ACL_TYPE,sig)
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+	log.info("******设置读ACP,end.******")
+
+#验证读ACP权限
+	StringToSign =  "GET" + "\n" + "" + "\n" + "" + "\n" + "" + "\n" + "" + "/"+bucket_name1+"?acl"
+	sig = create_sig(sk2,StringToSign)
+	log.info("******使用ak2读取buc1的ACL权限,start.******")
+	rc, opt = s3_common.get_bucket_acl_info(bucket_name1,ak2,sig)
+	log.info("******使用ak2读取buc1的ACL权限,end.******")
+	if "200 OK" in opt:
+		pass
+	else:
+		result.result(FILE_NAME, "-1")
+		common.judge_rc(-1, 0, "%s failed!" % FILE_NAME)
+
+#设置写ACP权限
+	log.info("8> 写ACP权限的设置与验证")
+	log.info("********************写ACP测试及验证********************")
+	ACL_TYPE = "WRITE_ACP"
+	string = "PUT" + "\n" + "" + "\n" + "application/x-www-form-urlencoded" + "\n" + ""\
+	         + "\n" + "" + "/"+bucket_name1+"?acl"
+	sig = create_sig(sk1,string)
+	log.info("******设置的写ACP,start.******")
+	rc, opt = s3_common.set_bucket_acl(bucket_name1, ak1, account_id1, email1, account_id2, email2, ACL_TYPE, sig)
+	log.info("******设置的写ACP,end.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+
+#验证写ACP权限
+	ACL_TYPE = "WRITE"
+	string = "PUT" + "\n" + "" + "\n" + "application/x-www-form-urlencoded" + "\n" \
+	         + "" + "\n" + "" + "/"+bucket_name1+"?acl"
+	sig = create_sig(sk2, string)
+	log.info("******验证写ACP权限，使用ak2设置一个写权限,start.******")
+	rc, opt = s3_common.set_bucket_acl(bucket_name1, ak2, account_id1, email1, account_id2, email2, ACL_TYPE, sig)
+	log.info("******验证写ACP权限，使用ak2设置一个写权限,end.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+
+	log.info("******验证写ACP权限，使用ak2验证写权限,start.******")
+	create_file(FILE_NAME, 2)
+	rc, opt = s3_common.add_object_by_sk(bucket_name1, object_name1 + "ww", FILE_NAME, ak2, sk2)
+	common.run_command_shot_time("rm %s" % FILE_NAME)
+	log.info("******验证写ACP权限，使用ak2验证写权限,end.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+
+#设置完全权限
+	log.info("9> 完全权限的设置与验证")
+	log.info("********************完全权限测试及验证********************")
+	ACL_TYPE = "FULL_CONTROL"
+	string = "PUT" + "\n" + "" + "\n" + "application/x-www-form-urlencoded" + "\n" + ""\
+	         + "\n" + "" + "/"+bucket_name1+"?acl"
+	sig = create_sig(sk1,string)
+	log.info("******设置的完全权限,start.******")
+	rc, opt = s3_common.set_bucket_acl(bucket_name1, ak1, account_id1, email1, account_id2, email2, ACL_TYPE, sig)
+	log.info("******设置的完全权限,end.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+
+#完全权限验证
+	log.info("******验证完全权限，使用ak2验证写权限,start.******")
+	create_file(FILE_NAME, 3)
+	rc, opt = s3_common.add_object_by_sk(bucket_name1, object_name1 + "ww", FILE_NAME, ak2, sk2)
+	common.run_command_shot_time("rm %s" % FILE_NAME)
+	log.info("******验证完全权限，使用ak2验证写权限,end.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+
+	log.info("******验证完全权限，使用ak2验证读ACP权限,start.******")
+	StringToSign = "GET" + "\n" + "" + "\n" + "" + "\n" + "" + "\n" + "" + "/" + bucket_name1 + "?acl"
+	sig = create_sig(sk2, StringToSign)
+	rc, opt = s3_common.get_bucket_acl_info(bucket_name1, ak2, sig)
+	log.info("******验证完全权限，使用ak2验证读ACP权限,start.******")
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "%s failed!" % FILE_NAME)
+#
+	log.info("6> 关闭签名认证")
+	rc, opt = s3_common.set_oss_http_auth("0")
+	judge_result(rc, FILE_NAME)
+	time.sleep(12)
+	common.judge_rc(rc, 0, "Close sig-mode failed!")
+
+def main():
+	rc, opt = s3_common.set_oss_http_auth("0")
+	time.sleep(12)
+	judge_result(rc, FILE_NAME)
+	common.judge_rc(rc, 0, "Close sig-mode failed!")
+	prepare_clean.s3_test_prepare(FILE_NAME, [email1,email2])
+	case()
+	prepare_clean.s3_test_clean([email1,email2])
+	log.info('%s succeed!' % FILE_NAME)
+	result.result(FILE_NAME, "0")
+
+if __name__ == '__main__':
+	common.case_main(main)

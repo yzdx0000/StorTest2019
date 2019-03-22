@@ -1,0 +1,4 @@
+hd=h1,shell=ssh,user=root,system=localhost,vdbench=/home/zt_dws/vdbench
+fsd=fsd1,depth=1,files=20,sizes=(1k,10,4k,10,100k,10,1M,10,500k,10,10M,10,100M,1,20k,19,7M,10,200k,10),anchor=/mnt/zhanghan/src_1512931730.04,width=5
+fwd=fwd1,hd=h1,xfersize=1K,operation=read,fsd=fsd1,threads=5
+rd=rd1,fwd=fwd1,fwdrate=max,format=yes,elapsed=2,interval=1

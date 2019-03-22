@@ -1,0 +1,34 @@
+# -*- coding:utf-8 -*-            #可以加中文注释
+#**********************************************#
+#标题：批量下载桶里的所有对象，
+#使用方法：用户自己输入指定DS的ip和客户端ip、证书id，桶名，下载对象存放目录；下载之后文件的名字是自己使用列表定义。
+
+#作者：张芳芳
+#创建时间：2017/10/31
+#更新时间：2017/10/31
+#**********************************************#
+import os
+import sys
+import commands
+from _get_all_objects import *    #调用脚本10_get_all_objects.py
+xiazainame_lst = []               #定义下载后的文件为一个列表
+object_list = get_file_lst()      #将桶内对象整合成一个列表
+print object_list
+n = len (object_list)
+print n
+
+for i in range(1,n+1):                              
+	a='xiazai'                                     #定义下载文件的名字前缀
+	xiazainame_lst.append(a+str(i))             #将字符和数字组合成下载文件的最终名字
+print xiazainame_lst
+zuhes=zip(object_list,xiazainame_lst)
+print zuhes
+for zuhe in zuhes:                       #将桶内对象和下载后的文件组合成列表
+	objectname=zuhe[0]
+	xiazaifile=zuhe[1]
+#	print xiazaifile
+	d="ssh 10.2.20.107 'curl -s http://10.2.20.103:20480/zff1/%s  -o  /mnt/fa1/xiazai/%s -H \"Authorization: AWS4-HMAC-SHA256 Credential=000020ZYIVOIY1V000001XAX95EMVSIE\"' " %(objectname,xiazaifile)  #下载桶内对象到指定目录下
+	rc, sout = commands.getstatusoutput(d)    #使用commands模块执行Linux shell命令	
+	print sout
+
+

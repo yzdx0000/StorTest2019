@@ -1,0 +1,14 @@
+sd=default,journal=/root/vdbench/journal
+sd=sd4,lun=\\.\PhysicalDrive4,range=(0,100M)
+sd=sd3,lun=\\.\PhysicalDrive3,range=(0,100M)
+sd=sd6,lun=\\.\PhysicalDrive6,range=(0,100M)
+sd=sd5,lun=\\.\PhysicalDrive5,range=(0,100M)
+sd=sd2,lun=\\.\PhysicalDrive2,range=(0,100M)
+sd=sd1,lun=\\.\PhysicalDrive1,range=(0,100M)
+wd=wd4,sd=sd4,xfersize=(4k,20,8k,10,32k,30,128k,40),rdpct=0,seekpct=80
+wd=wd3,sd=sd3,xfersize=(270k,20,520k,10,1036k,30,4095k,40),rdpct=100,seekpct=80
+wd=wd6,sd=sd6,xfersize=(4k,20,8k,10,32k,30,128k,40),rdpct=0,seekpct=80
+wd=wd5,sd=sd5,xfersize=(270k,20,520k,10,1036k,30,4095k,40),rdpct=100,seekpct=80
+wd=wd2,sd=sd2,xfersize=(4k,20,8k,10,32k,30,128k,40),rdpct=0,seekpct=80
+wd=wd1,sd=sd1,xfersize=(270k,20,520k,10,1036k,30,4095k,40),rdpct=100,seekpct=80
+rd=run1,wd=wd*,iorate=80,elapsed=600,maxdata=2G,threads=16,interval=1

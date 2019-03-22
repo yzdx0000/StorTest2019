@@ -1,0 +1,33 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建证书模块
+#使用方法：调用"cer_add()"函数，指定主MGR的ip和账户id即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/23 新增远程操作功能
+#**********************************************#
+import os,sys
+import commands
+
+#命令生成函数
+def cer_add_cmd(mgr_ip,acc_id):
+	part0 = "ssh "
+	part1 = " /home/parastor/bin/sysctl/parastor_pos addcertificate accountid=" 	#拼串片段，无需关注。
+	cmd = ''.join((part0,mgr_ip,part1,acc_id))#生成指令
+	return cmd
+
+#创建证书函数
+def cer_add(mgr_ip,acc_id):#输入参数为:"主mgr的ip，账户id"
+	cmd = cer_add_cmd(mgr_ip,acc_id)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	if (output[0:1]!='a'):
+		print "create error!"
+		sys.exit(0)
+	str1 = output[output.find("#") + 1:]						#字符串筛选片段，无需关注
+	str2 = str1[str1.find(":") + 1:]						#字符串筛选片段，无需关注
+	cer_id = str2[0:32]								#字符串筛选片段，无需关注
+	return cer_id
+
+#调试代码
+#cer_id=cer_add('10.10.222.3','000024OZFTJVAUF6')
+#print cer_id

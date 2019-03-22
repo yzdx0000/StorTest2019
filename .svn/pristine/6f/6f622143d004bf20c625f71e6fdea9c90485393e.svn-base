@@ -1,0 +1,34 @@
+from hashlib import sha1
+import hmac
+import base64
+import sys,os
+
+HTTP_Verb=sys.argv[1]
+Content_MD5=sys.argv[2]
+Content_Type=sys.argv[3]
+Date=sys.argv[4]
+CanonicalizedHeaders=sys.argv[5]
+CanonicalizedResource=sys.argv[6]
+sk=sys.argv[7]
+
+def mk_str(HTTP_Verb,Content_MD5,Content_Type,CanonicalizedHeaders,CanonicalizedResource):
+	StringToSign = HTTP_Verb + "\n" + Content_MD5 + "\n" + Content_Type + "\n" + Date + "\n" + CanonicalizedHeaders + CanonicalizedResource
+	return StringToSign
+
+def mk_sig(sk,StringToSign):
+	sig = hmac.new(sk, StringToSign.encode('utf-8'), sha1).digest()
+	return sig
+
+def mk_sig_code(sig):
+	base64sig = base64.b64encode(sig)
+	return base64sig
+
+def test():
+	StringToSign = HTTP_Verb + "\n" + Content_MD5 + "\n" + Content_Type + "\n" + Date + "\n" + CanonicalizedHeaders + CanonicalizedResource
+	sig = hmac.new(sk, StringToSign.encode('utf-8'), sha1).digest()
+	base64sig = base64.b64encode(sig)
+	print StringToSign
+	print base64sig
+
+if __name__ == '__main__':
+	test()

@@ -1,0 +1,31 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于获取bucket的acl###########
+#需要执行list_buckets_exc，参数包括：oOss节点ip，bucket名称，certificateid
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+import sys   #为了向脚本传参数而引入
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+  
+def list_buckets_cmd(ip,bucket_name,certificate_id):
+    cmd='curl -i http://'+str(ip)+':20480/'+str(bucket_name)+'?acl -XGET -H '+' \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\"'  #执行获取bucket的acl命令本身
+    return cmd
+
+def list_buckets_exc(ip,bucket_name,certificate_id):
+    cmd=list_buckets_cmd(ip,bucket_name,certificate_id)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    list_buckets_exc(ds_ip,bucket_name,certificate_id)
+    list_buckets_exc(all_argvs['oOss_ip'],all_argvs['create_bucket_name'],'00003P7CR00VGJF700003P7CQQD1KITW')   
+

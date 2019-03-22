@@ -1,0 +1,39 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建账户模块
+#使用方法：调用"acc_add()"函数，指定主MGR的ip、账户名、email即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/19 增加错误日志功能
+#	   2017/10/23 增加远程操作功能
+#**********************************************#
+import os,sys
+import commands
+import _log_module
+
+#创建账户命令生成函数
+def acc_add_cmd(mgr_ip,acc_name,acc_email):
+	part0 = "ssh "
+	part1 = " /home/parastor/bin/sysctl/parastor_pos addaccount accountname=" 	#拼串片段，无需关注。
+	part2 = " email=" 							 	#拼串片段，无需关注。
+	part3 = " quota=0" 							 	#拼串片段，无需关注。
+	cmd = ''.join((part0,mgr_ip,part1,acc_name,part2,acc_email,part3))#生成创建账户的指令
+	return cmd
+
+#创建账户函数
+def acc_add(mgr_ip,acc_name,acc_email):#输入参数为:"账户名"，"账户邮箱"
+	cmd = acc_add_cmd(mgr_ip,acc_name,acc_email)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	if (output[0:1]!='a'):
+		print "account create error!"
+		_log_module.create_log("acc_err_log.log","ERROR,"+acc_name,output)
+#		sys.exit(0)
+		return 0
+	str1 = output[output.find("#") + 1:]						#字符串筛选片段，无需关注
+	str2 = str1[str1.find(":") + 1:]						#字符串筛选片段，无需关注
+	acc_id = str2[0:16]								#字符串筛选片段，无需关注
+	return acc_id
+
+#调试代码
+#acc_id=acc_add('10.10.222.3','abcd','abcd@sugon.com')
+#print acc_id

@@ -1,0 +1,26 @@
+# -*- coding:utf-8 -*- #可以加入中文注释
+#creat accounts auto  批量创建账户并获取账户id
+import os
+import sys
+import commands
+users = []
+useremails = []
+for i in range(3,6):                              #定义桶列表元素循环，主要是桶名字的>
+	a='xiaopang'                                     #桶名字的前缀
+	users.append(a+str(i))             #将字符和数字组合成桶名
+	useremails.append(a+str(i)+"@sugon.com")
+accounts=zip(users, useremails)                             #将账户名字和email组成二维列表
+accountid_lst = []                                          #定义账户列表
+for account in accounts:                                    #定义二次循环
+        user=account[0]                                     
+        useremail=account[1]
+	c="parastor_pos addaccount accountname=%s email=%s quota=0" %(user,useremail) #创建账户的指令
+
+	rc, stdout = commands.getstatusoutput(c)    #使用commands模块执行Linux shell命令     
+	print stdout
+#	print rc
+	if 0 == rc:    #如果commands.getstatusoutput模块正确执行，则将账户id组成列表打印出来。
+		accountid_lst.append(stdout.split('#')[1].split(':')[-1])  #获取账户id
+
+print accountid_lst
+

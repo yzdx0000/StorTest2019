@@ -1,0 +1,21 @@
+#-*- coding:utf-8 -*
+#函数名称：downloadObject
+#函数作用：将指定对象下载到指定路径下
+#函数你输入：oossip，bucketname，objectname,certificateid
+#函数输出：print下载结果
+import commands
+import sys
+def usage():
+	print 'python scriptname oossip bucketname objectname certificateid'
+def downloadObject(oossip,bucketname,objectname,certificateid):
+	cmd='curl -s http://'+oossip+':20480/'+bucketname+'/'+objectname+' -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	#curl -i http://ip:80/bucket/object -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential=00000000000000010000000000000001"
+	print '下载并打印的命令是：'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+if __name__=="__main__":
+	if len(sys.argv)!=5:
+		usage()
+	else:
+		downloadObject(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4])

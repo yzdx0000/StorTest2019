@@ -1,0 +1,84 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#liuyanzhe
+#**********************************************#
+import os,sys
+import commands
+import _checkresult_lyz
+import _checkresult_lyz
+#创建桶命令生成函数
+def bucket_add_cmd(ip,bucketname,credential):
+	part1 = "curl -s -i http://" 	#拼串片段，无需关注。
+	part2 = ":20480/" 							 	#拼串片段，无需关注。
+	part3 = " -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential="		#拼串片段，无需关注。
+	cmd = ''.join((part1,ip,part2,bucketname,part3,credential,"\""))#生成创建账户的指令
+	return cmd
+
+#创建账户函数
+def bucket_add(ip,bucketname,credential):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	cmd = bucket_add_cmd(ip,bucketname,credential)
+	print cmd
+	(return_code,output)=commands.getstatusoutput(cmd)
+	print output
+	re=_checkresult_lyz.checkresult(return_code, output)
+	if re == -1:
+		return -1
+	return output
+def bucket_addHaveLog(ip,bucketname,credential,logger):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	cmd = bucket_add_cmd(ip,bucketname,credential)
+	logger.info(cmd)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	re=_checkresult_lyz.checkresultHaveLog(return_code, output,logger)
+	if re == -1:
+		return -1
+	return output
+def bucket_addHaveLognocheck(ip,bucketname,credential,logger):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	cmd = bucket_add_cmd(ip,bucketname,credential)
+	logger.info(cmd)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	return output
+def bucket_addnocheckHaveLog(ip,bucketname,credential,logger):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	cmd = bucket_add_cmd(ip,bucketname,credential)
+	logger.info(cmd)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	re=_checkresult_lyz.checkresultHaveLog(return_code, output,logger)
+	if re == -1:
+		return -1
+	return output
+def bucket100_add(ip,bucketname,credential):	#输入参数为:"ostor_ip","桶名"，"证书id"
+	for b in range(100):
+		cmd = bucket_add_cmd(ip,bucketname+str(b),credential)
+		print cmd
+		(return_code,output)=commands.getstatusoutput(cmd)
+		print output
+		re=_checkresult_lyz.checkresult(return_code, output)
+		if re == -1:
+			return -1
+
+def bucket100_addbingfaHaveLog(logger,ip, bucketname, credential):  # 输入参数为:"ostor_ip","桶名"，"证书id"
+	for b in range(100):
+		cmd = bucket_add_cmd(ip, bucketname + str(b), credential)
+		logger.info(cmd)
+		(return_code, output) = commands.getstatusoutput(cmd)
+		logger.info(return_code)
+		logger.info(output)
+		print output
+		re = _checkresult_lyz.checkresult(return_code, output)
+		if re == -1:
+			logger.error('error#########################################case 29-0-16-6_lyz fail  ')
+			result.result('29-0-16-6_lyz', -1)
+			exit(1)
+#调试代码
+if __name__=="__main__":
+	#cmd=bucket_add_cmd('10.2.40.18','shishi3','000024P00B8AVJNI000025XCEGCC5NIZ')
+        #print cmd
+	result=bucket_add(sys.argv[1],sys.argv[2],sys.argv[3])
+	#result=bucket_add('10.2.40.18','hehehehehe','000024P00B8AVJNI000025XCEGCC5NIZ')
+        print result
+#cmd=bucket_add_cmd('10.2.30.xx','hehe','0000000001')
+#print cmd
+#output = bucket_add("10.10.222.6","test1","000023GNCOR3TGZU00001ZRM69FDH4O2")
+#print output

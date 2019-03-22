@@ -1,0 +1,80 @@
+#!/usr/bin/python
+# -*- coding:utf-8 -*- 
+#随机拔盘
+import random
+import os
+import time
+import commands
+import getoutputpath_lyz
+def drawdisk(ip):
+    cmd1="ssh "+ip+" df |sed  -n '2p' |awk '{print $1}'"
+    rc,out=commands.getstatusoutput(cmd1)
+    out1=out.split('/')[2]
+    out2=filter(lambda x:x not in '0123456789',out1)  #删除字符串中的数字
+    disks=[]
+    cmd="ssh "+ip+" lsscsi|grep disk"+"|sed "+"'/"+out2+"/d"+"'"
+    disksinfo=os.popen(cmd).readlines()
+    print disksinfo
+    for diskinfo in disksinfo:
+        num=diskinfo.split()[0][1:-1].replace(":"," ")
+        disks.append(num)
+    length=len(disks)
+    print disks
+    outputdir = getoutputpath_lyz.getoutputpath()
+    os.system('cd ' + outputdir + ';touch drawdisklog')
+    logfile=os.path.join(outputdir,'drawdisklog')
+    for i in range(1, 500):
+        num = random.randint(0, length-1)
+        print num
+        cmd = "ssh "+ip+" '"+"echo scsi remove-single-device "+disks[num]+" > /proc/scsi/scsi"+"'"
+        print cmd
+        os.system(cmd)
+        cmd = "echo `date` echo scsi remove-single-device "+disks[num]+" > /proc/scsi/scsi"+">> "+logfile
+        print cmd
+        os.system(cmd)
+        time.sleep(120)
+        cmd = "ssh "+ip+" '"+"echo scsi add-single-device "+disks[num]+" > /proc/scsi/scsi"+"'"
+        print cmd
+        os.system(cmd)
+        cmd = "echo `date` echo scsi add-single-device "+disks[num]+" > /proc/scsi/scsi"+">> "+logfile
+        print cmd
+        os.system(cmd)
+    time.sleep(120)
+
+#下面的函数与上面唯一的不同是多了一个logger参数
+def drawdiskHaveLog(logger,ip):
+    cmd1="ssh "+ip+" df |sed  -n '2p' |awk '{print $1}'"
+    rc,out=commands.getstatusoutput(cmd1)
+    out1=out.split('/')[2]
+    out2=filter(lambda x:x not in '0123456789',out1)  #删除字符串中的数字
+    disks=[]
+    cmd="ssh "+ip+" lsscsi|grep disk"+"|sed "+"'/"+out2+"/d"+"'"
+    disksinfo=os.popen(cmd).readlines()
+    logger.info(disksinfo)
+    for diskinfo in disksinfo:
+        num=diskinfo.split()[0][1:-1].replace(":"," ")
+        disks.append(num)
+    length=len(disks)
+    logger.info(disks)
+    outputdir = getoutputpath_lyz.getoutputpath()
+    os.system('cd ' + outputdir + ';touch drawdisklog')
+    logfile=os.path.join(outputdir,'drawdisklog')
+    for i in range(1, 10):
+        num = random.randint(0, length-1)
+        logger.info(num)
+        cmd = "ssh "+ip+" '"+"echo scsi remove-single-device "+disks[num]+" > /proc/scsi/scsi"+"'"
+        logger.info(cmd)
+        os.system(cmd)
+        cmd = "echo `date` echo scsi remove-single-device "+disks[num]+" > /proc/scsi/scsi"+">> "+logfile
+        logger.info(cmd)
+        os.system(cmd)
+        time.sleep(120)
+        cmd = "ssh "+ip+" '"+"echo scsi add-single-device "+disks[num]+" > /proc/scsi/scsi"+"'"
+        logger.info(cmd)
+        os.system(cmd)
+        cmd = "echo `date` echo scsi add-single-device "+disks[num]+" > /proc/scsi/scsi"+">> "+logfile
+        logger.info(cmd)
+        os.system(cmd)
+    time.sleep(120)
+if __name__=="__main__":
+    drawdisk('10.2.40.35')

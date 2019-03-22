@@ -1,0 +1,16 @@
+from robotremoteserver import RobotRemoteServer as Rs
+from nas_common_win import Smb, Ftp
+from Bao import Bao, Liyao
+import get_config
+
+WIN_HOST = get_config.get_win_client_ips()[0]
+
+
+class RunRemoteServer(Smb):
+    def __init__(self):
+        pass
+
+
+if __name__ == '__main__':
+    instance = RunRemoteServer()
+    Rs(instance, host=WIN_HOST, port=8270)

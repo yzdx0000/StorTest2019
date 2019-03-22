@@ -1,0 +1,203 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+# 本模块实现的功能如下
+# 用于根据账户名account name获取账户account id，函数名为get_account_id_from_accountname
+# 用于从已有certificate的account中获取第一个certificate id，函数名为get_cer_id_from_account
+# 用于从已有certificate的account中获取所有的certificate id，函数名为get_all_cer_id_from_account
+# 用于获取account id(从刚创建的account的输出中获取)，函数名为get_account_id
+# 用于获取account uid(从刚创建的account的输出中获取)，函数名为get_account_uid
+# 用于获取certificate id(从刚创建的certificate的输出中获取)，函数名为get_certificate_id
+# 用于获取账户的quota(从刚创建的account的输出中获取)，函数名为get_account_quota
+# 用于获取当前路径，函数名为get_current_path
+# 用于获取当前路径的父路径，函数名为get_dir_path
+# 用于向指定的xml文件中写内容(写入任意内容，可以包括非xml的部分)，函数名为write_to_xml
+# 用于获取文件中xml格式的部分(即以“<”开头的行)，函数名为get_xml_content
+# 用于获取xml文件中指定的标签的值(只获得该标签第一次出现时对应的值)，函数名为analyze_xml
+# 用于获取xml文件中指定的标签的值(当该标签多次出现时，获得其所有值)，函数名为analyze_all_xml
+# 用于检测http请求的返回值,函数名为get_return_code_from_http
+# 用于检测函数返回值，判断执行成功或失败，函数名为if_succ
+# 用于判断http请求返回值，函数名为judge_http_res
+
+import os,commands
+import shutil
+import xml.dom.minidom
+
+#本函数用于根据账户名account name获取账户account id
+#参数为oOms节点ip和account名称
+def get_account_id_from_accountname(mgr_ip ,account_name):
+    cmd="ssh %s -C \"parastor_pos listaccounts \" | grep %s | awk -F ':' '{print $2}'|awk -F '#' '{print $1}'"%(mgr_ip,account_name)
+    (return_code,acc_id)=commands.getstatusoutput(cmd)
+    if return_code == 0:
+        return acc_id
+    else:
+        return -1
+
+#本函数用户从已有certificate的account中获取第一个certificate id
+#参数为oOms节点ip和accountid
+def get_cer_id_from_account(mgr_ip,account_id):
+    cmd="ssh %s -C \"parastor_pos listcertificates accountid=%s\" | awk -F ':' '{print $5}'|awk -F '%%' '{print $1}'"%(mgr_ip,account_id)
+    (return_code, cer_id) = commands.getstatusoutput(cmd)
+    if return_code == 0:
+        return cer_id
+    else:
+        return -1
+#本函数用于从已有certificate的account中获取所有的certificate id
+#参数为oOms节点ip和accountid
+def get_all_cer_id_from_account(mgr_ip,account_id):
+    cmd = "ssh %s -C \"parastor_pos listcertificates accountid=%s\" | cut -d \":\" -f 3|cut -d \"#\" -f1"%(mgr_ip,account_id)
+    #获取cer id的个数,用cer_id_num表示
+    (return_code, cer_id_num) = commands.getstatusoutput(cmd)
+    if return_code != 0:
+        return -1
+    cer_id_list=[]
+    ret_code=[]
+    for i in range(int(cer_id_num)):
+        cmd = "ssh %s -C \"parastor_pos listcertificates accountid=%s\" |awk -F '{' '{print $%d}'|cut -d \":\" -f 2 | cut -d \"%%\" -f1 "%(mgr_ip, account_id,i+2)
+        (return_code, cer_id) = commands.getstatusoutput(cmd)
+        if return_code == 0:
+            cer_id_list.append(str(cer_id))
+            ret_code.append(return_code)
+    if len(ret_code) == int(cer_id_num):
+        print cer_id_list
+        return cer_id_list
+    else:
+        return -1
+
+
+
+#本函数用于获取account id(从刚创建的account的输出中获取)
+#参数为创建account时的返回值
+def get_account_id(res):
+    tmp_id=res[2].split(':')
+    tmp_id2=tmp_id[2].split('#')
+    acc_id=tmp_id2[0]
+    return acc_id
+    
+#本函数用于获取account uid(从刚创建的account的输出中获取)
+#参数为创建account时的返回值
+def get_account_uid(res):
+    tmp_uid=res[2].split(':')
+    tmp_uid2=tmp_uid[3].split('#')
+    acc_uid=tmp_uid2[0]
+    return acc_uid
+
+#本函数用于获取certificate id(从刚创建的certificate的输出中获取)
+#参数为创建certificate时的返回值
+def get_certificate_id(res):
+    tmp_cer=res[2].split(':')
+    tmp_cer2=tmp_cer[2].split('#')
+    cer_id=tmp_cer2[0]
+    return cer_id
+
+#本函数用于获取账户的quota(从刚创建的account的输出中获取)
+#参数为创建account时的返回值
+def get_account_quota(res):
+    tmp_quota=res[2].split(':')
+    tmp_quota2=tmp_quota[5].split('#')
+    quota=tmp_quota2[0]
+    return quota
+
+#本函数用于获取当前路径
+def get_current_path():
+    current_path = os.path.abspath('')
+    print current_path
+    return current_path
+
+#本函数用于获取当前路径的父路径
+def get_dir_path():
+    current_path = os.path.abspath('')
+    dir_path = os.path.dirname(current_path)
+    print dir_path
+    return dir_path
+
+#本函数用于向指定的xml文件中写内容(写入任意内容，可以包括非xml的部分)
+#参数为想写入的内容和xml文件名称
+def write_to_xml(content,xml_file):
+    file=open(xml_file,'w')
+    file.write(content)
+    file.close()
+
+#本函数用于获取文件中xml格式的部分(即以“<”开头的行)
+#参数为xml文件的名称和临时xml文件的名称(函数执行后会被删除)
+def get_xml_content(xml_name,xml_name_new):
+    with open("%s"%xml_name,'r') as f:
+        with open("%s"%xml_name_new,'w') as g:
+            for line in f.readlines():
+                if "<" in line:
+                    g.write(line)
+    shutil.move("%s"%xml_name_new,"%s"%xml_name)
+
+#本函数用于获取xml文件中指定的标签的值(只获得该标签第一次出现时对应的值)
+#参数为xml文件的名称和标签的名称
+def analyze_xml(xml_name,value):
+    dom=xml.dom.minidom.parse(xml_name)
+    root=dom.documentElement
+    content=root.getElementsByTagName(value)
+    res=content[0].firstChild.nodeValue
+    return res
+
+#本函数用于获取xml文件中指定的标签的值(当该标签多次出现时，获得其所有值)
+#参数为xml文件的名称和标签的名称
+def analyze_all_xml(xml_name,value):
+    list=[]  #定义空列表，用于保存多个标签对应的值
+    dom = xml.dom.minidom.parse(xml_name)
+    root = dom.documentElement
+    contents = root.getElementsByTagName(value)
+    for content in contents:
+        res=content.firstChild.nodeValue
+        list.append(str(res))
+    return list
+
+#本函数用于检测http请求的返回值
+def get_return_code_from_http(res,xml_file):
+    write_to_xml(res, xml_file)
+    return_list=[]
+    with open ("%s"%xml_file,'r') as f:
+        for line in f:
+            if "HTTP" in line:
+                #print line
+                res=line.split(' ')[1]
+                return_list.append(res)
+        return return_list
+
+#本函数用于检测函数的返回值，判断函数执行成功还是失败
+def if_succ(return_code,cmd):
+    if return_code != 0:
+        print "%s failed, please check!!!"%cmd
+        return -1
+    else:
+        print "%s success!"%cmd
+        return 0
+
+#本函数用于判断http请求的返回值(200、400...)
+def judge_http_res(return_content):
+    res1=return_content.find('HTTP/1.1')
+    print "res1=%s"%res1
+    res2=return_content[(res1+9):((res1+12))]
+    print "res2=%s"%res2
+    return res2
+
+
+
+# if __name__=="__main__":
+
+
+    # get_current_path()
+    # get_dir_path()
+
+    # account_id=get_account_id_from_accountname('20.10.10.33', 'zh10')
+    # print account_id
+
+    # cer_id=get_cer_id_from_account('20.10.10.33','00003PBYRHUH6DZQ')
+    # print cer_id
+
+    # list=[]
+    # list=get_all_cer_id_from_account('20.10.10.33', '00003PBAOEN385SJ')
+    # print list
+    # print len(list)
+
+    # res=get_account_id_from_accountname('20.10.10.33', 'acc_zh_cos4')
+    # print res
+    # cer_id=get_cer_id_from_account('20.10.10.33',res)
+    # print cer_id

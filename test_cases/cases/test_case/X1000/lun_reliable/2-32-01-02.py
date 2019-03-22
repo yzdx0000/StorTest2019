@@ -1,0 +1,89 @@
+#!usr/bin/env python
+# -*- coding:utf-8 _*-
+
+'''
+测试步骤：
+1）配置节点池，配置存储池
+2）配置访问区，非日志节点数据网+日志组业务节点异常，创建/删除访问区
+检查项：
+1）访问区配置成功
+2）逻辑卷创建成功
+'''
+
+# testlink case: 1000-33985
+import os
+import time
+import random
+import commands
+import threading
+import utils_path
+import log
+import common
+import access_env
+import ReliableTest
+import env_manage
+import decorator_func
+
+'''初始化'''
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+
+
+def setup():
+    '''获取业务节点IP和非业务节点IP'''
+    global node_ip1
+    global node_ip2
+    global node_ip3
+    global client_ip1
+    node_ip1 = env_manage.deploy_ips[0]
+    node_ip2 = env_manage.deploy_ips[1]
+    node_ip3 = env_manage.deploy_ips[2]
+    client_ip1 = env_manage.client_ips[0]
+
+
+infos = []
+os_types = []
+
+
+def os_down():
+    type = env_manage.get_os_type(node_ip1)
+    info = env_manage.down_node(node_ip1, type, "init 0")
+    os_types.append(type)
+    infos.append(info)
+
+
+def net_down(name):
+    env_manage.down_network(node_ip2, name)
+
+
+def case():
+    date_ip = env_manage.com_lh.get_eth_name(node_ip2)[1]
+    env_manage.create_access(ips=node_ip3, node_ids="3,4")
+    threads = []
+    t1 = threading.Thread(target=os_down)
+    threads.append(t1)
+    t2 = threading.Thread(target=env_manage.clean_access_zone, args=(node_ip3,))
+    threads.append(t2)
+    t3 = threading.Thread(target=net_down, args=(date_ip,))
+    threads.append(t3)
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    log.info("%s 节点开机 节点类型%s,节点ID or IPMI IP: %s" % (node_ip2, os_types[0], infos[0]))
+    env_manage.up_node(infos[0], os_types[0])
+    env_manage.up_network(node_ip2, date_ip)
+    env_manage.com_lh.get_os_status(node_ip2)
+
+
+def main():
+    access_env.check_env()
+    setup()
+    case()
+    log.info("The case finished!!!")
+
+
+if __name__ == "__main__":
+    env_manage.rel_check_before_run(file_name, jnl_rep=3,free_jnl_num=0, node_num=5)
+    common.case_main(main)

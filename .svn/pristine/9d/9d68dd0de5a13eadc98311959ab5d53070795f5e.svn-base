@@ -1,0 +1,37 @@
+# -*- coding:utf-8 8-*
+#################################################
+#该脚本用来不停的从宕机，然后在主上测试s3的基础命令
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+#参数说明：masterip：主的ip；slaveip：从的ip；pathOfScript:要执行的脚本在从上的路径; stabilityScript:要执行的s3的稳定性脚本名称,然后是_stability1lib_lyz这个脚本需要的参数
+def slavemgrfaultAndS3(num,masterip,masteripmiip,slaveip,slaveipmiip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    num=int(num)
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo=_fault_all_lyz.statusrecovery()
+    for i in range(num):
+        #步骤1：执行s3的指令集
+        _stability1lib_lyz.allOPerations(masterip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota)
+        #步骤2：给从断电
+        faulto.poweroff(slaveipmiip)
+        time.sleep(180)
+        #步骤3：再次执行s3的指令集
+        re=_stability1lib_lyz.allOPerations(masterip, accountname,oossip, createBucketname, putObjectname,objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename,numofsplit, cancleupobjectname, quota)
+        if re==-1:
+            return -1
+        #步骤4：给从上电
+        faulto.poweron(slaveipmiip)
+        #步骤5：等待从上电成功
+        statusrecoveryo.ifpoweron(slaveip)
+        time.sleep(300)
+        #步骤6：再次执行s3的指令集
+        re=_stability1lib_lyz.allOPerations(masterip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit,cancleupobjectname, quota)
+        if re==-1:
+            return -1
+if __name__=="__main__":
+    #mgrfaultAndS3(masterip, slaveip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname,quota)
+    slavemgrfaultAndS3(2,'100.100.100.16','10.2.40.66','100.100.100.17','10.2.40.67','s1123a','100.100.100.18','bucket1123a','object1123a','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit1103o','/opt/s3uploadfile','test',2,'objectsplitcancle03o',1024)

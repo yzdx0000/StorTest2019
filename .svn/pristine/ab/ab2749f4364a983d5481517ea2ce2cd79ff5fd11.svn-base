@@ -1,0 +1,13 @@
+# -*- coding:utf-8 -*
+#!/usr/bin/env python
+"本脚本是将conf中获得的字符串转化成list.例如：conf=backup1，bakcup2   那么我们获得的结果是一个字符串，此函数可以将它转化为[backup1,bakcup2]"
+def confStringToList(argv):
+    splitstring=argv.split(',')
+    listoutput=list(splitstring)
+    return listoutput
+    #print listoutput
+    #print type(listoutput)
+if __name__=="__main__":
+    confStringToList("vdbench1,vdbench2")
+
+

@@ -1,0 +1,71 @@
+# -*-coding:utf-8 -*
+# !/usr/bin/python
+
+import os
+import time
+import commands
+import json
+import hashlib
+
+import utils_path
+import common
+import snap_common
+import nas_common
+
+import random
+import log
+import shell
+import get_config
+import tool_use
+import prepare_clean
+
+# =================================================================================
+#  latest update:2018-07-30                                                   =
+#  author:wanggl                                                          =
+# =================================================================================
+# 2018-07-30:
+# 修改者：wanggl
+# @summary：
+#   ps大量进程卡主
+# @steps:
+#   1、创建3节点访问区，确定nas服务；
+#   2、配置共享目录、授权协议、对外IP地址、授权客户端IP；
+#   3、linux客户端通过授权的用户挂载目录；
+#   4、所有私有客户端都进行大量的创建删除4k小文件和目录的操作；
+#
+#
+
+# changelog:
+
+
+######################################################
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]              # 本脚本名字
+vdb_path = os.path.join(nas_common.BASE_NAS_PATH, FILE_NAME)             # /mnt/wangguanglin/cus_6_1_0_4
+create_file_path = os.path.join(nas_common.ROOT_DIR, FILE_NAME)         # wangguanglin:/cus_6_1_0_4
+VDB_PATH = os.path.join(vdb_path, 'vdbench')
+PRIVATE_CLIENT_IP1 = get_config.get_client_ip(0)
+PRIVATE_CLIENT_IP2 = get_config.get_client_ip(1)
+PRIVATE_CLIENT_IP3 = get_config.get_client_ip(2)
+
+
+def case():
+
+    """"所有私有客户端都进行大量的创建删除4k小文件和目录的操作"""
+    log.info('所有私有客户端都进行大量的创建删除4k小文件和目录的操作')
+    common.mkdir_path(PRIVATE_CLIENT_IP1, VDB_PATH)
+    vdb = tool_use.Vdbenchrun(depth=5, width=6, files=90, size='4k', threads=40, xfersize='4k', elapsed=600)  #改为了10m
+    rc = vdb.run_create(VDB_PATH, VDB_PATH, PRIVATE_CLIENT_IP1, PRIVATE_CLIENT_IP2, PRIVATE_CLIENT_IP3)
+    common.judge_rc(rc, 0, 'vdbench run ')
+
+    return
+
+
+def main():
+    prepare_clean.test_prepare(FILE_NAME)
+    case()
+    prepare_clean.test_clean(FILE_NAME)
+    log.info('succeed!')
+
+
+if __name__ == '__main__':
+    common.case_main(main)

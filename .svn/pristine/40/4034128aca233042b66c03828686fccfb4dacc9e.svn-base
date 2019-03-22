@@ -1,0 +1,212 @@
+1..39
+
+1: OPEN: open a scalar on a ref to a string
+1: ok 1
+
+2: fileno() returns undef
+2: ok 2
+
+3: PRINT: able to print to A diner while dining at Crewe
+3: Found a rather large mouse in his stew
+3:    Said the waiter, "Don't shout,
+3:    And wave it about...
+3: ok 3
+
+4: FULL
+4:   S: "A diner while dining at Crewe\nFound a rather large mouse in his stew\n   Said the waiter, \22Don't shout,\n   And wave it about...\nor the rest will be wanting one too.\22\n"
+4:   F: "A diner while dining at Crewe\nFound a rather large mouse in his stew\n   Said the waiter, \22Don't shout,\n   And wave it about...\nor the rest will be wanting one too.\22\n"
+4: ok 4
+
+5: GETC: seek(0,0) and getc()
+5: ok 5
+
+6: GETLINE/SEEK3: seek(3,START) and getline() gets part of 1st line
+6:   GH: "A diner while dining at Crewe\nFound a rather large mouse in his stew\n   Said the waiter, \22Don't shout,\n   And wave it about...\nor the rest will be wanting one too.\22\n"
+6:   Got: "iner while dining at Crewe\n"
+6:   Want: "iner while dining at Crewe\n"
+6: ok 6
+
+7: GETLINE/NEXT: next getline() gets subsequent line
+7:   Got: "Found a rather large mouse in his stew\n"
+7: ok 7
+
+8: GETLINE/EOF: repeated getline() finds end of stream
+8:   Last: "undef"
+8: ok 8
+
+9: GETLINE/GETLINES: seek(0,0) and getlines() slurps in string
+9:   GotAll: "A diner while dining at Crewe\nFound a rather large mouse in his stew\n   Said the waiter, \22Don't shout,\n   And wave it about...\nor the rest will be wanting one too.\22\n"
+9:   WantAll: "A diner while dining at Crewe\nFound a rather large mouse in his stew\n   Said the waiter, \22Don't shout,\n   And wave it about...\nor the rest will be wanting one too.\22\n"
+9:   Got: "A diner while dining at Crewe\n"
+9:   Got: "Found a rather large mouse in his stew\n"
+9:   Got: "   Said the waiter, \22Don't shout,\n"
+9:   Got: "   And wave it about...\n"
+9:   Got: "or the rest will be wanting one too.\22\n"
+9: ok 9
+
+10: READ/FIRST10: reading first 10 bytes with seek(0,START) + read(10)
+10: ok 10
+
+11: READ/NEXT10: reading next 10 bytes with read(10)
+11: ok 11
+
+12: READ/TELL20: tell() the current location as 20
+12: ok 12
+
+13: READ/SLURP: seek(0,START) + read(1000) reads in whole handle
+13: ok 13
+
+14: SEEK/SET: seek(2,SET) + read(5) returns 'diner'
+14:   A: "diner"
+14:   B: "diner"
+14: ok 14
+
+15: SEEK/END: seek(-6,END) + read(3) returns 'too'
+15:   A: "too"
+15:   B: "too"
+15: ok 15
+
+16: SEEK/CUR: seek(-7,CUR) + read(7) returns 'one too'
+16:   A: "one too"
+16:   B: "one too"
+16: ok 16
+
+17: TIE/TIE: able to tie
+17:   TieClass: "IO::Scalar"
+17: ok 17
+
+18: TIE/PRINT: printing data
+18: ok 18
+
+19: TIE/GETLINE: seek(0,0) and scalar <> get expected lines
+19:   Want: "A diner while dining at Crewe\n"
+19:   Want: "Found a rather large mouse in his stew\n"
+19:   Want: "   Said the waiter, \22Don't shout,\n"
+19:   Want: "   And wave it about...\n"
+19:   Want: "or the rest will be wanting one too.\22\n"
+19:   Gotl: "A diner while dining at Crewe\n"
+19:   Gotl: "Found a rather large mouse in his stew\n"
+19:   Gotl: "   Said the waiter, \22Don't shout,\n"
+19:   Gotl: "   And wave it about...\n"
+19:   Gotl: "or the rest will be wanting one too.\22\n"
+19:   Lines: "0..4"
+19:   Match: "5"
+19:   FDatl: "5"
+19:   FData: "A diner while dining at Crewe\n"
+19:   FData: "Found a rather large mouse in his stew\n"
+19:   FData: "   Said the waiter, \22Don't shout,\n"
+19:   FData: "   And wave it about...\n"
+19:   FData: "or the rest will be wanting one too.\22\n"
+19: ok 19
+
+20: TIE/GETLINES: seek(0,0) and array <> slurps in lines
+20:   Want: "A diner while dining at Crewe\n"
+20:   Want: "Found a rather large mouse in his stew\n"
+20:   Want: "   Said the waiter, \22Don't shout,\n"
+20:   Want: "   And wave it about...\n"
+20:   Want: "or the rest will be wanting one too.\22\n"
+20:   Gotl: "A diner while dining at Crewe\n"
+20:   Gotl: "Found a rather large mouse in his stew\n"
+20:   Gotl: "   Said the waiter, \22Don't shout,\n"
+20:   Gotl: "   And wave it about...\n"
+20:   Gotl: "or the rest will be wanting one too.\22\n"
+20:   Lines: "0..4"
+20:   Match: "5"
+20: ok 20
+
+21: RECORDSEP undef: getline slurps everything
+21:   A: "par 1, line 1\npar 1, line 2\n\n\n\n\npar 2, line 1\n\npar 3, line 1\npar 3, line 2\npar 3, line 3"
+21:   B: "par 1, line 1\npar 1, line 2\n\n\n\n\npar 2, line 1\n\npar 3, line 1\npar 3, line 2\npar 3, line 3"
+21: ok 21
+
+22: RECORDSEP undef: get first line
+22:   A: "par 1, line 1\n"
+22:   B: "par 1, line 1\n"
+22: ok 22
+
+23: RECORDSEP undef: slurp the rest
+23:   A: "par 1, line 2\n\n\n\n\npar 2, line 1\n\npar 3, line 1\npar 3, line 2\npar 3, line 3"
+23:   B: "par 1, line 2\n\n\n\n\npar 2, line 1\n\npar 3, line 1\npar 3, line 2\npar 3, line 3"
+23: ok 23
+
+24: RECORDSEP empty: first par
+24:   A: "par 1, line 1\npar 1, line 2\n\n"
+24:   B: "par 1, line 1\npar 1, line 2\n\n"
+24: ok 24
+
+25: RECORDSEP empty: second par
+25:   A: "par 2, line 1\n\n"
+25:   B: "par 2, line 1\n\n"
+25: ok 25
+
+26: RECORDSEP empty: third par
+26:   A: "par 3, line 1\npar 3, line 2\npar 3, line 3"
+26:   B: "par 3, line 1\npar 3, line 2\npar 3, line 3"
+26: ok 26
+
+27: RECORDSEP custom: first rec
+27:   A: "par 1,"
+27:   B: "par 1,"
+27: ok 27
+
+28: RECORDSEP custom: second rec
+28:   A: " line 1\npar 1,"
+28:   B: " line 1\npar 1,"
+28: ok 28
+
+29: RECORDSEP newline: rec 0
+29:   A: "par 1, line 1\n"
+29:   B: "par 1, line 1\n"
+29: ok 29
+
+30: RECORDSEP newline: rec 1
+30:   A: "par 1, line 2\n"
+30:   B: "par 1, line 2\n"
+30: ok 30
+
+31: RECORDSEP newline: rec 2
+31:   A: "\n"
+31:   B: "\n"
+31: ok 31
+
+32: RECORDSEP newline: rec 3
+32:   A: "\n"
+32:   B: "\n"
+32: ok 32
+
+33: RECORDSEP newline: rec 4
+33:   A: "\n"
+33:   B: "\n"
+33: ok 33
+
+34: RECORDSEP newline: rec 5
+34:   A: "\n"
+34:   B: "\n"
+34: ok 34
+
+35: RECORDSEP newline: rec 6
+35:   A: "par 2, line 1\n"
+35:   B: "par 2, line 1\n"
+35: ok 35
+
+36: RECORDSEP newline: rec 7
+36:   A: "\n"
+36:   B: "\n"
+36: ok 36
+
+37: RECORDSEP newline: rec 8
+37:   A: "par 3, line 1\n"
+37:   B: "par 3, line 1\n"
+37: ok 37
+
+38: RECORDSEP newline: rec 9
+38:   A: "par 3, line 2\n"
+38:   B: "par 3, line 2\n"
+38: ok 38
+
+39: RECORDSEP newline: rec 10
+39:   A: "par 3, line 3"
+39:   B: "par 3, line 3"
+39: ok 39
+
+# END

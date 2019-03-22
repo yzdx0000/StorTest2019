@@ -1,0 +1,131 @@
+# -*-coding:utf-8 -*
+import os
+import time
+
+import utils_path
+import common
+import snap_common
+import log
+import get_config
+import json
+import quota_common
+import prepare_clean
+
+####################################################################################
+#
+# Author: liyao
+# date 2018-05-25
+# @summary：
+#    对根目录创建配额（文件数，软阈值），宽限时间内创建非空文件，创建快照并查看回滚结果
+# @steps:
+#    1、对目录/mnt/volume1/创建配额（文件数，软阈值），配额限制为100，宽限时间2分钟；
+#    2、在目录下创建150个文件（宽限时间内）；
+#    3、对目录创建快照；
+#    4、超过宽限时间后，删除50个文件；
+#    5、在目录/mnt/volume1/下尝试创建20个文件；
+#    6、执行revert并查看回滚结果；
+#    7、删除配额；
+#
+# @changelog：
+####################################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                 # 本脚本名字
+SNAP_TRUE_PATH = os.path.join(snap_common.SNAP_PATH, FILE_NAME)             # /mnt/volume1/snap/snap_13_0_8_11
+CREATE_SNAP_PATH = os.path.join(snap_common.SNAP_PATH_BASENAME, FILE_NAME)  # /snap/snap_13_0_8_11
+SNAP_PATH = get_config.get_one_snap_test_path()
+BASE_SNAP_PATH = os.path.dirname(SNAP_PATH)                                 # BASE_SNAP_PATH = "/mnt/volume1"
+
+
+def case():
+    # 1> 对目录创建配额（文件数，软阈值）
+    quota_path = snap_common.VOLUME_NAME + ':/'
+    rc, check_result = quota_common.create_one_quota(path=quota_path,
+                                                     filenr_quota_cal_type='QUOTA_LIMIT',
+                                                     filenr_soft_threshold=100,
+                                                     filenr_grace_time=120)
+    common.judge_rc(rc, 0, "create quota failed", exit_flag=False)
+
+    rc, quota_id = quota_common.get_one_quota_id(path=quota_path,
+                                                 u_or_g_type=quota_common.TYPE_CATALOG)
+    rc = quota_common.wait_quota_work(quota_id)
+    common.judge_rc(rc, 0, "get quota info failed")
+
+    # 2> 目录下创建150个非空文件
+    temp_name = 'test_liyao'
+    for i in range(150):
+        file_name = temp_name + str(i)
+        file_path = os.path.join(BASE_SNAP_PATH, file_name)
+        cmd = 'echo 111 > %s' % file_path
+        common.run_command(snap_common.CLIENT_IP_1, cmd)
+
+    # 3> 对目录创建快照
+    snap_name = FILE_NAME + '_snapshot1'
+    snap_path = snap_common.VOLUME_NAME + ':/'
+    rc, stdout = snap_common.create_snapshot(snap_name, snap_path)
+    if 0 != rc:
+        log.error('create_snapshot %s failed!!!' % snap_name)
+        raise Exception('create_snapshot %s failed!!!' % snap_name)
+
+    log.info('waiting for 150s')
+    time.sleep(150)
+
+    # 4> 删除目录下的50个文件
+    for i in range(50):
+        file_name = temp_name + str(i)
+        file_path = os.path.join(BASE_SNAP_PATH, file_name)
+        common.rm_exe(snap_common.CLIENT_IP_1, file_path)
+
+    log.info('waiting for 10s')
+    time.sleep(10)
+
+    # 5> 目录下尝试创建20个文件
+    temp_name_again = temp_name + '_again'
+    for i in range(20):
+        file_name = temp_name_again + str(i)
+        file_path = os.path.join(BASE_SNAP_PATH, file_name)
+        cmd = 'echo 222 > %s' % file_path
+        rc, stdout = common.run_command(snap_common.CLIENT_IP_1, cmd)
+        if 0 != rc:
+            count = i + 1
+            specific_file = temp_name_again + str(count)
+            print specific_file
+            if count != 1:
+                log.error('quota limitation is incorrect !!!')
+                raise Exception('quota limitation is incorrect !!!')
+            else:
+                break
+
+    # 6> 执行回滚操作
+    snap_info = snap_common.get_snapshot_by_name(snap_name)
+    snap_id = snap_info['id']
+    rc, stdout = snap_common.revert_snapshot_by_id(snap_id)
+    if rc != 0:
+        log.error("revert snapshot %s failed!!!" % snap_name)
+        raise Exception("revert snapshot %s failed!!!" % snap_name)
+    snap_common.check_revert_finished(snap_id)
+
+    cmd = 'ls %s | grep %s | wc -l' % (BASE_SNAP_PATH, temp_name)
+    rc, stdout = common.run_command(snap_common.CLIENT_IP_1, cmd)
+    if stdout.strip() != '150':
+        log.error('revert snapshot %s failed' % snap_name)
+        raise Exception('revert snapshot %s failed' % snap_name)
+
+    # 7> 删除配额
+    rc, stdout = quota_common.delete_one_quota(quota_id)
+    common.judge_rc(rc, 0, "delete quota failed")
+    snap_common.delete_snapshot_by_path(snap_path)
+
+    file_wait_delete = os.path.join(BASE_SNAP_PATH, temp_name+'*')
+    common.rm_exe(snap_common.CLIENT_IP_1, file_wait_delete)
+    return
+
+
+def main():
+    prepare_clean.snap_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.snap_test_clean(FILE_NAME)
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

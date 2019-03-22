@@ -1,0 +1,596 @@
+# -*- encoding=utf8 -*-
+# @Time: 2018/7/3 13:53
+# @Author: wangxiang
+
+"""
+Xstor的安装和各种清理工作
+"""
+
+import os, sys
+import time
+import threading
+import commands
+import re
+import xml
+import utils_path
+import Lun_managerTest
+import common
+import common2
+import log
+import breakdown
+import ReliableTest
+import error
+import get_config
+from get_config import config_parser as cp
+import decorator_func
+
+# import timeout_decorator
+
+conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+node_ip = deploy_ips[0]
+log.info(deploy_ips)
+node_ip1 = deploy_ips[0]  # 集群节点1
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+client_ip1 = client_ips[0]
+client_ip2 = client_ips[1]
+log.info(client_ips)
+
+co2_osan = common2.oSan()
+osan = Lun_managerTest.oSan()
+Reliable_osan = breakdown.Os_Reliable()
+break_down = breakdown.disk()
+com_disk = common.Disk()
+assert_ins = decorator_func.assert_cls()
+Esxi_ips = cp('esxi', 'Esxi_ips')
+
+
+def setup():
+    file_name = os.path.basename(__file__)
+    file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+    log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+    log.init(log_file_path, True)  # 初始化日志文件
+    log.info("'\033[46m##################该部署脚本用于部署执行卷管理用例的测试环境################ ...\033[0m'")
+
+
+def xstor_init():
+    decorator_func.timer(15)
+    for ip in deploy_ips:
+        cmd = ("ssh root@%s 'reboot'" % (ip))
+        log.info(cmd)
+        res, output = commands.getstatusoutput(cmd)
+    for ip in deploy_ips:
+        Reliable_osan.get_os_status_1(ip)
+    osan.uninstall_Xstor(node_ip1)
+    tgt_res = 0
+    for ip in deploy_ips:
+        cmd = ("ssh root@%s 'lsmod |grep -w tgt'" % (ip,))
+        res, output = commands.getstatusoutput(cmd)
+        if res == 0:
+            log.error("Sorry, I detect that there is tgt module on %s" % (ip,))
+            tgt_res = 1
+        if tgt_res == 1:
+            log.error("Begin to restart these nodes.")
+            cmd = ("ssh root@%s 'reboot'" % (ip))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            Reliable_osan.get_os_status_1(ip)
+            osan.uninstall_Xstor(node_ip1)
+    osan.install_Xstor(node_ip1)
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    node_ids = ",".join('%s' % id for id in node_ids_list)
+
+    share_disk_ids_list = break_down.get_all_shared_disk_id()
+    data_disk_ids_list = break_down.get_all_data_disk_id()
+    share_disk_ids = re.sub('\[|\]| ', '', str(break_down.get_all_shared_disk_id()))
+    data_disk_ids = re.sub('\[|\]| ', '', str(break_down.get_all_data_disk_id()))
+    # log.debug("更改共享盘速率为High、数据盘速率为MID")
+    # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=HIGH'"
+    #        % (deploy_ips[0], share_disk_ids))
+    # commands.getstatusoutput(cmd)
+    # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=MID'"
+    #        % (deploy_ips[0], data_disk_ids))
+    # commands.getstatusoutput(cmd)
+    node_pool_id = osan.create_node_pool(s_ip=node_ip, node_ids=node_ids,
+                                         replica_num=cp("create_node_pool", "replica_num"),
+                                         stripe_width=cp('create_node_pool', 'stripe_width'),
+                                         disk_parity_num=cp("create_node_pool", "disk_parity_num"),
+                                         node_parity_num=cp("create_node_pool", "node_parity_num"), name="nodepool1")
+    osan.startup(s_ip=node_ip)
+    data_unuse_disks = []
+    for i in node_ids_list:
+        j = break_down.get_assign_data_disk_id(s_ip=deploy_ips[0], node_id=i)
+        data_unuse_disks.append(j)
+    lists = [[] for a in range(3)]
+    for m in range(3):
+        new_list = []
+        for list in data_unuse_disks:
+            new_list.append(list[m])
+        lists[m].append(new_list)
+
+    log.info("集群中的所有未使用数据盘:{}".format(lists))
+    for i in range(3):
+        log.info("will create storage :%s" % i)
+        pool_id = ",".join('%s' % id for id in lists[i][0])
+        cmd = (
+                "ssh root@%s '/home/parastor/cli/pscli --command=create_storage_pool --name=stor%s --type=BLOCK --node_pool_ids=1 --disk_ids=%s '" % (
+            deploy_ips[0], i, pool_id))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+
+    osan.update_param(s_ip=node_ip, section='MGR', name='mgcd_auto_mount_flag', current='0')  # 解除自动挂载
+    az_id = osan.create_access_zone(s_ip=node_ip, node_id=node_ids, name='accesszone1')
+    sub_id = osan.create_subnet(s_ip=node_ip, access_zone_id=az_id, name='subnet1', sv_ip=cp("create_subnet", "sv_ip"),
+                                mask=cp("create_subnet", "mask"), vv_ip=cp("create_subnet", "vv_ip"),
+                                gate_way=cp("create_subnet", "gate_way"),
+                                network_interface=cp("create_subnet", "network_interface"))
+    osan.add_vip_address_pool(s_ip=node_ip, subnet_id=sub_id, domain_name=cp("add_vip_address_pool", "domain_name"),
+                              vip=cp("add_vip_address_pool", "vips"))
+
+    osan.enable_san(s_ip=node_ip, access_zone_id=az_id)
+
+    osan.xstor_pre_config(s_ip=node_ip1, osan_space_check=1, is_display_raw_capacity=0)
+
+
+def xstor_install():
+    decorator_func.timer(15)
+    config_info = xml.dom.minidom.parse(conf_file)
+    replica = config_info.getElementsByTagName('replica')[0].firstChild.nodeValue
+    strip_width = config_info.getElementsByTagName('stripwidth')[0].firstChild.nodeValue
+    node_parity = int(replica) - 1
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    node_ids_list = [str(x) for x in node_ids_list]
+    # 1.检查节点上的存储软件包和配置文件是否存在
+    new_pkg = ''
+    cmd = ('ssh %s "ls /home/deploy/"' % deploy_ips[0])
+    rc, result = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error("the directory deploy is not exists.")
+        os._exit(1)
+    else:
+        if 'deploy_config.xml' in result:
+            log.info("the x1000 install config is exists.")
+        else:
+            log.error("the x1000 install config is not exists.")
+            os._exit(1)
+        if 'parastor-3.0.0-centos' in result:
+            log.info("the x1000 software package is exists.")
+            cmd = ('ssh %s "ls -t /home/deploy/" | grep "parastor" | head -n 1' % deploy_ips[0])
+            rc, stdout = commands.getstatusoutput(cmd)
+            new_pkg = stdout
+        else:
+            log.info("the x1000 software package is not exists.")
+            os._exit(1)
+    # 2.开始卸载旧系统
+    log.info("Unpack the new package on %s:/home/deploy" % (deploy_ips[0]))
+    new_pkg_name = new_pkg.split('.tar')[0]
+    cmd = ("ssh %s 'ls /home/deploy'" % deploy_ips[0])
+    rc, stdout = commands.getstatusoutput(cmd)
+    dir_list = stdout.split('\n')
+    deploy_conf_file = '/home/deploy/deploy_config.xml'
+    tar_tag = 1
+    for file in dir_list:
+        if file == new_pkg_name:
+            tar_tag = 0
+            break
+    if tar_tag == 1:
+        cmd = ("ssh root@%s 'cd /home/deploy;tar -xvf %s'" % (deploy_ips[0], new_pkg))
+        os.system(cmd)
+    log.info("Begin to clean the cluster.")
+    clean_cmd = ('ssh %s "/home/deploy/%s/server/tools/deployment/clean.py --deploy_config=%s > /dev/null"'
+                 % (deploy_ips[0], new_pkg_name, deploy_conf_file))
+    rc = os.system(clean_cmd)
+    if 0 == rc:
+        log.info("uninstall x1000 successful!")
+    for ip in deploy_ips:
+        cmd = ("ssh root@%s 'lsmod | grep -w tgt'" % (ip,))
+        res, output = commands.getstatusoutput(cmd)
+        if res == 0:
+            log.error("Sorry, I detect that there is tgt module on %s" % ip)
+            for ip in deploy_ips:
+                cmd = ("ssh %s 'reboot'" % ip)
+                log.info("Begin to shutdown %s." % ip)
+                os.system(cmd)
+            time.sleep(100)
+            for ip in deploy_ips:
+                while False is ReliableTest.check_ping(ip):
+                    time.sleep(5)
+            rc = os.system(clean_cmd)
+            if 0 == rc:
+                log.info("uninstall x1000 successful!")
+
+    # 3.开始部署新系统
+    log.info("Install script check the install environment.")
+    cmd = ("ssh root@%s '/home/deploy/%s/server/tools/env_check/env_check.py "
+           "--ip=%s --config=%s'" % (deploy_ips[0], new_pkg_name, deploy_ips[0], deploy_conf_file))
+    os.system(cmd)
+    cmd = ("ssh root@%s '/home/deploy/%s/server/tools/deployment/deploy.py --deploy_config=%s --type=BLOCK'"
+           % (deploy_ips[0], new_pkg_name, deploy_conf_file))
+    rc = os.system(cmd)
+    if 0 == rc:
+        log.info("install x1000 system successful!")
+    else:
+        log.error("install x1000 failed!!!")
+    cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=update_param --section=MGR "
+           "--name=min_meta_replica --current=%s' > /dev/null" % (deploy_ips[0], str(replica)))
+    os.system(cmd)
+
+    # 创建节点池
+    log.info("step1: create node pool")
+    node_ids = ','.join(node_ids_list)
+    cmd = ("ssh %s '/home/parastor/cli/pscli --command=create_node_pool --node_ids=%s --replica_num=%s "
+           "--stripe_width=%s --disk_parity_num=0 --node_parity_num=%s --name=node_pool1'"
+           % (deploy_ips[0], node_ids, str(replica), str(strip_width), str(node_parity)))
+    rc, stdout = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error("create node pool failed! info:%s" % stdout)
+        os._exit(1)
+    else:
+        log.info("create node pool successful.")
+
+    # 启动xstor系统
+    log.info("step2: startup xstor system")
+    cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=startup'" % (deploy_ips[0]))
+    rc, stdout = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error("startup xstor system failed! info:%s" % stdout)
+        os._exit(1)
+    else:
+        log.info("startup xstor system successful!")
+
+    # 创建存储池
+    log.info("step3: create storage pool")
+    cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=create_storage_pool --name=stor1 "
+           "--type=BLOCK --node_pool_ids=1'" % (deploy_ips[0]))
+    rc, stdout = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error("create storage pool failed! info:%s" % stdout)
+        os._exit(1)
+    else:
+        log.info("create storage pool successful!")
+
+    # 创建访问区
+    log.info("step4: create oSan access_zone")
+    cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=create_access_zone --name=access_zone1 "
+           "--node_ids=%s'" % ((deploy_ips[0]), node_ids))
+    rc, stdout = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error("create oSan access_zone failed! info:%s" % stdout)
+        os._exit(1)
+    else:
+        log.info("create oSan access_zone successful!")
+
+    # 创建业务子网
+    log.info("step5: create oSan subnet")
+    gateway = cp('create_subnet', 'gate_way')
+    svip = cp('create_subnet', 'sv_ip')
+    mask = cp('create_subnet', 'mask')
+    network_interface1 = cp('create_subnet', 'network_interface')
+    network_interface2 = cp('create_subnet', 'network_interface1')
+    network_interfaces = network_interface1 + ',' + network_interface2
+    cmd = ("ssh %s '/home/parastor/cli/pscli --command=create_subnet --name=subnet1 --access_zone_id=1 "
+           "--svip=%s --subnet_mask=%s --ip_family=IPv4 --subnet_gateway=%s --network_interfaces=%s'"
+           % (deploy_ips[0], svip, mask, gateway, network_interfaces))
+    rc, stdout = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error("create oSan subnet failed! info:%s" % stdout)
+        os._exit(1)
+    else:
+        log.info("create oSan subnet successful!")
+
+
+def create_node_pool():
+    decorator_func.timer(15)
+    for ip in deploy_ips:
+        cmd = ("ssh root@%s 'reboot'" % (ip))
+        log.info(cmd)
+        res, output = commands.getstatusoutput(cmd)
+    for ip in deploy_ips:
+        Reliable_osan.get_os_status_1(ip)
+    osan.uninstall_Xstor(node_ip1)
+    tgt_res = 0
+    for ip in deploy_ips:
+        cmd = ("ssh root@%s 'lsmod |grep -w tgt'" % (ip,))
+        res, output = commands.getstatusoutput(cmd)
+        if res == 0:
+            log.error("Sorry, I detect that there is tgt module on %s" % (ip,))
+            tgt_res = 1
+        if tgt_res == 1:
+            log.error("Begin to restart these nodes.")
+            cmd = ("ssh root@%s 'reboot'" % (ip))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            Reliable_osan.get_os_status_1(ip)
+            osan.uninstall_Xstor(node_ip1)
+    osan.install_Xstor(node_ip1)
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    node_ids = ",".join('%s' % id for id in node_ids_list)
+    # log.debug("更改共享盘速率为High、数据盘速率为MID")
+    # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=HIGH'"
+    #        % (deploy_ips[0], share_disk_ids))
+    # commands.getstatusoutput(cmd)
+    # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=MID'"
+    #        % (deploy_ips[0], data_disk_ids))
+    # commands.getstatusoutput(cmd)
+    node_pool_id = osan.create_node_pool(s_ip=node_ip, node_ids=node_ids,
+                                         replica_num=cp("create_node_pool", "replica_num"),
+                                         stripe_width=cp('create_node_pool', 'stripe_width'),
+                                         disk_parity_num=cp("create_node_pool", "disk_parity_num"),
+                                         node_parity_num=cp("create_node_pool", "node_parity_num"), name="nodepool1")
+
+
+def create_vip():
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    node_ids = ",".join('%s' % id for id in node_ids_list)
+
+    share_disk_ids_list = break_down.get_all_shared_disk_id()
+    data_disk_ids_list = break_down.get_all_data_disk_id()
+    share_disk_ids = re.sub('\[|\]| ', '', str(break_down.get_all_shared_disk_id()))
+    data_disk_ids = re.sub('\[|\]| ', '', str(break_down.get_all_data_disk_id()))
+    osan.disable_san()
+    # log.debug("更改共享盘速率为High、数据盘速率为MID")
+    # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=HIGH'"
+    #        % (deploy_ips[0], share_disk_ids))
+    # commands.getstatusoutput(cmd)
+    # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=MID'"
+    #        % (deploy_ips[0], data_disk_ids))
+    # commands.getstatusoutput(cmd)
+    # node_pool_id = osan.create_node_pool(s_ip=node_ip, node_ids=node_ids,
+    #                                      replica_num=cp("create_node_pool", "replica_num"),
+    #                                      stripe_width=cp('create_node_pool', 'stripe_width'),
+    #                                      disk_parity_num=cp("create_node_pool", "disk_parity_num"),
+    #                                      node_parity_num=cp("create_node_pool", "node_parity_num"), name="nodepool1")
+    node_pool_id = osan.get_option(s_ip=node_ip, command="get_node_pools", indexname="node_pools",
+                                   argv="id")[-1]
+    osan.startup(s_ip=node_ip)
+    data_unuse_disks = []
+    for i in node_ids_list:
+        j = break_down.get_assign_data_disk_id(s_ip=deploy_ips[0], node_id=i)
+        data_unuse_disks.append(j)
+    lists = [[] for a in range(3)]
+    for m in range(3):
+        new_list = []
+        for list in data_unuse_disks:
+            new_list.append(list[m])
+        lists[m].append(new_list)
+
+    log.info("集群中的所有未使用数据盘:{}".format(lists))
+    for i in range(3):
+        log.info("will create storage :%s" % i)
+        pool_id = ",".join('%s' % id for id in lists[i][0])
+        cmd = (
+                "ssh root@%s '/home/parastor/cli/pscli --command=create_storage_pool --name=stor%s --type=BLOCK --node_pool_ids=1 --disk_ids=%s '" % (
+            deploy_ips[0], i, pool_id))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    osan.update_param(s_ip=node_ip, section='MGR', name='mgcd_auto_mount_flag', current='0')  # 解除自动挂载
+    az_id = osan.create_access_zone(s_ip=node_ip, node_id=node_ids, name='accesszone1')
+    sub_id = osan.create_subnet(s_ip=node_ip, access_zone_id=az_id, name='subnet1', sv_ip=cp("create_subnet", "sv_ip"),
+                                mask=cp("create_subnet", "mask"), vv_ip=cp("create_subnet", "vv_ip"),
+                                gate_way=cp("create_subnet", "gate_way"),
+                                network_interface=cp("create_subnet", "network_interface"))
+    osan.add_vip_address_pool(s_ip=node_ip, subnet_id=sub_id, domain_name=cp("add_vip_address_pool", "domain_name"),
+                              vip=cp("add_vip_address_pool", "vips"))
+
+    osan.enable_san(s_ip=node_ip, access_zone_id=az_id)
+
+
+def clean_lun_map():
+    iscsi_logout()  # 删除lun_map前先在所有主机端logout
+    lun_map_ids = osan.get_lun_maps(node_ip)
+    log.info(lun_map_ids)
+    threads = []
+    for i in lun_map_ids:
+        threads.append(threading.Thread(target=osan.delete_lun_map, args=(node_ip1, i)))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
+def clean_node_pools():
+    node_pool_ids = osan.get_option(s_ip=node_ip, command="get_node_pools", indexname="node_pools", argv="id")
+    log.info(node_pool_ids)
+    for node_pool_id in node_pool_ids:
+        osan.delete_node_pools(s_ip=node_ip, lun_id=node_pool_id)
+
+
+def clean_lun():
+    lun_ids = osan.get_lun(s_ip=node_ip1)
+    log.info(lun_ids)
+    threads = []
+    for i in lun_ids:
+        threads.append(threading.Thread(target=osan.delete_lun, args=(node_ip1, i)))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    while True:
+        lun_ids = osan.get_lun(s_ip=node_ip1)
+
+        if len(lun_ids) == 0:
+            break
+        log.info("Wait execute finish ...")
+        time.sleep(20)
+    time.sleep(60)  # 等待lun空间释放(针对打开空间管理的环境)
+
+
+def clean_initiator():
+    ini_ids = osan.get_initiators(s_ip=node_ip)
+    log.info(ini_ids)
+    threads = []
+    for i in ini_ids:
+        threads.append(threading.Thread(target=osan.remove_initiator, args=(node_ip1, i)))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    while True:
+        ini_ids = osan.get_initiators(s_ip=node_ip)
+
+        if len(ini_ids) == 0:
+            break
+        log.info("Wait execute finish ...")
+        time.sleep(20)
+
+
+def clean_host():
+    host_ids = osan.get_hosts(s_ip=node_ip)
+    log.info(host_ids)
+    threads = []
+    for i in host_ids:
+        threads.append(threading.Thread(target=osan.remove_hosts, args=(node_ip1, i)))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    while True:
+        host_ids = osan.get_hosts(s_ip=node_ip)
+
+        if len(host_ids) == 0:
+            break
+        log.info("Wait execute finish ...")
+        time.sleep(20)
+
+
+def clean_hostgroup():
+    hostgroup_ids = osan.get_host_groups(s_ip=node_ip)
+    log.info(hostgroup_ids)
+    threads = []
+    for i in hostgroup_ids:
+        threads.append(threading.Thread(target=osan.delete_host_groups, args=(node_ip1, i)))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    while True:
+        hostgroup_ids = osan.get_host_groups(s_ip=node_ip)
+        if len(hostgroup_ids) == 0:
+            break
+        log.info("Wait execute finish ...")
+        time.sleep(20)
+
+
+def clean_vip_address_pool():
+    vip_pool_ids = osan.get_option(s_ip=node_ip, command="get_vip_address_pools", indexname="ip_address_pools",
+                                   argv="id")
+    for vip_pool_id in vip_pool_ids:
+        osan.delete_vip_address_pool(s_ip=node_ip, id=vip_pool_id)
+
+
+def clean_subnet():
+    subnet_ids = osan.get_subnet_id(s_ip=node_ip)
+    log.info(subnet_ids)
+    for subnet_id in subnet_ids:
+        osan.delete_subnet(s_ip=node_ip, id=subnet_id)
+
+
+def clean_access_zone(azs=None):
+    azs = osan.get_access_zone_id(s_ip=node_ip)
+    log.info(azs)
+    for az in azs:
+        osan.disable_san(s_ip=node_ip1, access_zone_id=az)
+        osan.delete_access_zone(s_ip=node_ip, azid=az)
+
+
+def clean_storage_pool():
+    sto_pool_ids = osan.get_storage_id(s_ip=node_ip)
+    if len(sto_pool_ids) >= 2:
+        sto_pool_ids.remove(1)  # 列表删除共享池
+        log.info(sto_pool_ids)
+        for sto_pool_id in sto_pool_ids:
+            osan.delete_storage_pool(s_ip=node_ip, id=sto_pool_id)
+
+
+def iscsi_logout():
+    for cli in client_ips:
+        osan.iscsi_logout_all(cli)
+
+
+def rel_check_before_run(filename):
+    """执行用例前环境检测"""
+    error.rel_check_before_run(file_name=filename, jnl_rep=int(cp("env", "jnl_rep")),
+                               node_num=int(cp("env", "node_num")))
+
+
+def clean():
+    clean_lun_map()
+    clean_lun()
+    clean_initiator()
+    clean_host()
+    clean_hostgroup()
+
+
+def clean_for_subnet():
+    clean_lun_map()
+    clean_lun()
+    clean_initiator()
+    clean_host()
+    clean_hostgroup()
+    clean_vip_address_pool()
+    clean_subnet()
+
+
+def clean_for_storage_pool():
+    azs = osan.get_access_zone_id(s_ip=node_ip)
+    for az in azs:
+        osan.disable_san(s_ip=node_ip1, access_zone_id=az)
+    clean_lun_map()
+    clean_lun()
+    clean_initiator()
+    clean_host()
+    clean_hostgroup()
+    clean_vip_address_pool()
+    clean_subnet()
+    clean_access_zone()
+    clean_storage_pool()
+
+
+def clean_for_access_zone():
+    azs = osan.get_access_zone_id(s_ip=node_ip)
+    for az in azs:
+        osan.disable_san(s_ip=node_ip1, access_zone_id=az)
+    clean_lun_map()
+    clean_lun()
+    clean_initiator()
+    clean_host()
+    clean_hostgroup()
+    clean_vip_address_pool()
+    clean_subnet()
+    clean_access_zone()
+    clean_storage_pool()
+
+
+def create_iscsi_login(ips=deploy_ips[0], cli_ips=client_ips[0]):
+    # node_id = com_lh.get_node_id_by_ip(ips)
+    svip = co2_osan.get_svip(ips)
+    osan.discover_scsi_list(client_ip=cli_ips, svip=svip[0])  # 进行一下discovery，真正的tag从xstor中拿
+    target_list = osan.get_map_target(ips)
+    log.info("Get Info:\nSvip list:%s \nTarget list:%s" % (svip, target_list))
+    for tag in target_list:
+        log.info("主机发现存储target：%s,主机 %s 将进行SCSI登录" % (tag, cli_ips))
+        osan.iscsi_login(client_ip=cli_ips, iqn=tag)
+
+
+def revert_env():
+    log.info("------------------- 还原主机端环境参数--------------- ...")
+    log.info("主机端logout ...")
+    iscsi_logout()
+    log.info("还原主机端iqn ...")
+    osan.write_iqn(cli_ip=client_ip1, iqn=cp('add_initiator', 'iqn'))
+    osan.write_iqn(cli_ip=client_ip2, iqn=cp('add_initiator', 'iqn1'))
+    log.info("还原主机端CHAP的认证，默认为None ...")
+    osan.update_iscsid_conf(cli_ip=client_ips[0], CHAPTYPE='None', s_ip=client_ips[0])
+    osan.update_iscsid_conf(cli_ip=client_ips[0], CHAPTYPE='None', s_ip=client_ips[1])
+
+
+def main():
+    setup()
+    revert_env()
+    xstor_init()
+    common.ckeck_system()
+
+
+if __name__ == '__main__':
+    main()

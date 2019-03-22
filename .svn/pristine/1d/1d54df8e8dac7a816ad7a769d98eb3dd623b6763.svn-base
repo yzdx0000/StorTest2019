@@ -1,0 +1,32 @@
+#-*- coding : utf-8 -*
+import _sshlistaccounts_lyz1
+import _delete_account_lyz
+import commands
+import _sshListcertificatesHaveReturn_lyz1
+import _delete_certificate
+def deletemanyaccount(accountnamelist,mgrip):
+    dicts=_sshlistaccounts_lyz1.sshlistaccounts(mgrip)
+    if dicts==-1:
+        return -1
+    for name in accountnamelist:
+        accountid=dicts[name][0]
+        print 'accountid is %s' %accountid
+        cers=_sshListcertificatesHaveReturn_lyz1.sshListcertificatesHaveReturn(mgrip,accountid)
+        if cers==-1:
+            return -1
+        if cers!=[]:
+            for cer in cers:
+                redd=_delete_certificate.deleteCertificate(mgrip,cer)
+                if redd==-1:
+                    return -1
+                #(status,output)=commands.getstatusoutput('/home/parastor/bin/sysctl/parastor_pos delcertificate certificateid ='+cer)
+        red=_delete_account_lyz.acc_del(mgrip,accountid)
+        if red==-1:
+            return -1
+
+if __name__=="__main__":
+    names=[]
+    #for i in range(0,100):
+        #name='zaaaclllllaaa'+str(i)
+        #names.append(name)
+    deletemanyaccount(['zzzz3src'], '10.2.40.16')

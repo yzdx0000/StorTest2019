@@ -1,0 +1,81 @@
+#!/usr/bin/python
+#-*-coding:utf-8 -*
+
+import os,sys
+import utils_path
+import common2
+import log
+import get_config
+
+conf_file = common2.CONF_FILE    #配置文件路径
+clean_env = common2.CLEAN_ENV
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]      #获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)     #获取日志目录，即test_cases/Log/Case_log
+log.init(log_file_path, True)       #初始化日志文件
+deploy_ips = get_config.get_env_ip_info(conf_file)       #获取集群IP列表
+client_ips = get_config.get_allclient_ip()      #获取客户端IP
+
+osan = common2.oSan()
+nodeid = osan.get_nodes(s_ip="10.22.129.3")
+print str(nodeid).strip("[|]")
+exit(1)
+ids_1 = osan.get_node_pool_disks(s_ip=deploy_ips[0],ids="1",nodeid="1")
+print ids_1
+ids_2 = osan.get_node_pool_disks(s_ip="10.22.129.3",ids="1",nodeid="2")
+print ids_2
+ids_3 = osan.get_node_pool_disks(s_ip="10.22.129.3",ids="1",nodeid="3")
+print ids_3
+disk_ids = ("%s,%s,%s" % (str(ids_1[0]), str(ids_2[0]), str(ids_3[0])))
+stor0_id = osan.create_storage_pool(s_ip="10.22.129.3",name="stor0",node_pool_ids="1",disk_ids=disk_ids)
+print stor0_id
+disk_ids = ("%s,%s,%s" % (str(ids_1[1]), str(ids_2[1]), str(ids_3[1])))
+stor1_id = osan.create_storage_pool(s_ip="10.22.129.3",name="stor1",node_pool_ids="1",disk_ids=disk_ids)
+print stor1_id
+disk_ids = ("%s,%s,%s" % (str(ids_1[2]), str(ids_2[2]), str(ids_3[2])))
+stor2_id = osan.create_storage_pool(s_ip="10.22.129.3",name="stor2",node_pool_ids="1",disk_ids=disk_ids)
+print stor2_id
+disk_ids = ("%s,%s,%s" % (str(ids_1[3]), str(ids_2[3]), str(ids_3[3])))
+stor3_id = osan.create_storage_pool(s_ip="10.22.129.3",name="stor3",node_pool_ids="1",disk_ids=disk_ids)
+print stor3_id
+storid = osan.get_storage_id(s_ip="10.22.129.3")
+print nodeid
+print storid
+ids = osan.create_access_zone(s_ip="10.22.129.3",node_id=nodeid[0],name="acc_0")
+print ids
+svip = osan.set_vip(s_ip="10.22.129.3")
+print svip
+#svip = "10.22.129.50"
+osan.create_subnet(s_ip="10.22.129.3",sv_ip=svip,access_zone_id=ids,name="subnet1")
+sub_id =  osan.get_subnet_id(s_ip="10.22.129.3")
+print sub_id
+vip = osan.set_vip(s_ip="10.22.129.3",v_ip=svip)
+print vip
+osan.add_vip_address_pool(s_ip="10.22.129.3",subnet_id=sub_id[0],domain_name="vip1.com",vip=vip)
+print osan.get_access_zone_id(s_ip="10.22.129.3")
+osan.enable_san(s_ip="10.22.129.3",access_zone_id=1)
+osan.enable_san(s_ip="10.22.129.3",access_zone_id=3)
+osan.create_host_group(s_ip="10.22.129.3",hg_name="hg_1")
+osan.add_host(s_ip="10.22.129.3",h_name="h_1",hg_id=1)
+osan.add_host(s_ip="10.22.129.3",h_name="h_2",hg_id=1)
+osan.create_host_group(s_ip="10.22.129.3",hg_name="hg_2")
+osan.add_host(s_ip="10.22.129.3",h_name="h_3",hg_id=2)
+osan.add_host(s_ip="10.22.129.3",h_name="h_4",hg_id=2)
+hosts = osan.get_hosts(s_ip="10.22.129.3")
+print hosts
+host_group = osan.get_host_groups(s_ip="10.22.129.3")
+print host_group
+osan.add_initiator(s_ip="10.22.129.3",h_id=hosts[1],iqn="iqn.1990-21.com.sugon",alias="dws_20.initiator")
+osan.create_lun(s_ip="10.22.129.3",lun_name="lun_3",stor_pool_id="2",acc_zone_id="1")
+lun = osan.get_lun(s_ip="10.22.129.3")
+print lun
+osan.map_lun(s_ip="10.22.129.3",lun_ids=lun[0],hg_id=host_group[0])
+osan.map_lun(s_ip="10.22.129.3",lun_ids=lun[1],hg_id=host_group[0])
+osan.map_lun(s_ip="10.22.129.3",lun_ids=lun[2],hg_id=host_group[0])
+ini_ids = osan.get_initiators(s_ip="10.22.129.3")
+print ini_ids
+iqn = osan.get_iqn(s_ip="10.22.129.3",ids=2)
+print iqn
+osan.write_iqn(cli_ip="10.22.129.6",iqn=iqn[0])
+scsi = osan.discover_scsi("10.22.129.6","10.22.129.201")
+osan.iscsi_login("10.22.129.6",scsi)

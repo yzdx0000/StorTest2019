@@ -1,0 +1,369 @@
+#!/usr/bin/python
+# -*- encoding=utf8 -*-
+import os
+import commands
+import ReliableTest
+import time
+import threading
+import xml
+import common2
+import get_config
+import Lun_managerTest
+
+config_path = common2.CONF_FILE
+deploy_ips = get_config.get_env_ip_info(config_path)
+osan = common2.oSan()
+test_log_path = get_config.get_testlog_path()
+lun_osan = Lun_managerTest.oSan()
+
+
+def get_err_log_ip():
+    '''
+    :Author:diws
+    :Date:20180829
+    :return: node ip 错误日志备份目标节点IP
+    '''
+    err_log_ip_info = xml.dom.minidom.parse(config_path)
+    ip_info = err_log_ip_info.getElementsByTagName('err_log_ip')[0].firstChild.nodeValue
+    return ip_info
+
+
+def get_err_log_path():
+    '''
+    :Author:diws
+    :Date:20180829
+    :return: log path 错误日志备份目标节点的路径
+    '''
+    err_log_path_info = xml.dom.minidom.parse(config_path)
+    path_info = err_log_path_info.getElementsByTagName('err_log_path')[0].firstChild.nodeValue
+    return path_info
+
+
+def collect_parastor(s_ip=None, dst=None):
+    '''
+    :Author:diws
+    :Date:20180829
+    :param s_ip:日志所在节点IP
+    :return: None
+    '''
+    if s_ip is None or dst is None:
+        print("Please input correct parameters.")
+        os._exit(1)
+    err_ip = get_err_log_ip()
+    err_path = get_err_log_path()
+    # 备份日志前，检查目标节点是否能正常登陆
+    while False is ReliableTest.check_ping(s_ip):
+        time.sleep(5)
+    # 在日志目标节点，检查备份目录是否存在，不存在则创建
+    dst_log_path = err_path + "/" + str(dst) + "/" + '/' + str(s_ip) + '_ser'
+    cmd = ("ssh root@%s '[ -e %s]'" % (err_ip, dst_log_path))
+    res, output = commands.getstatusoutput(cmd)
+    if res != 0:
+        cmd = ("ssh root@%s 'mkdir -p %s'" % (err_ip, dst_log_path))
+        commands.getstatusoutput(cmd)
+    zk_log = dst_log_path + '/zk_log'
+    pro_log = dst_log_path + '/pro_log'
+    bin_log = dst_log_path + '/bin'
+    message_log = dst_log_path + '/message_log'
+    pscli_log = dst_log_path + '/pscli_log'
+    nwatch_log = dst_log_path + '/nwath_log'
+    other_log = dst_log_path + '/other_log'
+    cmd = (
+        "ssh root@%s 'mkdir %s %s %s %s %s %s %s'" % (
+            err_ip, zk_log, bin_log, pro_log, message_log, pscli_log, nwatch_log, other_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝/home/parastor/log目录下所有日志，拷贝完成后，将所有文件truncate到0
+    cmd = ("ssh root@%s 'cd /home/parastor/log/;scp -r * %s:%s'" % (s_ip, err_ip, pro_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    log_list = ["dbginfo_stub", "errinfo.sh", "gdb.dump", "gdb.dump.opmgr", "msginfo.sh", "potrc"]
+    for i in log_list:
+        cmd = ("ssh root@%s 'scp /home/parastor/tools/%s %s:%s'" % (s_ip, i, err_ip, other_log))
+        commands.getstatusoutput(cmd)
+    cmd = ("timeout 20 ssh root@%s 'pstack `pidof oPara`' | ssh %s 'cat - > %s/opara.pstack'" % (s_ip, err_ip, pro_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s 'scp /home/parastor/bin/o* %s:%s'" % (s_ip, err_ip, bin_log))
+    # cmd = ("ssh root@%s 'cd /home/parastor/log/;rm -rf core.*;find ./ -type f | xargs truncate -s 0'" % (s_ip, ))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s 'cd /;scp -r core* %s:%s'" % (s_ip, err_ip, pro_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s 'cd /;rm -rf core*'" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝/root/zk/zookeeper.log和/tmp/mgcd_zookeeper.log
+    cmd = ("ssh root@%s 'scp -r /root/zk/ %s:%s'" % (s_ip, err_ip, zk_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s 'scp /tmp/mgcd_zookeeper.log %s:%s'" % (s_ip, err_ip, zk_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝intiators/luns/lun_maps信息
+    cmd = ("timeout 20 ssh root@%s 'pscli --command=get_initiators ' | ssh %s 'cat - > %s/initiators'" % (
+        s_ip, err_ip, pscli_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("timeout 20 ssh root@%s 'pscli --command=get_luns ' | ssh %s 'cat - > %s/luns'" % (s_ip, err_ip, pscli_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 20 ssh root@%s 'pscli --command=get_targets ' | ssh %s 'cat - > %s/targets'" % (
+            s_ip, err_ip, pscli_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 20 ssh root@%s 'pscli --command=get_lun_maps ' | ssh %s 'cat - > %s/lunmaps'" % (
+            s_ip, err_ip, pscli_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("timeout 20 ssh root@%s 'pscli --command=get_node_stat ' | ssh %s 'cat - > %s/node_stat'" % (
+        s_ip, err_ip, pscli_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝/var/log/messages
+    cmd = ("ssh root@%s 'scp /var/log/message* %s:%s'" % (s_ip, err_ip, message_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s 'scp /tmp/part_disk* %s:%s'" % (s_ip, err_ip, message_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 备份nWatch输出
+    # 改xstor_io_dbg.sh，1. 注释掉145行之后拷贝/home/parastor/log的内容；2. 注释掉检查core存在则exit的行
+    cmd = ("ssh root@%s \"sed -i '145,$ s/^/#/' /home/parastor/tools/xstor_io_dbg.sh\"" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s \"sed -i '/exit/s/^/#/g' /home/parastor/tools/xstor_io_dbg.sh\"" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 注释掉fsinfo检查的行——打开会导致oRole进程core
+    cmd = ("ssh root@%s \"sed -i '/fsinfo/s/^/#/g' /home/parastor/tools/xstor_io_dbg.sh\"" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 根据节点IP获取该节点id
+    node_id = ReliableTest.get_node_id_by_ip(s_ip)
+    # 执行nWatch收集工具，将其保存到该节点/home/xlog目录下
+    cmd = ("ssh root@%s '/home/parastor/tools/xstor_io_dbg.sh xlog %s'" % (s_ip, str(node_id)))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 收集完成后，将xstor_io_dbg.sh工具注释去掉
+    cmd = ("ssh root@%s \"sed -i '145,$ s/^#//' /home/parastor/tools/xstor_io_dbg.sh\"" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 将收集的信息备份到日志目标节点，并删除该节点收集的信息
+    cmd = ("ssh root@%s 'scp -r /home/xlog %s:%s'" % (s_ip, err_ip, nwatch_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    cmd = ("ssh root@%s 'rm -rf /home/xlog'" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 收集lioc日志
+    cmd = (
+        "timeout 30 ssh root@%s ' /home/parastor/tools/nWatch -t oSan -i %s -c oSan#lioc_dump_ios' | ssh %s 'cat - > %s/osan_lioc_dump_ios'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 收集mempool日志
+    cmd = (
+        "timeout 30 ssh root@%s ' /home/parastor/tools/nWatch -t oJob -i %s -c NAL#mpool_dump ' | ssh %s 'cat - > %s/nal_mempool_dump'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 收集lioc日志
+    cmd = ("timeout 30 ssh root@%s '/home/parastor/tools/dlm_mml -t 5208 -p -s 1 -l 1' | ssh %s 'cat - > %s/dlm'"
+           % (s_ip, err_ip, nwatch_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 收集other_latency日志
+    cmd = (
+        "timeout 30 ssh root@%s ' /home/parastor/tools/nWatch -t oStor -i %s -c oStor#other_latency ' | ssh %s 'cat - > %s/ostor_other_latency'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 收集msgop_latency日志
+    cmd = (
+        "timeout 30 ssh root@%s ' /home/parastor/tools/nWatch -t oStor -i %s -c oStor#msgop_latency ' | ssh %s 'cat - > %s/ostor_msgop_latency'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # ds投递给obs请求完成耗时情况
+    cmd = (
+        "timeout 30 ssh root@%s ' /home/parastor/tools/nWatch -i %s -t oStor -c OBS#jobperf' | ssh %s 'cat - > %s/obs_jobperf'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    # obs操作磁盘排队执行等耗时
+    cmd = (
+        "timeout 30 ssh root@%s ' /home/parastor/tools/nWatch -i %s -t oStor -c OBS#diskperf' | ssh %s 'cat - > %s/obs_diskperf'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    # obs相关日志操作耗时情况
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#jnlperf' | ssh %s 'cat - > %s/obs_jnlperf'"
+        % (s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    # mpool_dump
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c NAL#mpool_dump' | ssh %s 'cat - > %s/ostor_mpool_dump'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c oStor#get_qos_resctl' | ssh %s 'cat - > %s/ostor_get_qos_resctl'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#jobperf' | ssh %s 'cat - > %s/obs_jobperf'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#iostat' | ssh %s 'cat - > %s/obs_iostat'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#iostat -a speed' | ssh %s 'cat - > %s/obs_iostat_a_speed'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c NAL#loadwave -a nice' | ssh %s 'cat - > %s/obs_loadwave_a_nice'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    time.sleep(5)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#iostat -a speed' | ssh %s 'cat - > %s/obs_iostat_b_speed'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c NAL#loadwave -a nice' | ssh %s 'cat - > %s/obs_loadwave_b_nice'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#topn' | ssh %s 'cat - > %s/topn'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#spaceinfo' | ssh %s 'cat - > %s/spaceinfo'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#ldsk_prestat' | ssh %s 'cat - > %s/ldsk_prestat'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+    cmd = (
+        "timeout 30 ssh root@%s '/home/parastor/tools/nWatch -i %s -t oStor -c OBS#reqstat' | ssh %s 'cat - > %s/obs_reqstat'" % (
+            s_ip, str(node_id), err_ip, nwatch_log))
+    commands.getstatusoutput(cmd)
+
+
+def collect_cli(s_ip=None, dst=None, ):
+    '''
+    :Author:diws
+    :Date:20180829
+    :param s_ip: 日志所在节点IP
+    :param dst: 目标节点日志备份目录
+    :return:
+    '''
+    if s_ip is None or dst is None:
+        print("Please input correct parameters.")
+        os._exit(1)
+    err_ip = get_err_log_ip()
+    err_path = get_err_log_path()
+    # 备份日志前，检查目标节点是否能正常登陆
+    while False is ReliableTest.check_ping(s_ip):
+        time.sleep(5)
+    dst_log_path = err_path + "/" + str(dst) + '/' + str(s_ip) + '_host'
+    lun_log = dst_log_path + '/' + 'luns'
+    message_log = dst_log_path + '/' + 'message'
+    cmd = ("ssh root@%s '[ -e %s]'" % (err_ip, dst_log_path))
+    res, output = commands.getstatusoutput(cmd)
+    if res != 0:
+        cmd = ("ssh root@%s 'mkdir -p %s %s %s'" % (err_ip, dst_log_path, lun_log, message_log))
+        commands.getstatusoutput(cmd)
+    # 拷贝/var/log/messages*
+    cmd = ("ssh root@%s 'scp /var/log/message* %s:%s'" % (s_ip, err_ip, message_log))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝lsscsi信息
+    print cmd
+    cmd = ("ssh root@%s 'lsscsi ' | ssh %s 'cat - > %s/lsscsi'" % (s_ip, err_ip, dst_log_path))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝iscsiadm -m session -P 3信息
+    cmd = ("ssh root@%s 'iscsiadm -m session -P 3 ' | ssh %s 'cat - > %s/iscsiadm'" % (s_ip, err_ip, dst_log_path))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝/etc/iscsi/initiatorname.iscsi
+    cmd = ("ssh root@%s 'scp /etc/iscsi/initiatorname.iscsi %s:%s'" % (s_ip, err_ip, dst_log_path))
+    print cmd
+    commands.getstatusoutput(cmd)
+    #  拷贝/etc/iscsi/iscsid.conf
+    cmd = ("ssh root@%s 'scp /etc/iscsi/iscsid.conf  %s:%s'" % (s_ip, err_ip, dst_log_path))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 还原旧的iscsid.conf配置文件
+    cmd = ("ssh root@%s \"sed -r -i 's/^node.session.auth/#node.session.auth/g' /etc/iscsi/iscsid.conf\"" % (s_ip,))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝vdbench日志
+    cmd = ("ssh root@%s 'scp -r /root/output %s:%s'" % (s_ip, err_ip, dst_log_path))
+    print cmd
+    commands.getstatusoutput(cmd)
+    # 拷贝xstor_locate_lun.py信息
+    cmd = ("ssh root@%s 'scp /home/parastor/tools/xstor_locate_lun.py %s:/root'" % (deploy_ips[0], s_ip))
+    print cmd
+    commands.getstatusoutput(cmd)
+    luns = osan.ls_scsi_dev(s_ip)
+    for lun in luns:
+        cmd = ("timeout 10 ssh root@%s 'fdisk -l %s ' | ssh %s 'cat - >> %s/fdisk_info'" % (s_ip, lun, err_ip, lun_log))
+        commands.getstatusoutput(cmd)
+        lun = lun.split('/')[-1]
+        cmd = ("timeout 15 ssh root@%s '/root/xstor_locate_lun.py %s ' | ssh %s 'cat - > %s/%s'"
+               % (s_ip, lun, err_ip, lun_log, lun))
+        print cmd
+        commands.getstatusoutput(cmd)
+
+
+def collect_parastors(s_ip=None, dst=None):
+    col_threads = []
+    for sip in s_ip:
+        col_threads.append(threading.Thread(target=collect_parastor, args=(sip, dst)))
+    for col_thread in col_threads:
+        col_thread.setDaemon(True)
+        col_thread.start()
+    for col_thread in col_threads:
+        col_thread.join()
+
+
+def collect_clis(s_ip=None, dst=None):
+    col_threads = []
+    for sip in s_ip:
+        col_threads.append(threading.Thread(target=collect_cli, args=(sip, dst)))
+    for col_thread in col_threads:
+        col_thread.setDaemon(True)
+        col_thread.start()
+    for col_thread in col_threads:
+        col_thread.join()
+
+
+def collect_script(dst=None):
+    '''
+    :Author:Diws
+    :Date:20180901
+    :Description:拷贝测试脚本日志
+    :param dst: 脚本名
+    :return:
+    '''
+    err_ip = get_err_log_ip()
+    err_path = get_err_log_path()
+    script_log_path = dst
+    dst = dst.split('/')[0]
+    cmd = ("cd %s;ls -lt |grep %s | sed -n 1p | awk '{print $NF}'" % (test_log_path, dst))
+    res, fname = commands.getstatusoutput(cmd)
+    dst_log_path = err_path + "/" + str(script_log_path) + '/'
+    cmd = ("ssh root@%s '[ -e %s]'" % (err_ip, dst_log_path))
+    res, output = commands.getstatusoutput(cmd)
+    if res != 0:
+        cmd = ("ssh root@%s 'mkdir -p %s'" % (err_ip, dst_log_path))
+        commands.getstatusoutput(cmd)
+    cmd = ("scp %s/%s root@%s:%s" % (test_log_path, fname, err_ip, dst_log_path))
+    commands.getstatusoutput(cmd)

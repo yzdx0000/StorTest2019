@@ -1,0 +1,33 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于更新现有账户###########
+#需要执行upd_account_exc，参数包括：oOms节点ip，accountid和quota
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands   #调用子进程执行shell
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+#定义”获取更新账户命令“函数，三个参数依次表示mgr节点ip、账户id、账户配额
+def upd_account_cmd(ip,account_id,quota):
+    cmd='/home/parastor/bin/sysctl/parastor_pos'+' updaccount'+' accountid='+str(account_id)+' quota='+str(quota)  #执行更新现有账户命令本身
+    cmd='ssh '+str(ip)+' -C '+"'"+cmd+"'"   #到管理节点去执行更新现有账户命令
+    return cmd
+
+#定义”获取更新账户命令“函数，其功能用于更新账户配额，三个参数依次表示mgr节点ip、账户id、>账户配额
+def upd_account_exc(ip,account_id,quota):
+    cmd=upd_account_cmd(ip,account_id,quota)   #获取更新账户命令
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    upd_account_exc(mgr_ip,account_id,quota)
+    upd_account_exc(all_argvs['master_mgr_ip'],all_argvs['account_id'],'5555')   
+

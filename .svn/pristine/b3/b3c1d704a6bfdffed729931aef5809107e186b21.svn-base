@@ -1,0 +1,26 @@
+# -*-coding:utf-8 -*
+#*********************#
+#函数名称：利用路径上传object
+#需要参数：parastor ds的ip、bucketname、objectname、要上传的文件所在路径、证书id
+#作者：刘艳哲
+#**********************#
+import os,sys
+import commands
+def usage():
+	print '正确用法：python scriptname ip bucketname objectname objectpath certificateid'
+	print '例子：python scriptname 10.2.40.18 bucket1 objecthehe1 /opt/put 000020ZYTUAP29Z100001XAXNEV2354P'
+def add_object(ip,bucketname,objectname,path,certificateid):
+	cmd='curl -s -i http://'+ip+':20480/'+bucketname+'/'+objectname+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(return_code,output)=commands.getstatusoutput(cmd)
+	#result=os.popen(cmd)
+	#print output
+	return output
+
+if __name__=="__main__":
+	if len(sys.argv)!=6:
+		usage()
+	else:
+		result=add_object(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
+		#result=add_object('10.2.40.18','bucket1','objecthehe1','/opt/put','000020ZYTUAP29Z100001XAXNEV2354P')
+		print result

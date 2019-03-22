@@ -1,0 +1,13 @@
+data_errors=1
+
+hd=default,vdbench=/home/vdbench50406_snap,shell=ssh,user=root
+hd=h1,system=10.2.41.108
+
+fsd=default,depth=2,width=2,files=100,size=64k,shared=yes
+fsd=fsd1,anchor=/mnt/volume1/.snapshot/snap_13_0_1_17_snapshot_1,journal=/mnt/volume1/snap/snap_13_0_1_17
+
+fwd=default,threads=100,xfersize=(4k,50,64k,30,1m,20)
+fwd=fwd1,fsd=fsd1,hd=h1
+
+rd=default,fwdrate=max,elapsed=30,interval=1,warmup=10,pause=5
+rd=rd1,fwd=fwd*,format=no

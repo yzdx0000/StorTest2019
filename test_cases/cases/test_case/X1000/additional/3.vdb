@@ -1,0 +1,11 @@
+sd=default,journal=/root/vdbench/journal/10.22.129.3,openflags=o_direct,align=0,offset=0
+sd=sd1,lun=/dev/sdi,range=(5G,9G)
+sd=sd2,lun=/dev/sdj,range=(17408G,17410G)
+sd=sd3,lun=/dev/sdk,range=(66560G,66566G)
+sd=sd4,lun=/dev/sdl,range=(0G,4G)
+wd=default,xfersize=(4k,10,8k,90),rdpct=0,seekpct=100
+wd=wd1,sd=sd1
+wd=wd2,sd=sd2
+wd=wd3,sd=sd3
+wd=wd4,sd=sd4
+rd=rd1,wd=wd*,iorate=200,elapsed=600h,maxdata=19G,threads=4,interval=1

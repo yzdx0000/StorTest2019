@@ -1,0 +1,67 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建账户模块
+#使用方法：调用"acc_add()"函数，指定mgrip,账户名、email即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/11
+#**********************************************#
+import os,sys
+import commands
+import _delete_account_wjl
+import _create_certificate_wjl
+import _accname_obtain_accid_wjl
+import _delete_certificate_wjl
+
+init_num = 60
+
+#创建账户命令生成函数
+def acc_add_cmd(mgrip,acc_name,acc_email):
+	#part1 = "/home/parastor/bin/sysctl/parastor_pos addaccount accountname=" 	#拼串片段，无需关注。
+	#part2 = " email=" 							 	#拼串片段，无需关注。a
+	#part3 = " quota=0" 							 	#拼串片段，无需关注。
+	#cmd = ''.join((part1,acc_name,part2,acc_email,part3))#生成创建账户的指令
+	cmd='ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos addaccount accountname='+acc_name+' email='+acc_email+' quota=0'+'"'
+#	print cmd
+	return cmd
+
+#创建账户函数
+def acc_add(mgrip,acc_name,acc_email):#输入参数为:"账户名"，"账户邮箱"
+	cmd = acc_add_cmd(mgrip,acc_name,acc_email)
+	(return_code,output)=commands.getstatusoutput(cmd)
+#	print output
+	if (output[0:1]!='a'):
+		print "create error!"
+		sys.exit(0)
+	str1 = output[output.find("#") + 1:]						#字符串筛选片段，无需关注
+	str2 = str1[str1.find(":") + 1:]						#字符串筛选片段，无需关注
+	acc_id = str2[0:16]								#字符串筛选片段，无需关注
+	return acc_id
+
+#创建账户，数据库初始化
+def account_create_init(mgrip,acc_name):
+	for i in range(init_num):
+		acc_id = acc_add(mgrip,acc_name+str(i),acc_name+str(i)+"@sugon.com")
+#		print acc_id
+#		_delete_account_wjl.acc_del(mgrip,acc_id)
+		cerid = _create_certificate_wjl.cer_add(mgrip,acc_id)
+#		print cerid
+	print "acc_create init complete."
+
+#清理账户
+def account_delete_init(mgrip,acc_name):
+        for i in range(init_num):
+		acc_id = _accname_obtain_accid_wjl.obtain_accid(mgrip,acc_name+str(i))
+		ak=_delete_certificate_wjl.get_ak(mgrip,acc_id)
+		_delete_certificate_wjl.deleteCertificate(mgrip,ak)
+                _delete_account_wjl.acc_del(mgrip,acc_id)
+		
+#        print "acc_delete complete."
+
+
+if __name__=="__main__":
+#调试代码
+#acc_id=acc_add('wjl','wjl@sugon.com')
+#print acc_id
+#	account_create_init(sys.argv[1],sys.argv[2])  #测试前init环境
+	account_delete_init(sys.argv[1],sys.argv[2])  #测试后clear环境

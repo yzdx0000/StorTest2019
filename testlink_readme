@@ -1,0 +1,28 @@
+如果想要使用用例执行结果上传testlink的功能，需要以下几步
+
+1、安装TestLink-API-Python-client
+连通外网的节点可以直接执行pip install TestLink-API-Python-client
+没有连通外网的节点需要下载TestLink-API-Python-client安装包，然后拷到节点上安装
+
+2、配置文件
+修改配置文件中的testlink配置
+<!-- testlink配置 -->
+<testlink>true</testlink>           # true表示和testlink链接，false表示不链接
+<tlurl>http://10.2.43.156/testlink/lib/api/xmlrpc/v1/xmlrpc.php</tlurl>
+<tldevkey>1a97b5c7e30085ccbecf00ec454e9212</tldevkey>  <!-- admin的密钥 -->
+<tlprojectname>parastor</tlprojectname>
+<tlplanname>ParaStor3.0第七轮系统测试</tlplanname>
+
+tlurl输入testlink的url，只需要替换ip即可
+tldevkey输入testlink某个用户的密钥，在testlink账户设置中获取
+tlprojectname输入testlink中的项目
+tlplanname输入testlink项目下的测试计划
+
+3、脚本和用例对应
+
+在和用例对应的脚本中加入一行注释，格式是# testlink case: 3.0-342~356,3.0-1243,3.0-235
+其中# testlink case: 是固定格式，不能写错
+3.0-235是testlink上的用例id，在testlink里可以看到。注意:项目前缀必须写上, -前面的是项目前缀，比如3.0就是
+如果一个脚本只对应一个用例，就写一个即可# testlink case: 3.0-235
+如果一个脚本对应多个用例，需要把用例编号都写上，中间用英文逗号分隔，例:3.0-1243,3.0-235。如果用例连续，可以写成3.0-342~356，或者3.0-342~3.0-356
+注意：一个脚本对应多个用例时，如果脚本失败，所有用例都设置为失败

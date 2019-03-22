@@ -1,0 +1,71 @@
+# -*- coding:utf-8 8-*
+#################################################
+#该脚本用来不停的ds宕机，循环给提供的所有ds依次宕机，宕机重启之后测试s3指令集是否通过
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+import deleteAllAccount_lyz
+import random
+import conf_lyz
+import threading
+import _randdrawdisk_lyz
+import _stability1libcycle_lyz
+#参数说明：pathOfScript:要执行的脚本在从上的路径; stabilityScript:要执行的s3的稳定性脚本名称,然后是_stability1lib_lyz这个脚本需要的参数
+#dsips必须是一个列表，里面装着想要断网的所有的ds的ip；dsipmiips也是一个列表，和dsips一一对应
+def dsfaultAndS3(num,conffilename,masterip,dsips,dsipmiips,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    confo = conf_lyz.confrelate()
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo = _fault_all_lyz.statusrecovery()
+    # 前期准备：从配置文件中读取参数
+    # print 'masterip is :' %masterip
+    argvs = [masterip, dsips, dsipmiips, oossip, num]
+    print "argvs is : %s" % argvs
+    readargvs = confo.readmanyconf(conffilename, 'public', argvs)
+    masterip = readargvs[0]
+    dsipso = readargvs[1]
+    dsips=confo.confStringToList(dsipso)
+    dsipmiipso = readargvs[2]
+    dsipmiips = confo.confStringToList(dsipmiipso)
+    oossip = readargvs[3]
+    num = readargvs[4]
+    print dsips,dsipmiips
+    #print 'masterip is %s,slaveip is %s,slaveipmiip is %s,oossip is %s' % (masterip, slaveip, slaveipmiip, oossip)
+    argvs2 = [accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,
+              splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota]
+    readargvs2 = confo.readmanyconf(conffilename, 's3', argvs2)
+    accountname = readargvs2[0]
+    createBucketname = readargvs2[1]
+    putObjectname = readargvs2[2]
+    objectpath = readargvs2[3]
+    downobjectpath = readargvs2[4]
+    splitobjectname = readargvs2[5]
+    splitobjectpathdir = readargvs2[6]
+    splitfilename = readargvs2[7]
+    numofsplit = readargvs2[8]
+    cancleupobjectname = readargvs2[9]
+    quota = readargvs2[10]
+    print 'accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota is '
+    print accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota
+    num=int(num)
+
+    #起两个线程，一个用来执行s3，一个用来拔盘
+    print 'time of start of thread is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+    threads=[]
+    t1=threading.Thread(target=_randdrawdisk_lyz.drawdisk,args=(oossip,))
+    t2=threading.Thread(target= _stability1libcycle_lyz.allOPerations,args=(num,masterip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota))
+    threads.append(t1)
+    threads.append(t2)
+    t1.setDaemon(True)
+    for t in threads:
+        t.start()
+
+
+if __name__=="__main__":
+    #mgrfaultAndS3(masterip, slaveip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname,quota)
+    #mgrfaultAndS3(2,'100.100.100.16',['100.100.100.18','100.100.100.19'],['10.2.40.68','10.2.40.69'],'s1123c','100.100.100.18','bucket1123c','object1123c','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit1103o','/opt/s3uploadfile','test',2,'objectsplitcancle03o',1024)
+    dsfaultAndS3('num', 'faultconf_lyz.conf', 'masterip','dsips','dsipmiips', 'accountname', 'oossip', 'createBucketname', 'putObjectname', 'objectpath', 'downobjectpath', 'splitobjectname','splitobjectpathdir', 'splitfilename', 'numofsplit', 'cancleupobjectname', 'quota')
+    #dsfaultAndS3(num,     conffilename,              masterip,   dsips,   dsipmiips,      accountname,     oossip,     createBucketname,    putObjectname,      objectpath,     downobjectpath,       splitobjectname,    splitobjectpathdir,     splitfilename,     numofsplit,    cancleupobjectname,       quota):

@@ -1,0 +1,167 @@
+# -*- coding:utf-8 _*-
+# Author:wangxiang
+# Date  :2018-10-17
+"""
+测试内容:多逻辑卷部分卷设置Qos
+
+步骤:
+1）在一个节点上5条逻辑卷，卷名称为LUN1-LUN5，LUN1-LUN3设置QoS的IOPS值为主机性能的10%；
+2）将卷映射至主机，并进行小块读写业务（读写4:1）；
+3）检查主机各盘IOPS和主机IOSP；
+4）LUN1和LUN2的Qos设置为主机能力20%；
+5）再次检查主机各盘IOPS和主机的IOPS；
+
+检查项:
+1）逻辑卷成功创建
+3）LUN1-LUN3的带宽为10%
+4）LUN1和LUN2的带宽设置成功
+5）LUN1-LUN2的带宽为30%，LUN3为10%，主机带宽能力和步骤3无变化
+"""
+import os
+import sys
+import utils_path
+import common2
+import common
+import Lun_managerTest
+import log
+import error
+import login
+import error
+import get_config
+import threading
+import time
+import commands
+import random
+import breakdown
+import ReliableTest
+
+import env_manage_lun_manage
+import decorator_func
+from get_config import config_parser as cp
+
+"""初始化日志和全局变量"""
+conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+log.init(log_file_path, True)  # 初始化日志文件
+
+log.info("---------------全局初始化操作-----------------")
+node_ip1 = env_manage_lun_manage.node_ip1
+node_ip2 = env_manage_lun_manage.deploy_ips[1]
+client_ip1 = env_manage_lun_manage.client_ips[0]
+client_ip2 = env_manage_lun_manage.client_ips[1]
+esxi_ip = env_manage_lun_manage.Esxi_ips
+
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+
+osan = Lun_managerTest.oSan()
+
+"""读取存储池的容量"""
+storage_pool_id = env_manage_lun_manage.osan.get_storage__type_id(s_ip=node_ip1, type="BLOCK")
+az_id = env_manage_lun_manage.osan.get_access_zone_id(s_ip=node_ip1)[0]
+storage_pool_size = env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1,
+                                                                 command='get_storage_pools', ids="ids",
+                                                                 indexname="storage_pools",
+                                                                 argv2="total_bytes",
+                                                                 argv1=storage_pool_id)
+
+
+def iscsi_login():
+    global min_seq_w
+    global min_seq_r
+
+    hg_id = env_manage_lun_manage.osan.create_host_group(s_ip=node_ip1, hg_name='myhostgroup1')
+    h_id = env_manage_lun_manage.osan.add_host(s_ip=node_ip1, h_name='host1', hg_id=hg_id)
+    ini_id = env_manage_lun_manage.osan.add_initiator(s_ip=node_ip1, h_id=h_id, iqn=cp("add_initiator", "iqn"),
+                                                      alias=cp("add_initiator", "alias"))
+    decorator_func.judge_target(
+        env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1, command="get_initiators", indexname="initiators"
+                                                     , argv2="auth_type", ids="ids", argv1=ini_id),
+        "NONE")
+    env_manage_lun_manage.osan.update_iscsid_conf(cli_ip=client_ip1, CHAPTYPE='None', s_ip=client_ip1)
+    lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes='5368709120', lun_type="THIN",
+                                                   lun_name='LUN1',
+                                                   stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+    lun_map_id = env_manage_lun_manage.osan.map_lun(s_ip=node_ip1, lun_ids=lun_id, hg_id=hg_id)
+
+    login.login()
+
+    # 修改vdbench配置文件的参数值
+    seekpct = 0  # 随机
+    rdpct1 = 0  # 读写比例(0是全写)
+    rdpct2 = 100
+    xfersize1 = "(4k,20,8k,20,1k,35,10k,25)"
+    lun1 = env_manage_lun_manage.osan.ls_scsi_dev(client_ip=client_ip1)
+    min_seq_w = env_manage_lun_manage.co2_osan.gen_vdb_xml(lun=lun1, xfersize=xfersize1, seekpct=seekpct, rdpct=rdpct1)
+    min_seq_r = env_manage_lun_manage.co2_osan.gen_vdb_xml(maxdata='1G', lun=lun1, xfersize=xfersize1, seekpct=seekpct,
+                                                           rdpct=rdpct2)
+
+
+def run_vdb(arg=1):
+    log.info('Run task %s (%s)...' % (arg, os.getpid()))
+    env_manage_lun_manage.co2_osan.run_vdb(client_ip=client_ip1, vdb_xml=min_seq_r, output=node_ip1)
+
+
+def get_avg_bandwidth(arg=1):
+    global avg_bandwidth
+    log.info('Run task %s (%s)...' % (arg, os.getpid()))
+    avg_bandwidth = env_manage_lun_manage.osan.Qos_count(client_ip1)
+    log.info(avg_bandwidth)
+    return avg_bandwidth
+
+def create_lun(arg=1):
+    osan.add_vip_address_pool(s_ip=node_ip1, subnet_id=sub_id,
+                              domain_name=cp("add_vip_address_pool", "domain_name"),
+                              vip=cp("add_vip_address_pool", "vip"))
+    log.info("初始化 otrace")
+    for ip in deploy_ips:
+        cmd = ("ssh root@%s \"/home/parastor/tools/otraced -d\"" % (ip,))
+        commands.getstatusoutput(cmd)
+        log.debug("Open otrace on %s : Success." % (ip,))
+        cmd = ("ssh root@%s 'mkdir -p /home/parastor/log/otrace/'" % (ip,))
+        commands.getstatusoutput(cmd)
+        cmd = ("ssh root@%s 'touch /home/parastor/log/otrace/otrace.data'" % (ip,))
+        commands.getstatusoutput(cmd)
+        cmd = (
+            "ssh root@%s '/home/parastor/tools/otrc -o /home/parastor/log/otrace/otrace.data -s 4096 -S \"IOPREP|DJNL|DPC|LMPC|LIOC\"'" % (
+                ip,))
+        commands.getstatusoutput(cmd)
+        cmd = ("ssh root@%s '/home/parastor/tools/otrc -z on'" % (ip,))
+        commands.getstatusoutput(cmd)
+    osan.enable_san(s_ip=node_ip1, access_zone_id=az_id)
+    for i in range(5):
+
+
+
+
+def case():
+    log.info("step1:生成vdbench配置文件，将逻辑卷映射至主机，并进行读业务...")
+
+    iscsi_login()
+
+    decorator_func.multi_threads(run_vdb, get_avg_bandwidth)
+
+    log.info("step2:检查主机业务带宽，待稳定后设置QoS带宽值为实际的50%； ...")
+
+    log.info("提交申请后，立即查看主机实际读带宽，带宽值约为实际值的50%（忽略性能波动）")
+    log.info("再次修改读带宽值为实际值的75%")
+
+
+def main():
+    env_manage_lun_manage.revert_env()
+    # error.rel_check_before_run(file_name, jnl_rep=3, free_jnl_num=0, node_num=3)
+    # env_manage_lun_manage.rel_check_before_run(filename=file_name)  # 环境检测和准备
+
+    env_manage_lun_manage.clean()  # 环境清理
+
+    case()  # 用例步骤
+
+    common.ckeck_system()  # 检查系统core
+
+    env_manage_lun_manage.clean()  # 环境清理
+
+
+if __name__ == '__main__':
+    common.case_main(main)  # 主函数执行入口

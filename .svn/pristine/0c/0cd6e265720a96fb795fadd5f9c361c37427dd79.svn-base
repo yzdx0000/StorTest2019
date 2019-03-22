@@ -1,0 +1,55 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建账户及其证书模块
+#使用方法：集成时，只需给出账户名，调用"acc_cer_add()"函数，指定mgr_ip、账户名即可。
+#返回0为创建成功，返回-1为创建失败。
+#如：creatresult=acc_cer_add(mgr_ip，"accountname")
+#作者：王建磊
+#创建时间：2018/03/15
+#更新时间：
+#**********************************************#
+
+import os,sys
+import commands
+import _create_account_wjl
+import _create_certificate_wjl
+
+def acc_cer_add(mgr_ip,acc_name):
+	acc_id = 0
+	ak = 0
+	acc_id = _create_account_wjl.acc_add(mgr_ip,acc_name,acc_name+'@sugon.com')
+	if acc_id == 0:
+		print "account create failed!"
+	else:
+		print "account create success!"
+		ak = _create_certificate_wjl.cer_add(mgr_ip,acc_id)
+		if ak == 0:
+			print "certificate create failed!"
+		else:
+			print "certificate create success!"
+	return ak
+
+def acc_cer_add_get_ak_sk(mgr_ip,acc_name):
+        acc_id = 0
+        ak = 0
+        acc_id = _create_account_wjl.acc_add(mgr_ip,acc_name,acc_name+'@sugon.com')
+        if acc_id == 0:
+                print "account create failed!"
+        else:
+                print "account create success!"
+                ak,sk = _create_certificate_wjl.cer_add_get_ak_sk(mgr_ip,acc_id)
+                if ak == 0:
+                        print "certificate create failed!"
+                else:
+                        print "certificate create success!"
+        return ak,sk
+
+if __name__ == '__main__':
+	print "please input mgr_ip and acc_name."
+	mgr_ip=sys.argv[1]
+	acc_name=sys.argv[2]
+	ak=acc_cer_add(mgr_ip,acc_name)
+	print ak
+	
+
+

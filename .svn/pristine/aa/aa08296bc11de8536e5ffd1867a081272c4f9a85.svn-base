@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <jenkins>
+        <ip>10.2.41.200</ip>
+        <path>/home/StorTest</path>
+    </jenkins>
+    <nodes>
+        <node>
+            <ctrl_ip>10.2.42.102</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.42.103</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.42.104</ctrl_ip>
+        </node>
+    </nodes>
+    <clients>
+        <client>
+            <ctrl_ip>10.2.42.105</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.42.106</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.42.107</ctrl_ip>
+        </client>
+    </clients>
+
+    <!-- 卷 -->
+    <volumes>
+        <volume>volume1</volume>
+    </volumes>
+
+    <!-- 文件系统目录 -->
+    <mount_paths>
+        <mount_path>/mnt/volume1</mount_path>
+    </mount_paths>
+
+    <!-- 快照测试路径 -->
+    <snap_test_path>/mnt/volume1/snap</snap_test_path>
+
+    <!-- 配额测试路径 -->
+    <quota_test_path>/mnt/volume1/quota_test_dir</quota_test_path>
+
+    <!-- NAS测试路径 -->
+    <nas_test_paths>
+        <nas_test_path>/mnt/volume</nas_test_path>
+    </nas_test_paths>
+
+    <!-- S3 访问分区对外IP -->
+    <S3_access_ips>
+        <S3_access_ip>20.2.40.103</S3_access_ip>
+        <S3_access_ip>20.2.40.104</S3_access_ip>
+        <S3_access_ip>20.2.40.105</S3_access_ip>
+    </S3_access_ips>
+
+    <!-- 私有客户端节点中客户端install.py脚本所在路径 -->
+    <client_install_path>/root/ofs3.0/client</client_install_path>
+
+    <!-- 缺陷脚本测试路径 -->
+    <defect_test_path>/mnt/volume1/defect_case</defect_test_path>
+
+    <!-- 重要!!!执行用例列表文件 -->
+    <caselist>/home/StorTest/test_cases/cases/case_list/case_list</caselist>
+
+    <!-- 脚本日志存放路径 -->
+    <test_log_path>/home/StorTest/test_cases/log/case_log</test_log_path>
+
+    <!-- 脚本执行结果存放路径 -->
+    <test_result_path>/home/StorTest/test_cases/log/case_result</test_result_path>
+
+    <!-- 工具路径 -->
+    <tools_path>/home/StorTest/test_cases/tools</tools_path>
+
+    <!-- vdbench工具的路径 -->
+    <vdbench_path>/home/StorTest/test_cases/tools/vdbench50406</vdbench_path>
+
+    <!-- 快照专用vdbench工具的路径 -->
+    <snap_vdbench_path>/home/vdbench50406_snap</snap_vdbench_path>
+</testconfig>

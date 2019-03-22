@@ -1,0 +1,97 @@
+#!/usr/bin/python
+#-*-coding:utf-8 -*-
+#******************************************************
+#实现功能：addaccount用于增加账户，addcertificateid用于增加证书，accountrea用于得到账户相关的id：包括accountid，accountuid，及其中一个certificateid
+#getacerids用于得到该账户的所有证书id,将所有证书id存放于一个certificateids列表中
+#所需参数：需要修改配置文件S3.conf中的mgrip，accountname，email)
+#作者：刘萍
+#修改时间：2018/01/12
+#******************************************************
+import commands,os
+import _readconffile_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+import utils_path
+import s3_common
+
+def addaccount_logger(mgrip,accountname,email,logger):
+    rec=s3_common.add_account(accountname, email, 0)
+    if(rec[0] != 0):
+        logger.info("********add account error,account may exist *************************")
+        logger.info(rec[1])
+        return -1
+    else:
+        logger.info("add account success")
+
+def addcertificateid_logger(mgrip,accountname,email,logger):
+    accountnm=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listaccounts |grep "+accountname+"|grep "+email)[1]
+    if(accountnm == ''):
+        logger.info("*************the account not exist,please check accountname or email***************")
+        return -1
+    else:
+        accountid=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listaccounts |grep "+accountname+"|grep "+email+"|cut -d '#' -f 1 |cut -d ':' -f 2")[1]
+        out=commands.getstatusoutput("ssh "+mgrip+" parastor_pos addcertificate accountid="+accountid)
+        if(out[0] == 0):
+            logger.info("add certificateid success")
+        else:
+            logger.info("**************the num of certificateids may more than 5********************")
+            logger.info(out[1])
+            return -1
+
+def accountrea_logger(mgrip,accountname,email,logger):
+    accountnm=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listaccounts |grep "+accountname+"|grep "+email)[1]
+    if(accountnm == ''):
+        logger.info("**********the account not exist,please check accountname or email************")
+        return -1
+    else:
+        accountid=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listaccounts |grep "+accountname+"|grep "+email+"|cut -d '#' -f 1 |cut -d ':' -f 2")[1]
+        accountuid=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listaccounts |grep "+accountname+"|grep "+email+"|cut -d ':' -f 3 |cut -d '#' -f 1")[1]
+        certificatenr=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listcertificates accountid="+accountid+" |cut -d ':' -f3|cut -d '#' -f1")[1]
+        if(certificatenr != '0'):
+            certificateid=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listcertificates accountid="+accountid+" |cut -d '{' -f2|cut -d '}' -f1 | cut -d '%' -f1 | cut -d ':' -f2")[1]
+        else:
+            certificateid=''
+            logger.info("*********there is no certificateid,please add a certificate************")
+            addcertificateid_logger(mgrip,accountname,email,logger)
+        return accountid,accountuid,certificateid
+
+def getacerids_logger(mgrip,accountname,email,logger):
+    (accountid,accountuid,certificateid)=accountrea_logger(mgrip,accountname,email,logger)
+    (status,output)=commands.getstatusoutput("ssh "+mgrip+" parastor_pos listcertificates accountid="+accountid+"|cut -d '[' -f2|cut -d ']' -f1")
+    certificateids=[]
+    if(output==''):
+        certificateids.append(output)
+    else:
+        counts=output.split(',')
+        length=len(counts)
+        for i in range(length):
+            certificateid=counts[i].split('%')[0].split(':')[1]
+            certificateids.append(certificateid)
+    return certificateids
+
+
+if __name__=="__main__":
+    args=_readconffile_lp.readconf()
+#    print args
+    logfilename='test'
+    # 第二个步骤：创建logger
+    logfilename='test'
+    # 创建日志输出文件
+    output = getoutputpath_lp.getoutputpath()
+    logfilepath = os.path.join(output, logfilename)
+    ifmkdir = commonfunction_lp.touchfile(logfilepath)
+    logger = _log_lp.log(logfilename)
+    if ifmkdir:
+        logger.info('%s is alreay exists and we delete it and create a new one' % logfilepath)
+    else:
+        logger.info('%s is created ok' % logfilepath)
+    addaccount_logger(args['master_mgr_ip'],args['accountname'],args['email'],logger)
+    addcertificateid_logger(args['master_mgr_ip'],args['accountname'],args['email'],logger)
+    (accountid,accountuid,certificateid)=accountrea_logger(args['master_mgr_ip'],args['accountname'],args['email'],logger)
+    logger.info(accountid)
+    logger.info(accountuid)
+    logger.info(certificateid)
+    certificateids=getacerids_logger(args['master_mgr_ip'],args['accountname'],args['email'],logger)
+    logger.info(certificateids)

@@ -1,0 +1,149 @@
+# -*-coding:utf-8 -*
+from multiprocessing import Process
+import os
+import time
+import random
+import json
+
+import utils_path
+import common
+import snap_common
+import log
+import prepare_clean
+import tool_use
+
+####################################################################################
+#
+# Author: baorb
+# date 2018-01-19
+# @summary：
+#    快照revert的时候，删除数据盘，观察revert数据的正确性
+# @steps:
+#    1、部署3节点集群，配比4 2 1；
+#    2、在目录/mnt/parastor/snap/下运行vdbench 00.init（使用vdbench写入数据）；
+#    3、对目录/mnt/parastor/snap/创建快照a1；
+#    4、在目录/mnt/parastor/snap/下使用vdbench修改数据；
+#    5、删除一个节点的一块数据盘，删除过程中对快照a1进行revert；
+#    6、revert完成后，在目录/mnt/parastor/snap/运行vdbench 01，验证数据正确性；
+#    7、删除快照；
+#    8、检查是否有快照路径入口；
+#
+# @changelog：
+####################################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                  #本脚本名字
+SNAP_TRUE_PATH = os.path.join(snap_common.SNAP_PATH, FILE_NAME)              #/mnt/volume1/snap/snap_13_0_0_0
+CREATE_SNAP_PATH = os.path.join(snap_common.SNAP_PATH_BASENAME, FILE_NAME)   #/snap/snap_13_0_0_0
+
+
+def case():
+    # 2> 运行00脚本
+    tool_use.vdbench_run(SNAP_TRUE_PATH, snap_common.CLIENT_IP_1, snap_common.CLIENT_IP_2, run_create=True)
+
+    #cmd1 = 'scp -r /tmp/vdb_control.file root@%s:/tmp' % snap_common.CLIENT_IP_2
+    #cmd2 = 'scp -r /tmp/vdb_control.file root@%s:/tmp' % snap_common.CLIENT_IP_3
+    #common.run_command(snap_common.CLIENT_IP_1, cmd1)
+    #common.run_command(snap_common.CLIENT_IP_1, cmd2)
+
+    # 3> 对目录创建快照
+    snap_name = FILE_NAME + '_snapshot1'
+    path = snap_common.VOLUME_NAME + ':/' + CREATE_SNAP_PATH
+    rc, stdout = snap_common.create_snapshot(snap_name, path)
+    if 0 != rc:
+        log.error('create_snapshot %s failed!!!' % snap_name)
+        raise Exception('create_snapshot %s failed!!!' % snap_name)
+
+    # 4> 运行01脚本
+    tool_use.vdbench_run(SNAP_TRUE_PATH, snap_common.CLIENT_IP_1, snap_common.CLIENT_IP_2, run_write=True)
+
+    ob_node = common.Node()
+    node_id_lst = ob_node.get_nodes_id()
+    '''获取集群内的一个节点,获取节点的所有数据盘的id'''
+    fault_node_id = random.choice(node_id_lst)
+    ob_disk = common.Disk()
+    ob_storage_pool = common.Storagepool()
+    '''获取一个节点内所有的共享硬盘和数据硬盘'''
+    share_disk_names, monopoly_disk_names = ob_disk.get_share_monopoly_disk_names(fault_node_id)
+    '''随机获取一个数据盘'''
+    fault_disk_name = random.choice(monopoly_disk_names)
+    fault_disk_id = ob_disk.get_diskid_by_name(fault_node_id, fault_disk_name)
+    fault_disk_uuid = ob_disk.get_disk_uuid_by_name(fault_node_id, fault_disk_name)
+    storage_pool_id = ob_disk.get_storage_pool_id_by_diskid(fault_node_id, fault_disk_id)
+    fault_disk_usage = ob_disk.get_disk_usage_by_name(fault_node_id, fault_disk_name)
+
+    log.info("fault_node_id : %s"
+             "\nfault_disk_name : %s"
+             "\nfault_disk_uuid : %s"
+             "\nfault_disk_usage : %s"
+             "\nfault_disk_id : %s"
+             "\nstorage_pool_id : %s"
+             % (str(fault_node_id),
+                fault_disk_name,
+                fault_disk_uuid,
+                fault_disk_usage,
+                str(fault_disk_id),
+                str(storage_pool_id)))
+
+    '''异步删除硬盘'''
+    ob_disk.remove_disks_asyn(fault_disk_id)
+
+    time.sleep(30)
+
+    # 5> 对快照进行revert
+    snap_info = snap_common.get_snapshot_by_name(snap_name)
+    snap_id = snap_info['id']
+    rc, stdout = snap_common.revert_snapshot_by_id(snap_id)
+    if rc != 0:
+        log.error("revert snapshot %s failed!!!" % snap_name)
+        #raise Exception("revert snapshot %s failed!!!" % snap_name)
+    snap_common.check_revert_finished(snap_id)
+
+    # 6> 运行02脚本
+    snap_path = os.path.join(snap_common.SNAPSHOT_PAHT, snap_name)
+    tool_use.vdbench_run(SNAP_TRUE_PATH, snap_common.CLIENT_IP_1, snap_common.CLIENT_IP_2, run_check=True)
+
+    num = 0
+    '''检查硬盘是否删除'''
+    while True:
+        num += 1
+        time.sleep(20)
+        if ob_disk.check_disk_exist(fault_node_id, fault_disk_id):
+            exist_time = num * 20
+            m, s = divmod(exist_time, 60)
+            h, m = divmod(m, 60)
+            log.info("disk exist %dh:%dm:%ds!!!" % (h, m, s))
+        else:
+            log.info("disk deleted!")
+            break
+
+    time.sleep(300)
+
+    # 加入磁盘
+    ob_disk.add_disks(fault_node_id, fault_disk_uuid, fault_disk_usage)
+
+    # 加入存储池
+    fault_disk_id_new = ob_disk.get_disk_id_by_uuid(fault_node_id, fault_disk_uuid)
+    ob_storage_pool.expand_storage_pool(storage_pool_id, fault_disk_id_new)
+
+    # 7> 删除快照
+    rc, stdout = snap_common.delete_snapshot_by_path(path)
+    if 0 != rc:
+        log.error('%s delete snapshot failed!!!' % (path))
+        raise Exception('%s delete snapshot failed!!!' % (path))
+
+    time.sleep(10)
+
+    # 8> 3个客户端检查快照路径入口是否存在
+    snap_common.check_snap_entry(snap_path)
+    return
+
+
+def main():
+    prepare_clean.snap_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.snap_test_clean(FILE_NAME, fault=True)
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

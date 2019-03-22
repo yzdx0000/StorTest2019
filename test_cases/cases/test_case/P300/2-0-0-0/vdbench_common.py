@@ -1,0 +1,784 @@
+#!/usr/bin/python
+# -*- encoding=utf8 -*-
+
+import time
+import random
+import os
+
+import log
+import tool_use
+import common
+import nas_common
+import make_fault
+import get_config
+import ReliableTest
+
+client_ip_list = get_config.get_allclient_ip()
+sys_ip_list = get_config.get_allparastor_ips()
+read_path = "/tmp/in.pipe"
+write_path = "/tmp/out.pipe"
+
+global pool_id
+
+
+def vdbench_run(anchor_path, run_create=False, run_check_write=False,
+                run_write=False, run_write_dio=False, run_check=False,
+                run_write_jn=False, run_clean=False, ip_list=None, elapsed=None, is_fault_exit=True):
+    """
+    :author:                caizhenxing
+    :date  :                2018.04.17
+    :Description:           获取集群中的core文件信息
+    :param anchor_path:     vdbench运行路径
+    :param run_create:      是否跑create,默认:不跑
+    :param run_check_write: 是否跑check_write,默认:不跑
+    :param run_write:       是否跑write,默认:不跑
+    :param run_write_dio:   是否跑write_dio,默认:不跑
+    :param run_check:       是否跑check,默认:不跑
+    :param run_write_jn:    是否跑write_jn,默认:不跑
+    :param run_clean:       是否跑run_clean,默认:不跑
+    :param ip_list:         客户端ip列表
+    :param elapsed:         运行时长
+    :param is_fault_exit:   失败后是否退出
+    :return:
+    """
+    obj_vdbench = tool_use.Vdbenchrun(files=500, elapsed=elapsed)
+    if run_create is True:
+        rc = obj_vdbench.run_create(anchor_path, '/tmp', *tuple(ip_list))
+        if rc != 0:
+            log.error('rc = %d' % rc)
+            raise Exception("vdbench create failed!!!!!!")
+
+    if run_check_write is True:
+        rc = obj_vdbench.run_check_write(anchor_path, '/tmp', *tuple(ip_list))
+        if rc != 0:
+            raise Exception("vdbench check_write failed!!!!!!")
+
+    if run_write is True:
+        rc = obj_vdbench.run_write(anchor_path, *tuple(ip_list))
+        if is_fault_exit:
+            if rc != 0:
+                raise Exception("vdbench write failed!!!!!!")
+
+    if run_write_jn is True:
+        rc = obj_vdbench.run_write_jn(anchor_path, '/tmp', *tuple(ip_list))
+        if is_fault_exit:
+            if rc != 0:
+                raise Exception("vdbench write_jn failed!!!!!!")
+
+    if run_write_dio is True:
+        rc = obj_vdbench.run_write_dio(anchor_path, *tuple(ip_list))
+        if rc != 0:
+            raise Exception("vdbench write_dio failed!!!!!!")
+
+    if run_check is True:
+        rc = obj_vdbench.run_check(anchor_path, '/tmp', *tuple(ip_list))
+        if rc != 0:
+            raise Exception("vdbench check failed!!!!!!")
+
+    if run_clean:
+        rc = obj_vdbench.run_clean(anchor_path, *tuple(ip_list))
+        if rc != 0:
+            raise Exception("vdbench write_dio failed!!!!!!")
+
+    return
+
+
+def down_node_net(ip, eth):
+    """
+    断指定IP的指定网卡
+    :param ip:
+    :param eth:
+    :return:
+    """
+    log.info("\033[1;31;40mBegin down node:%s, eth %s\033[0m" % (ip, eth))
+    # while not common.check_service_state():
+    #     time.sleep(5)
+    make_fault.down_eth(ip, eth)
+
+
+def up_node_net(ip, eth, ip_mask_lst):
+    """
+    up指定IP的指定网卡
+    :param ip:
+    :param eth:
+    :return:
+    """
+    log.info("\033[1;31;40mBegin up node:%s, eth %s\033[0m" % (ip, eth))
+    make_fault.up_eth(ip, eth, ip_mask_lst)
+    time.sleep(60)
+
+
+# def get_non_lmos_node_ip_and_eth():
+#     lmos_node_id = get_lmos_node_id()
+#     node_obj = common.Node()
+#     sys_node_id_lst = node_obj.get_nodes_id()
+#     fault_node_id = None
+#     for node_id in sys_node_id_lst:
+#
+#         if int(node_id) != int(lmos_node_id):
+#             fault_node_id = node_id
+#             break
+#     fault_node_ip = node_obj.get_node_ip_by_id(fault_node_id)
+#     eth_list, data_ip_list = node_obj.get_node_eth(fault_node_id)
+#     return fault_node_ip, eth_list
+
+
+def get_lmos_node_ip_and_eth(is_lmos=True):
+    """
+    获取节点ip和网卡
+    :return:
+    """
+    lmos_node_id = get_lmos_node_id()
+
+    node_obj = common.Node()
+    sys_node_id_lst = node_obj.get_nodes_id()
+    process_node_id = None
+
+    if is_lmos:
+        process_node_id = lmos_node_id
+    else:
+        for node_id in sys_node_id_lst:
+
+            if int(node_id) != int(lmos_node_id):
+                process_node_id = node_id
+                break
+
+    fault_node_ip = node_obj.get_node_ip_by_id(process_node_id)
+    eth_list, data_ip_list, ip_mask_lst = node_obj.get_node_eth(process_node_id)
+    return fault_node_ip, eth_list, ip_mask_lst
+
+
+def get_lmos_node_id():
+    """
+    获取lmos节点node_id
+    :return:
+    """
+    node_id = random.choice(get_orole_node_id_lst())
+    cmd = "ssh %s /home/parastor/tools/nWatch -t oRole -i %d -c oRole#rolemgr_view_dump" % (common.SYSTEM_IP, node_id)
+    rc, stdout = common.pscli_run_command(cmd)
+    result_lst = stdout.split('\n')
+    for line in result_lst:
+        if 'node_sn:' in line and 'node_stat: 1' not in line:
+            mem_lst = line.split(',')
+            for mem in mem_lst:
+                if 'node_id' in mem:
+                    return mem.split(':')[-1].strip()
+    log.warn("There is not mos node!!!")
+    return None
+
+
+def get_lmos_node_id_lst(is_lmos=True):
+    """
+    获取lmos节点node_id list
+    :return:
+    """
+    node_id_lst = []
+    node_id = random.choice(get_orole_node_id_lst())
+    cmd = "ssh %s /home/parastor/tools/nWatch -t oRole -i %d -c oRole#rolemgr_view_dump" % (common.SYSTEM_IP, node_id)
+    rc, stdout = common.pscli_run_command(cmd)
+    result_lst = stdout.split('\n')
+    node_obj = common.Node()
+    sys_node_id_lst = node_obj.get_nodes_id()
+
+    for line in result_lst:
+        if 'node_sn:' in line and 'node_stat: 1' not in line:
+            mem_lst = line.split(',')
+            for mem in mem_lst:
+                if 'node_id' in mem:
+                    node_id = mem.split(':')[-1].strip()
+                    if int(node_id) not in node_id_lst:
+                        node_id_lst.append(int(node_id))
+        elif 'node_sn:' in line and 'node_stat: 1' in line:
+            mem_lst = line.split(',')
+            for mem in mem_lst:
+                if 'node_id' in mem:
+                    node_id = mem.split(':')[-1].strip()
+                    if int(node_id) in sys_node_id_lst:
+                        sys_node_id_lst.remove(int(node_id))
+
+    if not is_lmos:
+        for n_id in node_id_lst:
+            sys_node_id_lst.remove(n_id)
+        del node_id_lst[:]
+        node_id_lst = sys_node_id_lst
+
+    return node_id_lst
+
+
+def get_lmos_ip_lst(is_lmos=True):
+    """
+    获取lmos节点ip列表
+    :param is_lmos:
+    :return:
+    """
+    node_id_lst = get_lmos_node_id_lst(is_lmos)
+    node = common.Node()
+    node_ip_lst = []
+    for node_id in node_id_lst:
+        node_ip = node.get_node_ip_by_id(node_id)
+        node_ip_lst.append(node_ip)
+
+    return node_ip_lst
+
+
+# def check_bad_obj():
+#     """
+#     检查坏对象
+#     :return:
+#     """
+#     count = 0
+#     while True:
+#         count += 1
+#         log.info("the %d times check badjobnr" % count)
+#         log.info("wait 60 seconds")
+#         time.sleep(60)
+#         if check_badjobnr():
+#             break
+
+
+def check_rebuild_job(fault_node_ip=None):
+    """不断检查重建任务是否存在"""
+    start_time = time.time()
+    while True:
+        if not check_rebuild_jobs(fault_node_ip=fault_node_ip):
+            log.info('rebuild job finish!!!')
+            break
+        time.sleep(20)
+        exist_time = int(time.time() - start_time)
+        m, s = divmod(exist_time, 60)
+        h, m = divmod(m, 60)
+        log.info('rebuild job exist %dh:%dm:%ds' % (h, m, s))
+
+# def kill_master_process(process_name):
+#     process_node_id = get_master_process_node_id(process_name)
+#     if process_node_id != 250:
+#         # 获取主进程所在的节点ip
+#         node_ip = get_node_ip_by_id(process_node_id)
+#
+#         make_fault.kill_process(node_ip, process_name)
+#     else:
+#         log.info("process_name is wrong!")
+
+
+# def kill_slave_process(process_name):
+#     ob_node = common.Node()
+#     node_id_list = ob_node.get_nodes_id()
+#     master_process_node_id = get_master_process_node_id(process_name)
+#     if master_process_node_id != 250:
+#         node_id_list.remove(master_process_node_id)
+#         slave_process_node_id = random.choice(node_id_list)
+#         node_ip = get_node_ip_by_id(slave_process_node_id)
+#
+#         make_fault.kill_process(node_ip, process_name)
+#     else:
+#         log.info("process_name is wrong!")
+def get_process_node_ip_and_eth(process_name, is_master=False):
+    """
+    获取指定进程的ip及网卡
+    :param process_name:
+    :param is_master:
+    :return:
+    """
+    master_process_node_id = get_master_process_node_id(process_name)
+    node_obj = common.Node()
+    sys_node_id_lst = node_obj.get_nodes_id()
+
+    # process_node_id = ''
+    if is_master:
+        process_node_id = master_process_node_id
+    else:
+        sys_node_id_lst.remove(master_process_node_id)
+        for node_id in sys_node_id_lst:
+            node_ip = node_obj.get_node_ip_by_id(node_id)
+            if node_ip in client_ip_list:
+                sys_node_id_lst.remove(node_id)
+
+        process_node_id = random.choice(sys_node_id_lst)
+
+    fault_node_ip = node_obj.get_node_ip_by_id(process_node_id)
+    eth_list, data_ip_list, ip_mask_lst = node_obj.get_node_eth(process_node_id)
+
+    return fault_node_ip, eth_list, ip_mask_lst
+
+
+def get_master_process_node_id(process_name):
+    """
+    获取主节点node id
+    :param process_name:
+    :return:
+    """
+    log.info("\t[ get_master_process_node_id ]")
+    node_id = random.choice(get_orole_node_id_lst())
+    if process_name == "oJmgs":
+        rc, stdout = common.get_master()
+        common.judge_rc(rc, 0, "Execute command: get_master failed. \nstdout: %s" % stdout)
+        ojmgs_result = common.json_loads(stdout)
+        ojmgs_node_id = ojmgs_result["result"]["node_id"]
+        return int(ojmgs_node_id)
+
+    elif process_name == "oJob":
+        cmd = "/home/parastor/tools/nWatch -t oJob -i %d -c JOB#jobinfo" % node_id
+        rc, stdout = common.pscli_run_command(cmd)
+        common.judge_rc(rc, 0, "Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        return int(stdout.split()[2].split(',')[0])
+
+    elif process_name == "oRole":
+        cmd = "/home/parastor/tools/nWatch -t oRole -i %d -c oRole#rolemgr_master_dump" % node_id
+        rc, stdout = common.pscli_run_command(cmd)
+        common.judge_rc(rc, 0, "Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        return int(stdout.split(':')[1].split()[0])
+    elif process_name == "oPara":
+        cmd = "/home/parastor/tools/nWatch -t oRole -i %d -c oRole#rolemgr_view_dump | " \
+              "grep \"lnodeid: 1\" -B 1 | grep node_id | uniq" % node_id
+        rc, stdout = common.pscli_run_command(cmd)
+        common.judge_rc(rc, 0, "Execute command: \"%s\" failed. \n stdout: %s" % (cmd, stdout))
+        return int(stdout.split()[4].split(',')[0])
+    else:
+        log.info("\t process_name is wrong!")
+    return 250
+
+
+def get_node_ip_by_id(node_id):
+    """
+    获取指定node id 的IP
+    :param node_id:
+    :return:
+    """
+    log.info("\t[ get_node_ip_by_id ]")
+
+    rc, stdout = common.get_nodes(ids=node_id)
+    common.judge_rc(rc, 0, "Execute command: get_nodes failed. \n stdout: %s" % stdout)
+    msg = common.json_loads(stdout)
+    node_ip_by_id = msg['result']['nodes'][0]['ctl_ips'][0]['ip_address']
+    return node_ip_by_id
+
+
+def get_random_client_data_ip_and_eth():
+    """
+    随机获取客户端数据网IP及网卡名
+    :return:
+    """
+    for ip in client_ip_list:
+        if ip in common.deploy_ips:
+            client_ip_list.remove(ip)
+    client_ip = random.choice(client_ip_list)
+    ip_split_lst = client_ip.split('.')
+    cluster_data_ip = random.choice(common.get_nodes_dataip())
+    cluster_data_ip_lst = cluster_data_ip.split('.')
+    cluster_data_ip_lst.pop(-1)
+    cluster_data_ip_lst.append(ip_split_lst[-1])
+    client_data_ip = '.'.join(cluster_data_ip_lst)
+
+    cmd1 = 'ip addr | grep %s' % client_data_ip
+    rc, stdout = common.run_command(client_ip, cmd1)
+    common.judge_rc(rc, 0, "Execute command: \"%s\" failed. \nstdout: %s" % (cmd1, stdout))
+    eth_name = stdout.split()[-1]
+
+    eth_name_lst = []
+    eth_name_lst.append(eth_name)
+
+    return client_ip, eth_name_lst
+
+
+def pullout_disk(disk_name_dict):
+    """
+    拔盘操作
+    :param disk_name_dict:
+    :return:
+    """
+    time.sleep(10)
+    for disk in disk_name_dict:
+        log.info("###################Begin to pullout disk#############################")
+        log.info("##########Node_ID: %s, physicalid: %s, Disk_ID: %s##########" % (disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['physicalid'], disk_name_dict[disk]['id']))
+        cmd = ('ssh %s \"echo scsi remove-single-device %s > /proc/scsi/scsi\"' % (disk_name_dict[disk]['ip'], disk_name_dict[disk]['physicalid']))
+        common.command(cmd)
+        time.sleep(1)
+    time.sleep(10)
+    return
+
+
+def insert_disk(disk_name_dict):
+    """
+    插入磁盘操作
+    :param disk_name_dict:
+    :return:
+    """
+    time.sleep(10)
+    for disk in disk_name_dict:
+        log.info("###################Begin to insert disk to Node#############################")
+        log.info("##########Node_ID: %s, physicalid: %s, Disk_ID: %s##########" % (disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['physicalid'], disk_name_dict[disk]['id']))
+        cmd = ('ssh %s \"echo scsi add-single-device %s > /proc/scsi/scsi\"' % (disk_name_dict[disk]['ip'], disk_name_dict[disk]['physicalid']))
+        common.command(cmd)
+        time.sleep(30)
+    return
+
+
+def del_disk(disk_name_dict, is_shared=False):
+    """
+    从系统中删除磁盘
+    :param disk_name_dict:
+    :param is_shared:
+    :return:
+    """
+    global pool_id
+    ob_disk = common.Disk()
+    disk_id_lst = []
+    for disk in disk_name_dict:
+        log.info("###################Begin to delete disk#############################")
+        if not is_shared:
+            pool_id = ob_disk.get_storage_pool_id_by_diskid(disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['id'])
+        log.info("#####Node_ID: %s, Disk_ID: %s#####" % (disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['id']))
+        disk_id_lst.append(disk_name_dict[disk]['id'])
+
+    disk_id_lst_new = ','.join(str(x) for x in disk_id_lst)
+    ob_disk.remove_disks(disk_id_lst_new)
+
+
+# def del_disk_asyn(disk_name_dict, is_shared=False):
+#     global pool_id
+#     ob_disk = common.Disk()
+#     for disk in disk_name_dict:
+#         log.info("###################Begin to delete disk#############################")
+#         if not is_shared:
+#             pool_id = ob_disk.get_storage_pool_id_by_diskid(disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['id'])
+#         log.info("#####Node_ID: %s, Disk_ID: %s#####" % (disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['id']))
+#         ob_disk.remove_disks_asyn(disk_name_dict[disk]['id'])
+
+
+def add_disk(disk_name_dict, is_shared=False):
+    """
+    将磁盘添加进系统
+    :param disk_name_dict:
+    :param is_shared:
+    :return:
+    """
+    global pool_id
+    ob_disk = common.Disk()
+    ob_storage_pool = common.Storagepool()
+    for disk in disk_name_dict:
+        time.sleep(10)
+        log.info("###################Begin to add disk to Node#############################")
+        log.info("#####Node_ID: %s, Disk_UUID: %s, Disk_Usage: %s, Disk_ID: %s#####" % (disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['uuid'], disk_name_dict[disk]['usage'], disk_name_dict[disk]['id']))
+        ob_disk.add_disks(disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['uuid'], disk_name_dict[disk]['usage'])
+        if not is_shared:
+            fault_disk_id_new = ob_disk.get_disk_id_by_uuid(disk_name_dict[disk]['nodeid'], disk_name_dict[disk]['uuid'])
+            ob_storage_pool.expand_storage_pool(pool_id, fault_disk_id_new)
+
+
+def get_disk_nodeid_uuid_usage(is_data_disk=False, is_lmos_jnl_disk=False,
+                               remove_all_shared=False, count_of_node=None, disk_num_each_node=None, node_id_del=None):
+
+    """
+    获取磁盘信息
+    :param is_data_disk:            是否为数据盘
+    :param is_lmos_jnl_disk:        是否为lmos日志盘
+    :param remove_all_shared:       是否删除所有共享盘
+    :param count_of_node:           节点数
+    :param disk_num_each_node:      每个节点待操作的磁盘数量
+    :param node_id_del:
+    :return:
+    """
+    disk_num_each_node = 1 if disk_num_each_node is None else disk_num_each_node
+    count_of_node = 1 if count_of_node is None else count_of_node
+
+    disk_name_dict = {}
+    node_id_lst_new = []
+    node_info_lst = []
+    ob_node = common.Node()
+    ob_disk = common.Disk()
+    node_id_lst = ob_node.get_nodes_id()
+    node_id_lst_final = []
+
+    if is_lmos_jnl_disk:
+        node_id_lst_final = get_lmos_node_id_lst()
+    else:
+        node_id_lst_final = node_id_lst
+
+    if node_id_del is not None:
+        for n_id in node_id_del:
+            node_id_lst_final.remove(n_id)
+
+    for i in range(count_of_node):
+        while True:
+            node_id = random.choice(node_id_lst_final)
+            if node_id not in node_id_lst_new:
+                node_id_lst_new.append(node_id)
+                break
+
+    for nodeid in node_id_lst_new:
+        node_ip = ob_node.get_node_ip_by_id(nodeid)
+        share_disk_names, monopoly_disk_names = ob_disk.get_share_monopoly_disk_names(nodeid)
+        node_id_final = (nodeid,)
+        node_ip_final = (node_ip,)
+        if not remove_all_shared:
+            for i in range(disk_num_each_node):
+                while True:
+                    data_disk_name = None
+                    if is_data_disk:
+                        data_disk_name = random.choice(monopoly_disk_names)
+                    elif not is_data_disk and not remove_all_shared:
+                        data_disk_name = random.choice(share_disk_names)
+                    if data_disk_name not in node_info_lst:
+                        data_disk_name_final = (data_disk_name,)
+                        break
+                node_info_final = node_id_final + node_ip_final + data_disk_name_final
+                node_info_lst.append(node_info_final)
+        else:
+            for disk_name in share_disk_names:
+                data_disk_name_final = (disk_name,)
+                node_info_final = node_id_final + node_ip_final + data_disk_name_final
+                node_info_lst.append(node_info_final)
+
+    for fault_node_id, fault_node_ip, fault_disk_name in node_info_lst:
+        fault_disk_physicalid = ob_disk.get_physicalid_by_name(fault_node_ip, fault_disk_name)
+        fault_disk_uuid = ob_disk.get_disk_uuid_by_name(fault_node_id, fault_disk_name)
+        fault_disk_usage = ob_disk.get_disk_usage_by_name(fault_node_id, fault_disk_name)
+        fault_disk_id = ob_disk.get_disk_id_by_uuid(fault_node_id, fault_disk_uuid)
+        disk_info = {'physicalid': fault_disk_physicalid, 'uuid': fault_disk_uuid,
+                     'usage': fault_disk_usage, 'id': fault_disk_id, 'ip': fault_node_ip, 'nodeid': fault_node_id}
+        disk_name_dict[fault_disk_name] = disk_info
+
+    return disk_name_dict, node_id_lst_new
+
+
+def down_node(fault_ip=None):
+    """
+    将指定节点下电
+    :param fault_ip:
+    :return:
+    """
+    type_info = get_config.get_machine_type(get_config.CONFIG_FILE)
+    result_lst = []
+    if type_info == "phy":
+        for ip in fault_ip:
+            ipmi_ip = ReliableTest.get_ipmi_ip(ip)
+            if not ReliableTest.run_down_node(ipmi_ip):
+                print ("node %s down failed!!!" % ip)
+                exit(1)
+            else:
+                data_node = (ipmi_ip,) + (ip,)
+                result_lst.append(data_node)
+    else:
+        for esxi_ip, esxi_name, esxi_pwd in get_config.get_esxi_info():
+
+            for ip in fault_ip:
+                vm_id = ReliableTest.run_down_vir_node(esxi_ip=esxi_ip,
+                                                       u_name=esxi_name,
+                                                       pw=esxi_pwd,
+                                                       node_ip=ip)
+                data_node = (vm_id,) + (ip,)
+                result_lst.append(data_node)
+
+    return result_lst
+
+
+def up_node(node_info=None, ):
+    """
+    将指定节点上电
+    :param node_info:
+    :return:
+    """
+    type_info = get_config.get_machine_type(get_config.CONFIG_FILE)
+    for ip, node_ip in node_info:
+        if type_info == "phy":
+            if not ReliableTest.run_up_node(ip):
+                print ("node up failed!!!")
+                exit(1)
+        else:
+            for esxi_ip, esxi_name, esxi_pwd in get_config.get_esxi_info():
+                ReliableTest.run_up_vir_node(esxi_ip=esxi_ip, u_name=esxi_name, pw=esxi_pwd, vm_id=ip)
+
+
+# def check_badjobnr():
+#     """获取集群中所有节点的id"""
+#
+#     node_id = random.choice(get_orole_node_id_lst())
+#     cmd = '/home/parastor/tools/nWatch -t oJob -i %d -c RCVR#jobinfo' % node_id
+#     rc, stdout = common.pscli_run_command(cmd, print_flag=False)
+#     if 0 != rc:
+#         log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+#         return False
+#     else:
+#         cmd1 = "/home/parastor/tools/nWatch -t oJob -i %s -c RCVR#repairjob" % node_id
+#         rc, stdout = common.pscli_run_command(cmd1)
+#         if 0 != rc:
+#             log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd1, stdout))
+#             return False
+#         else:
+#             log.info(stdout)
+#             result = stdout.split('\n')
+#             for mem in result:
+#                 if 'badobjnr' in mem:
+#                     mem_temp = mem.split()
+#                     if mem_temp[1] != '0':
+#                         log.info("badobj %s" % mem_temp[1])
+#                         return False
+#     return True
+
+
+def check_rebuild_jobs(fault_node_ip=None):
+    rc, stdout = common.get_jobengine_state(fault_node_ip=fault_node_ip)
+    common.judge_rc(rc, 0, "get jobengine state failed.\nstdout: %s" % stdout)
+    msg_json = common.json_loads(stdout)
+    jobs = msg_json['result']['job_engines']
+    for job in jobs:
+        if job['type'] == 'JOB_ENGINE_REBUILD' or job['type'] == 'JOB_ENGINE_REPAIR':
+            return True
+    return False
+
+
+def remove_nodes(fault_ip_lst):
+    time.sleep(120)
+    node = common.Node()
+    for fault_ip in fault_ip_lst:
+        node_id = node.get_node_id_by_ip(fault_ip)
+        node.remove_nodes(node_id, fault_node_ip=fault_ip)
+
+
+def add_nodes(config_file_lst):
+    time.sleep(60)
+    node = common.Node()
+    for fault_node_ip, config_file, node_pool_id, relation_lst in config_file_lst:
+
+        rc, stdout = node.add_node(config_file, fault_node_ip=fault_node_ip)
+        common.judge_rc(rc, 0, 'add_node failed', exit_flag=False)
+        time.sleep(60)
+        """获取新的节点id"""
+        node_id_new = node.get_node_id_by_ip(fault_node_ip)
+        """添加节点到节点池中"""
+        make_fault.add_node_to_nodepool(node_pool_id, node_id_new)
+        """将节点中的所有磁盘添加到对应的存储池"""
+        make_fault.add_node_disks_to_storagepool(node_id_new, relation_lst)
+        zone_id_lst = nas_common.get_access_zones_ids_list()
+        node_ids = ','.join(str(x) for x in node.get_nodes_id())
+        nas_common.update_access_zone(access_zone_id=zone_id_lst[0], node_ids=node_ids)
+        rc, stdout = common.startup(node_id_new, fault_node_ip=fault_node_ip)
+        common.judge_rc(rc, 0, 'startup system failed', exit_flag=False)
+
+
+def check_ping(ip_lst):
+    time.sleep(120)
+    for i in ip_lst:
+        if i in sys_ip_list:
+            sys_ip_list.remove(i)
+
+    sys_ip = random.choice(client_ip_list)
+    for ip in ip_lst:
+        while True:
+            time.sleep(10)
+            cmd = 'ssh %s hostname' % ip
+            rc, stdout = common.run_command(sys_ip, cmd)
+            if rc == 0:
+                break
+
+
+def create_config_file(fault_ip_lst):
+    config_file_lst = []
+    for fault_node_ip in fault_ip_lst:
+        node = common.Node()
+        fault_node_id = node.get_node_id_by_ip(fault_node_ip)  # 通过故障节点IP找到节点ID
+        """生成节点的配置文件"""
+        config_file = make_fault.make_node_xml(fault_node_id)
+        """获取节点所在的节点池的id"""
+        node_pool_id = node.get_nodepoolid_by_nodeid(fault_node_id)
+        """获取节点中所有磁盘与存储池的对应关系"""
+        relation_lst = make_fault.get_node_storage_pool_rel(fault_node_id)
+        config_file_lst.append((fault_node_ip,) + (config_file,) + (node_pool_id,) + (relation_lst,))
+    return config_file_lst
+
+
+def get_orole_node_id_lst():
+    rc, stdout = common.get_services()
+    node_id_lst = []
+    if rc != 0:
+        return False
+    services_info = common.json_loads(stdout)
+    service_lst = services_info['result']['nodes']
+    for service_node in service_lst:
+        service_node_lst = service_node['services']
+        for service in service_node_lst:
+            if service['service_type'] == 'oRole':
+                node_id_lst.append(service['node_id'])
+
+    return node_id_lst
+
+
+def get_orole_node_ip_lst():
+    node = common.Node()
+    node_id_lst = get_orole_node_id_lst()
+    node_ip_lst = []
+    for node_id in node_id_lst:
+        node_ip = node.get_node_ip_by_id(node_id)
+        node_ip_lst.append(node_ip)
+
+    return node_ip_lst
+
+
+def verify_node_stat(fault_node_ip=None):
+    count = 0
+    while not check_service_state(fault_node_ip=fault_node_ip):
+        count += 1
+        log.info("the %d times check node stat" % count)
+        log.info("wait 60 seconds")
+        time.sleep(60)
+
+
+def get_node_eth_name_lst(node_ip, is_specified=False):
+    eth_list = []
+    if is_specified:
+        cmd1 = 'ip addr | grep %s' % node_ip
+    else:
+        cmd1 = 'ip addr | grep -w global'
+    rc, stdout = common.run_command(node_ip, cmd1)
+    common.judge_rc(rc, 0, "Execute command: \"%s\" failed. \nstdout: %s" % (cmd1, stdout))
+    result = stdout.split("\n")
+    for line in result:
+        if line != '':
+            eth_name = line.split()[-1]
+            if eth_name not in eth_list:
+                eth_list.append(eth_name)
+    return eth_list
+
+
+def get_node_data_eth_name_lst(node_id):
+
+    node = common.Node()
+    eth_list, data_ip_list, ip_mask_lst = node.get_node_eth(node_id)
+
+    return eth_list
+
+
+def creat_pipe():
+    try:
+        os.mkfifo(read_path)
+        os.mkfifo(write_path)
+    except OSError, e:
+        print "mkfifo error:", e
+
+    return read_path, write_path
+
+
+def check_service_state(fault_node_ip=None):
+    """
+    :author:      baoruobing
+    :date  :      2018.06.06
+    :description: 检查环境中所有服务的状态是否正常
+    :return:
+    """
+    rc, stdout = common.get_services(fault_node_ip=fault_node_ip)
+    node = common.Node()
+    node_id = node.get_node_id_by_ip(fault_node_ip)
+    if rc != 0:
+        return False
+    services_info = common.json_loads(stdout)
+    service_lst = services_info['result']['nodes']
+    for service_node in service_lst:
+        if service_node['node_id'] != node_id:
+            service_node_lst = service_node['services']
+            for service in service_node_lst:
+                if service['service_type'] in ['oJmgs', 'oRole', 'oPara', 'oMgcd', 'oJob', 'oStor', 'oApp']:
+                    if service['inTimeStatus'] != 'SERV_STATE_OK' and service['inTimeStatus'] != 'SERV_STATE_READY':
+                        log.warn("node %s: %s's status is %s" %
+                                 (service['node_id'], service['service_type'], service['inTimeStatus']))
+                        return False
+    return True

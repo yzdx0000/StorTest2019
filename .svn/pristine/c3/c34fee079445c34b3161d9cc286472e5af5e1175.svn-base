@@ -1,0 +1,35 @@
+# -*- coding:utf-8 -*
+import commands
+import sys,os
+import _checkresult_lyz
+import getoutputpath_lyz
+import _xmlanalyzeAllBucket
+import _xmlanalyzeAllObjectOfBucket
+import json
+#函数名称：getAllBucketOfCertificateid
+#函数作用：查询某个证书下有哪些桶
+#函数输入：oOss所在ip，certificateid
+#函数输出：print出该证书下有哪些桶
+def getAllBucketOfCertificateid(oossip,certificateid):
+	cmd='curl -s -i http://'+oossip+':20480 -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	#output=os.system(cmd)
+	print output
+	re=_checkresult_lyz.checkresult(status, output)
+	if re == -1:
+		return -1
+	outputdir= getoutputpath_lyz.getoutputpath()
+	#print  output
+	os.system('cd ' + outputdir + ';touch fileAllBuckets')
+	fileAllBucketsallpath = os.path.join(outputdir, 'fileAllBuckets')
+	with open(fileAllBucketsallpath, 'w') as fo:
+		fo.write(output)
+	objects = _xmlanalyzeAllBucket.analyze_xml()
+	print objects
+	return objects
+	#print objects
+if __name__=="__main__":
+	getAllBucketOfCertificateid(sys.argv[1],sys.argv[2])
+	#getAllObjectOfBucket('10.2.40.18','000020ZYTUAP29Z1000020ZYSD52KRHK')
+	

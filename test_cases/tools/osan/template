@@ -1,0 +1,3 @@
+sd=default,journal=/root/vdbench/journal,openflags=o_direct
+wd=default,xfersizes=(4k,25,8k,25,32k,25,128k,25)
+rd=run1,wd=wd*,iorate=300,elapsed=600,maxdata=500G,threads=(4,4),interval=1

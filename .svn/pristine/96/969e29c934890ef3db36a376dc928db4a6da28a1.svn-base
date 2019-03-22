@@ -1,0 +1,19 @@
+#-*- coding:utf-8 -*
+##############################################3
+#该函数用来查询指定的进程是否存在
+#函数输入：ip，processname
+#函数输出：True 或者 False
+import os,sys,commands
+def ifExistsProcess_lyz(ip,processname):
+    cmd = 'ssh '+ip+' "ps aux | grep '+ processname+' |grep -v grep | wc -l"'
+    print cmd
+    (status,output)=commands.getstatusoutput(cmd)
+    print output
+    if int(output)>=1:
+        print 'True'
+        return True
+    else:
+        return False
+        print 'False'
+if __name__=="__main__":
+    ifExistsProcess_lyz('10.2.20.118', 'oOms')

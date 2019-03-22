@@ -1,0 +1,38 @@
+# -*- coding:utf-8 -*
+#该函数用来创建很多个account
+#import imports3libpath
+import _create_account
+import os,sys,commands
+def createManyAccount(mgrip,accountname,accountemailfre,accountnum):
+	accountnum=int(accountnum)
+	allaccountnameall=[]
+	for i in range(accountnum):
+		accountnameall=accountname+str(i)
+		print 'accountname is %s' %accountnameall
+		allaccountnameall.append(accountnameall)
+		accountemail=accountemailfre+str(i)+'@sugon.com'
+		re=_create_account.acc_add(mgrip,accountnameall,accountemail)
+		if re == -1:
+			return -1
+	print '**************************'
+	print 'allaccountname is %s'%allaccountnameall
+	return allaccountnameall
+##############################################
+#第二个函数与第一个相比，就是多了一个logger功能
+###############################################
+def createManyAccountHaveLog(mgrip,accountname,accountemailfre,accountnum,logger):
+	accountnum = int(accountnum)
+	allaccountnameall = []
+	for i in range(accountnum):
+		accountnameall = accountname + str(i)
+		print 'accountname is %s' % accountnameall
+		allaccountnameall.append(accountnameall)
+		accountemail = accountemailfre + str(i) + '@sugon.com'
+		re=_create_account.acc_add(mgrip, accountnameall, accountemail)
+		if re == -1:
+			return -1
+	logger.info('**************************')
+	logger.info('allaccountname is %s' % allaccountnameall)
+	return allaccountnameall
+if __name__=="__main__":
+	createManyAccount('10.2.40.16','test','test',105)

@@ -1,0 +1,35 @@
+#!/usr/bin/python
+# -*-coding:utf-8 -*
+#实现功能：复制对象
+import os,commands,sys
+import _readconffile_lp
+import _getrelatedid_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+def copyObject_logger(mgrip,dsip,dest_bucket,dest_obj,src_accname,src_email,src_bucket,src_obj,logger):
+    (src_accountid,src_accountuid,src_certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,src_accname,src_email,logger)
+    cmd='curl -s -i http://'+dsip+':20480/'+dest_bucket+'/'+dest_obj+' -X PUT -H "Authorization: AWS4-HMAC-SHA256 Credential='+src_certificateid+'" -H "x-amz-copy-source: /'+src_bucket+'/'+src_obj+'"'
+    logger.info(cmd)
+    (status,output)=commands.getstatusoutput(cmd)
+    logger.info(output)
+    num1=output.find('HTTP/1.1')
+    num2=output[(num1+9):((num1+12))]
+    logger.info("---------------Verify that the copy is successful---------------")
+    if (num2=='200'):
+        cmd1='curl -s -i http://'+dsip+':20480/'+dest_bucket+'/'+dest_obj+' -X HEAD -H "Authorization: AWS4-HMAC-SHA256 Credential='+src_certificateid+'"'
+        logger.info(cmd1)
+        (state1,output1)=commands.getstatusoutput(cmd1)
+        logger.info(output1)
+        num3=output1.find('HTTP/1.1')
+	num4=output[(num1+9):((num1+12))]
+        if(num4=='200'):
+            logger.info("copy %s of %s to %s of %s success!" % (src_obj,src_bucket,dest_obj,dest_bucket))
+        else:
+            logger.info("***************copy %s of %s to %s of %s fail************!" % (src_obj,src_bucket,dest_obj,dest_bucket))
+            return -1
+
+
+
+

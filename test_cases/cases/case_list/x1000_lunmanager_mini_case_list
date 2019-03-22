@@ -1,0 +1,40 @@
+###############################################################################
+# !!!!!!每一行只配置一个用例，否则除第一个以外的用例都不会执行!!!!!!
+# 可以有空行
+# 单行注释请在每一行的 最开始 使用#，只要此行最开始使用了#，剩余字符均不生效
+#
+# 多行注释请使用 /*开始  */结束(!!!!!注释请占一行!!!!!!)
+/*
+/basic_function/5nodes_system_install.py
+/basic_function/1-0-5-8_mod-nodepoolname.py
+#*/ (这个结束符被注释掉，所以不生效，也就是说#的优先级高于/*和*/)
+/basic_function/5nodes_system_install.py
+*/  11.py(此结束符生效，而且这一行剩余字符均不生效，!!!!!!11.py是不会执行的!!!!!!)
+# /* 和 */不可以在一行中（/* 11.py */，这种不支持，只能识别开始的/*，后面的内容不支持）
+# 可以加文件，文件名字的最后必须是"_list"，放在case_list统计目录下
+################################################################################
+#minicase/3_0010_install.py
+#minicase/3_0011_mgr_config.py
+
+#/X1000/lun_manager/env_manage.py
+/X1000/lun_manager/2-01-01-10.py
+/X1000/lun_manager/2-01-03-20.py
+/X1000/lun_manager/2-01-03-21.py
+#/X1000/lun_manager/2-06-01-01.py
+#/X1000/lun_manager/2-06-01-06.py
+#/X1000/lun_manager/2-06-01-10.py
+#/X1000/lun_manager/2-06-02-11.py
+#/X1000/lun_manager/2-06-02-06.py
+#/X1000/lun_manager/2-06-05-01.py
+#/X1000/lun_manager/2-06-05-02.py
+/X1000/lun_manager/2-06-07-11.py
+/X1000/lun_manager/2-06-07-12.py
+/X1000/lun_manager/2-06-08-02.py
+/X1000/lun_manager/2-06-08-03.py
+/X1000/lun_manager/2-06-08-05.py
+/X1000/lun_manager/2-06-09-02.py
+/X1000/lun_manager/2-06-09-04.py
+/X1000/lun_manager/2-08-01-02.py
+/X1000/lun_manager/2-08-01-06.py
+/X1000/lun_manager/2-06-07-06.py
+/X1000/lun_manager/2-06-07-07.py

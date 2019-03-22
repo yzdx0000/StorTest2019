@@ -1,0 +1,36 @@
+# -*- coding:utf-8 -*- #加中文注释
+#指定桶授权给多个账户acl权限
+import os
+import sys
+import commands
+from _create_account_zff import *
+#from _list_accountuid_zff import *
+ip=raw_input("please input ds ip: ")#输入DS节点IP
+bucket_name=raw_input("please input bucket_name to be set acl: ")#输入桶名
+owner_certificate_id=raw_input("please input owner certificat id: ")#输入桶所在账户证书id
+owner_accountuid=raw_input("please input owner accountuid: ")#输入账户的accountuid
+owner_email=raw_input("please input owner email: ")#输入桶所在账户的邮箱
+ 
+users_lst,useremails_lst =  get_useremails_lst()#调用创建账户的脚本函数
+#print useremails_lst   #输出账户的邮箱
+target_accountuid = target_accountuid()
+print target_accountuid
+i=0
+j=0
+power_lst=['READ','WRITE','READ_ACP','WRITE_ACP','FULL_CONTROL']  #权限列表
+n=len(power_lst)      #权限列表的长度
+for useremail in useremails_lst: 
+        print useremail
+	power = power_lst[i]
+	print power
+	taraccountuid = target_accountuid[i]
+	print taraccountuid
+	d="curl -i http://%s:20480/%s?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential=%s\" -d '<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID> %s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID> %s</ID><DisplayName> %s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>'"%(ip,bucket_name,owner_certificate_id,owner_accountuid,owner_email,taraccountuid,useremail,power)
+	print d
+	i+=1
+	if (i>n-1):       #权限列表不停滴循环
+		i=0
+	j+=1
+	rc, stdout = commands.getstatusoutput(d)
+	print stdout
+

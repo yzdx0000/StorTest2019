@@ -1,0 +1,9 @@
+
+
+
+sd=default,journal=/root/vdbench/journal,openflags=o_direct
+sd=sd1,lun=/dev/sdh,offset=0,align=0,threads=4
+sd=sd2,lun=/dev/sdi,offset=0,align=0,threads=4
+wd=wd1,sd=sd1,xfersize=(4k,20,8k,10,32k,30,128k,40),rdpct=0,seekpct=0
+wd=wd2,sd=sd2,xfersize=(240k,20,390k,10,1036k,30,4090k,40),rdpct=0,seekpct=0
+rd=run1,wd=wd*,iorate=200,elapsed=600,maxdata=500G,interval=1

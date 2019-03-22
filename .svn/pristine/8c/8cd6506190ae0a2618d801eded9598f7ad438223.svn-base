@@ -1,0 +1,22 @@
+模块使用方法：
+from faultrun import Fault_test
+
+实例化对象，obj_fault_test = Fault_test()
+
+方法说明
+1、obj_fault_test.start(config_file='config.conf', test_nums=10000)
+开始执行故障，config_file是配置文件，test_nums是故障次数，如果设置为0，近似一直做，其实也是10000次。
+特殊说明:不用起线程或者进程调用start。因为调用完start，已经是再后台执行了，start不会等故障运行完，会很快执行完，类似threading的start
+
+2、obj_fault_test.pause()
+提供给cosbench使用，使故障不执行。
+特殊说明:只能在start前调用才生效
+
+3、obj_fault_test.continue_run()
+提供给cosbench使用，和pause配套使用，是故障继续执行
+
+4、obj_fault_test.stop()和obj_fault_test.is_running
+stop是停止本次故障执行，但是不是马上停止，要等所有故障做完本轮。所以需要不断检查is_running，如果is_running是True，则故障还没有停止，如果是False，则故障停止，可以后续操作。
+
+5、obj_fault_test.join()
+主程序一直等故障执行，类似类似threading的join

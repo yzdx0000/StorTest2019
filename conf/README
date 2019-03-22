@@ -1,0 +1,14 @@
+注意,测试代码执行的前提如下:
+1、ctrl_ip的第一个ip地址必须是测试代码(StorTest)所在的ip,如下:
+   <clients>
+        <client>
+            <ctrl_ip>10.2.42.13</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.42.20</ctrl_ip>
+        </client>
+    </clients>
+
+10.2.42.13上应该是存放测试项目StorTest的IP
+
+2、所有的节点；包括测试项目机器；客户端；存储端；应该配置免密

@@ -1,0 +1,19 @@
+#-*-coding:utf-8 -*
+#本函数用来测试xml解析功能
+import xml.dom.minidom
+def xmlanalyze():
+    #步骤1：获取dom对象
+    dom=xml.dom.minidom.parse('file1.xml')
+    #步骤2：获取文档对象（根元素）
+    root=dom.documentElement
+    #步骤3：获取特定名字的子节点内容
+    contents=root.getElementsByTagName('caption')
+    for content in contents:
+        caption=content.firstChild.nodeValue
+        print caption
+if __name__=="__main__":
+    xmlanalyze()
+
+
+
+

@@ -1,0 +1,31 @@
+#!/usr/bin/python 
+# -*- coding:utf-8 -*-
+#************************************************
+#实现功能：query_bucket_acl用于得到指定bucket的acl列表
+#所需参数：mgrip，oossip，bucketname，accountname，email
+#作者：刘萍
+#修改日期：2018/01/12
+#*************************************************
+import os,sys
+import _readconffile_lp
+import _getrelatedid_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+def query_bucket_acl_logger(mgrip,oossip,bucketname,accountname,email,logger):
+	(accountid,accountuid,certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,accountname,email,logger)
+	cmd='curl -s -i http://%s:20480/%s?acl -XGET -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,certificateid)
+        logger.info(cmd)
+	output=os.popen(cmd).read()
+        logger.info(output)
+	num1=output.find('HTTP/1.1')
+        num2=output[(num1+9):((num1+12))]
+        if(num2=='200'):
+		logger.info("get bucket acl list of %s success!" % bucketname)
+	else:
+		logger.info(("***************get bucket acl list of %s fail!***************") % bucketname) 
+
+
+
+

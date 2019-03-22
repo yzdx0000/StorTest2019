@@ -1,0 +1,36 @@
+# -*- coding:utf-8 -*
+import os,sys,commands
+import _checkresult_lyz
+#该脚本用来设置object的acl
+def setobjectacl(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credential,dest_mail,operations):
+	cmd = "curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList>" %(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail)
+	for operation in operations:
+		print operation
+		#cmd="curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'"
+		cmdoperation="<Grant><Grantee xmlns:xsi =\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant>" %(dest_credential,dest_mail,operation)
+		cmd=cmd+cmdoperation
+	cmd=cmd+"</AccessControlList></AccessControlPolicy>\'"
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	re=_checkresult_lyz.checkresult(status,output)
+	if re == -1:
+		return -1
+def setobjectaclHaveLog(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credential,dest_mail,operations,logger):
+	cmd = "curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList>" %(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail)
+	for operation in operations:
+		logger.info(operation)
+		#cmd="curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'"
+		cmdoperation="<Grant><Grantee xmlns:xsi =\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant>" %(dest_credential,dest_mail,operation)
+		cmd=cmd+cmdoperation
+	cmd=cmd+"</AccessControlList></AccessControlPolicy>\'"
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	re=_checkresult_lyz.checkresultHaveLog(status,output,logger)
+	if re == -1:
+		return -1
+if __name__=="__main__":
+	#setobjectacl(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8],sys.argv[9])
+	#setobjectacl('10.2.40.18','bucketsrcforobjacl','objectsrc','000020ZYJHQEABCM00001ZRM2AH1T7XG','000020ZYJHQEABCM00001ZJXZXL623PS','aa@sugon.com','000024OZMUUF9H5L00001ZJXZXL623PS','lyz2@sugon.com',['READ','READ_ACP','WRITE_ACP'])
+	setobjectacl('10.2.40.18', 'bucketsrcforobjacl', 'objectsrc', '000020ZYJHQEABCM00001ZRM2AH1T7XG','000020ZYJHQEABCM00001ZJXZXL623PS', 'aa@sugon.com', '000023GN82J64MKK00001ZJXZXL623PS', 'lyz7@sugon.com', ['READ','READ_ACP','WRITE_ACP'])

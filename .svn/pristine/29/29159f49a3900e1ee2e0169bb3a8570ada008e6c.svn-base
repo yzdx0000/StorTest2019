@@ -1,0 +1,62 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于设置对象的acl###########
+#需要执行set_bucket_duoge_acl_exc，参数包括：oOss节点ip，bucket名称，object名称，所有者的certificateid，所有者的accountuid，所有者的email，设置acl的数量，目标账户的accountuid，目标账户的email和待设置的acl
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+#需要修改目标account的前缀名acc_pre和设置acl的数目acl_num
+
+import subprocess,commands,os
+
+#添加自定义模块*****
+import _add_account_zh
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+import _get_information_zh
+
+#定义”获取设置object acl的命令“函数，共8个参数，依次表示桶所在节点的ip、桶名称、object名称、所有者认证id、所有者邮箱、目标账户认证id、目标账户邮箱、赋予的object的acl
+def set_object_duoge_acl_cmd(ip,bucket_name,object_name,owner_certificate_id,owner_accountuid,owner_email,acl_num,target_accountuid,target_email,acl):
+    cmd='curl -i http://'+str(ip)+':20480/'+str(bucket_name)+'/'+str(object_name)+'?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential='+str(owner_certificate_id)+'\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>'+str(owner_accountuid)+'</ID><DisplayName>'+str(owner_email)+'</DisplayName></Owner><AccessControlList>'
+    for i in range (0,acl_num):
+        cmd_add='<Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>'+str(target_accountuid[i])+'</ID><DisplayName>'+str(target_email[i])+'</DisplayName></Grantee><Permission>'+str(acl)+'</Permission></Grant>'  #执行设置对象acl命令本身
+        cmd=cmd+cmd_add
+    cmd_last='</AccessControlList></AccessControlPolicy>\''
+    cmd=cmd+cmd_last
+    return cmd    
+    
+#定义”获取设置object acl的命令“函数，共8个参数，依次表示桶所在节>点的ip、桶名称、object名称、所有者认证id、所有者邮箱、目标账户认>证id、目标账户邮箱、赋予的object的acl
+def set_object_duoge_acl_exc(ip,bucket_name,object_name,owner_certificate_id,owner_accountuid,owner_email,acl_num,target_accountuid,target_email,acl):
+    cmd=set_object_duoge_acl_cmd(ip,bucket_name,object_name,owner_certificate_id,owner_accountuid,owner_email,acl_num,target_accountuid,target_email,acl)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自测部分*****
+if __name__=="__main__":
+#    ds_ip=raw_input("please input ds ip: ")
+#    bucket_name=raw_input("please input bucket_name: ")
+#    object_name=raw_input("please input object_name to be set acl: ")
+#    owner_certificate_id=raw_input("please input owner certificat id: ")
+#    owner_accountuid=raw_input("please input owner accountuid: ")
+#    owner_email=raw_input("please input owner email: ")
+
+#    acl=raw_input("please input the acl to be set: ")
+#    set_object_duoge_acl_exc(ds_ip,bucket_name,object_name,owner_certificate_id,owner_accountuid,owner_email,acl_num,target_accountuid,target_email,acl)
+    
+    acl_num=10
+    all_argvs=read_conf_zh.get_argvs()
+    target_accountuid=[]
+    target_email=[]
+    for i in range(0,acl_num):
+        acc_pre='acc_i_'
+        res=_add_account_zh.add_account_exc(all_argvs['master_mgr_ip'],acc_pre+str(i),acc_pre+str(i)+'@sugon.com',0)
+        uid = _get_information_zh.get_account_uid(res)
+        target_accountuid.append(uid)
+        target_email.append(acc_pre+str(i)+'@sugon.com')
+    
+#        print target_accountuid
+#        print target_email
+
+    set_object_duoge_acl_exc(all_argvs['oOss_ip'],all_argvs['create_bucket_name'],all_argvs['put_object_name'],all_argvs['certificate_id'],all_argvs['account_uid'],all_argvs['account_email'],acl_num,target_accountuid,target_email,all_argvs['acl'])   
+

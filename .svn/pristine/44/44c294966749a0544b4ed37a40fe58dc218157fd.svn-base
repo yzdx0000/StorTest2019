@@ -1,0 +1,365 @@
+#-*- coding:utf-8 -*
+#本脚本创建账户，然后进行s3的一系列操作
+#用例名称：allOperations1
+#用例作用：将桶和对象的所有操作结合起来
+#参数解释：mgrip，账户名称，oossip，想要创建的10个桶的名称前缀，想要创建的对象的名称前缀，需要上传的对象的path(包括文件名称),下载对象的目标path（不包括文件名称，只是目录名）
+#分段上传成功后的Object名字（splitobjectname），被分段上传的Object的路径（splitobjectpathdir），被分段上传的文件名称（（surobjectname），分段上传的段的数目（numofsplit）
+#取消分段上传时上传的Object名字（cancleupobjectname）,桶配额大小（必须小于上传的文件putObjectname的大小）logfilename是想要创建的log的名称（该文件会在output中创建）
+#用该脚本的额注意事项：改脚本不能在主mgr或者从mgr宕机的时候用
+import os,sys,commands,time
+#import imports3libpath
+import _create_bucket
+import common
+import _putobjectBySplit_lyz
+import _cancleputobjectBySplit_lyz
+import _set_bucket_quota_lyz
+import _get_bucket_quota_lyz
+import _create_many_accounts_lib_lyz
+import _sshlistaccounts_lyz1
+import _create_certificate
+import _delete_certificate
+import _set_bucketacl_lyz
+import _set_objectacl_lyz
+import _getAllObjectsOfBucket_lyz
+import _downloadObjectandPrint_lyz
+import _query_bucketacl_lyz
+import _query_objectacl_lyz
+import deletemanyaccount
+import _delete_account_lyz
+import _log_lyz
+import getoutputpath_lyz
+import commonfunction
+import result
+def allOPerations(logger,mgrip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    #准备工作
+
+
+    #步骤1：创建两个账户
+    logger.info('time  is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+    allaccountnameall = _create_many_accounts_lib_lyz.createManyAccountHaveLog(mgrip, accountname, accountname, 2,logger)
+    if allaccountnameall == -1:
+        return -1
+    logger.info('allaccountnameall is %s' % allaccountnameall)
+    dicts = _sshlistaccounts_lyz1.sshlistaccountsHaveLog(mgrip,logger)
+    if dicts==-1:
+        return -1
+    accountdicts = {}
+    for name in allaccountnameall:
+        accountinfo = dicts[name]
+        accountdict = {name: accountinfo}
+        accountdicts.update(accountdict)
+    logger.info('**************所有的生成好的账户信息是：%s*************************' % accountdicts)
+    #步骤2：给上文中创建的账户每个账户给一个certificateid
+    accountnames=[]
+    accountids=[]
+    certificateids=[]
+    for key in accountdicts.keys():
+        accountnames.append(key)
+        accountid=accountdicts[key][0]
+        accountids.append(accountid)
+        certificateid=_create_certificate.cer_add(mgrip,accountid)
+        if certificateid==-1:
+            return -1
+        certificateids.append(certificateid)
+    certificateid=certificateids[0]
+    logger.info('srcaccountname is %s' %accountnames[0])
+    logger.info('certificateid of srcaccountname is %s' %certificateid)
+
+    #步骤3：获取桶的列表
+    Allbukets=[]
+    #print oossip,certificateid
+    #Allbukets=common.getAllBucketOfCertificateid1(oossip,certificateid)
+    recc1=common.getAllBucketOfCertificateid1HaveLog(oossip, certificateid, logger)
+    if recc1 == -1:
+        return -1
+    #logger.info('Allbukets is %s' % Allbukets
+    logger.info('************获取桶的列表成功***********')
+    logger.info('')
+    #步骤4：创建2个后续步骤需要的桶
+    #logger.info('time o is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+    rec1=_create_bucket.bucket_addHaveLog(oossip, createBucketname, certificateid,logger)
+    if rec1 == -1:
+        return -1
+    logger.info('************%s 后续步骤需要的桶1创建成功************' %createBucketname)
+    logger.info('time o is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+    bucketname2=createBucketname+'copy'
+    rec2=_create_bucket.bucket_addHaveLog(oossip, bucketname2, certificateid,logger)
+    if rec2 == -1:
+        return -1
+    logger.info('************%s 后续步骤需要的桶2创建成功************' %bucketname2)
+    logger.info('time o is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+    #步骤5：创建10个桶
+    for num in range(10):
+        bucketname=createBucketname+str(num)
+        logger.info('bucketname is %s' %(bucketname))
+        rec3=_create_bucket.bucket_addHaveLog(oossip,bucketname,certificateid,logger)
+        if rec3 == -1:
+            return -1
+        logger.info('创建桶 %s 成功' %bucketname)
+    logger.info('************创建10个桶成功*****************8')
+    #步骤6：再次获取桶列表，查看是否新创建的桶已经创建成功
+    Allbukets = common.getAllBucketOfCertificateidHaveLog(oossip, certificateid, logger)
+    if Allbukets == -1:
+        return -1
+    logger.info('创建完十个桶后的桶列表：')
+    logger.info(Allbukets)
+    for num in range(10):
+        bucketname = createBucketname + str(num)
+        if bucketname not in Allbukets:
+            logger.info('error#################################################')
+            logger.info('the bucket created ok not exists')
+            return -1
+        logger.info('创建桶后获取桶列表成功,存在桶 %s' %bucketname)
+        logger.info('*****************创建的10个桶成功出现在桶列表中***************')
+    #步骤7：删除10个新创建的桶
+    for num in range(10):
+        bucketname = createBucketname + str(num)
+        recc2=common.delete_bucketHaveLog(oossip,bucketname,certificateid,logger)
+        if recc2 == -1:
+            return -1
+        logger.info('删除桶%s 成功' %bucketname)
+    logger.info('*************删除10个桶成功*********************')
+    #步骤8：删除桶后，查看桶列表，判断是否删除成功
+    Allbukets = common.getAllBucketOfCertificateidHaveLog(oossip, certificateid,logger)
+    if Allbukets == -1:
+        return -1
+    for num in range(10):
+        bucketname = createBucketname + str(num)
+        if bucketname in Allbukets:
+            logger.info('error#################################################')
+            logger.info('the bucket deleted ok already exists')
+            return -1
+        logger.info('删除桶 %s后查询列表成功' %bucketname)
+    logger.info('**********删除桶后桶列表准确************************')
+    #步骤9：获取每一个桶中的所有object列表
+    for i in range(len(Allbukets)):
+        bucketname=Allbukets[i]
+        objects=common.getAllObjectOfBucketHaveLog(oossip,bucketname,certificateid,logger)
+        if objects == -1:
+            return -1
+        logger.info('objects of %s is %s' % (bucketname,objects))
+    logger.info('*****************查询桶内所有对象成功**********************')
+
+    #步骤10：上传对象,将同一对象上传10次
+    for i in range(10):
+        putObjectnamenum10=putObjectname+str(i)
+        recc3=common.add_objectHaveLog(oossip,createBucketname,putObjectnamenum10,objectpath,certificateid,logger)
+        if recc3 == -1:
+            return -1
+        logger.info('上传对象%s 成功' %putObjectnamenum10)
+    logger.info('**********上传对象10次成功*********************')
+
+    #再次获取该桶中的Object列表证明该对象已经上传成功
+    objectsofadd= common.getAllObjectOfBucketHaveLog(oossip, createBucketname, certificateid,logger)
+    if objectsofadd == -1:
+        return -1
+    for i in range(10):
+        putObjectnamenum10=putObjectname+str(i)
+        if putObjectnamenum10 not in objectsofadd:
+            logger.info('error##########################################')
+            logger.info('对象 %s 上传到桶%s 中成功了，但是却不在该桶的对象列表中' %(putObjectnamenum10,createBucketname))
+        else:
+            logger.info('添加的对象成功出现在对象列表中')
+    #步骤11：下载上传的10个对象
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        downobjectpathall=os.path.join(downobjectpath,putObjectnamenum10+'down')
+        recc4=common.downloadObjectHaveLog(oossip,createBucketname,putObjectnamenum10,downobjectpathall,certificateid,logger)
+        if recc4 == -1:
+            return -1
+        logger.info('下载对象 %s 到 %s 成功' %(putObjectnamenum10,downobjectpathall))
+    logger.info('**********下载10个对象成功*********************')
+    #步骤12：对象的MD5值检测
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        downobjectpathall = os.path.join(downobjectpath, putObjectnamenum10 + 'down')
+        recc5=common.checkmd5sumHaveLog(objectpath,downobjectpathall,logger)
+        if recc5 == -1:
+            return -1
+    logger.info('**********md5值检测成功********************')
+    #步骤13：复制这10个对象到其他桶中
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        recc6=common.copyObject(oossip,bucketname2,putObjectnamenum10+'copy',certificateid,createBucketname,putObjectnamenum10)
+        if recc6 == -1:
+            return -1
+        logger.info('复制桶 %s 的对象 %s 到 桶%s，名为%s成功'  %(createBucketname,putObjectnamenum10,bucketname2,putObjectnamenum10+'copy'))
+    logger.info('***************复制桶10次成功**********************')
+    # 再次获取该复制的中的Object列表证明该对象已经复制成功
+    objectsofadd2 = common.getAllObjectOfBucketHaveLog(oossip, bucketname2, certificateid,logger)
+    if objectsofadd2 == -1:
+        return -1
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        if putObjectnamenum10+'copy' not in objectsofadd2:
+            logger.error('error##########################################')
+            logger.error('对象 %s 上传到桶%s 中成功了，但是却不在该桶的对象列表中' % (putObjectnamenum10+'copy', bucketname2))
+        else:
+            logger.info('添加的对象成功出现在对象列表中')
+    #步骤14：下载10个复制的对象
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        downobjectpathall2 = os.path.join(downobjectpath, putObjectnamenum10+'copydown')
+        recc7=common.downloadObjectHaveLog(oossip, bucketname2, putObjectnamenum10+'copy', downobjectpathall2, certificateid,logger)
+        if recc7 == -1:
+            return -1
+        logger.info('下载对象 %s 到 %s 成功' % (putObjectnamenum10+'copydown', downobjectpathall2))
+    logger.info('**********下载10个复制的对象成功*********************')
+    #步骤15：复制后的对象下载后MD5值检测
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        downobjectpathall2 = os.path.join(downobjectpath, putObjectnamenum10 + 'copydown')
+        recc8=common.checkmd5sumHaveLog(objectpath, downobjectpathall2,logger)
+        if recc8 == -1:
+            return -1
+    logger.info("************复制后的对象检测md5值成功*****************")
+    #步骤16：多段上传object
+    #(oossip, bucketname, objectname, certificateid, surobjectpathdir, surobjectname, num)
+    rep=_putobjectBySplit_lyz.upObjectBySplitHaveLog(oossip,createBucketname,splitobjectname,certificateid,splitobjectpathdir,splitfilename,numofsplit,logger)
+    if rep == -1:
+        return -1
+    logger.info('************多段上传成功*************')
+    # 再次获取该桶中的Object列表证明该分段上传的对象已经上传成功
+    objectsofadd3 = common.getAllObjectOfBucketHaveLog(oossip, createBucketname, certificateid,logger)
+    if objectsofadd3 == -1:
+        return -1
+    if splitobjectname not in objectsofadd3:
+        logger.info('error##########################################')
+        logger.info('对象 %s 上传到桶%s 中成功了，但是却不在该桶的对象列表中' % (putObjectname + 'copy', bucketname2))
+    else:
+        logger.info('添加的对象成功出现在对象列表中')
+    #步骤17：下载多段上传的object
+    downobjectpathallsplit=os.path.join(downobjectpath,splitfilename+'down')
+    recc9=common.downloadObjectHaveLog(oossip, createBucketname, splitobjectname, downobjectpathallsplit, certificateid,logger)
+    if recc9 == -1:
+        return -1
+    logger.info('************多段上传对象下载成功*********')
+    #步骤18：多段上传和下载后的文件进行md5值检测
+    splitsourceallpath=os.path.join(splitobjectpathdir,splitfilename)
+    logger.info('splitsourceallpath is %s' %splitsourceallpath)
+    recc10=common.checkmd5sumHaveLog(splitsourceallpath, downobjectpathallsplit,logger)
+    if recc10 == -1:
+        return -1
+    logger.info('**********多段上传对象MD5值检测成功**********')
+    #步骤19：取消多段上传
+    rec=_cancleputobjectBySplit_lyz.cancleupObjectBySplitHaveLog(oossip,createBucketname,cancleupobjectname,certificateid,splitobjectpathdir,splitfilename,numofsplit,logger)
+    if rec == -1:
+        return -1
+    #步骤20：设置桶的配额
+    quota=int(quota)
+    res=_set_bucket_quota_lyz.set_bucket_quota_excHaveLog(oossip,createBucketname,certificateid,quota,logger)
+    if res == -1:
+        return -1
+    logger.info("************设置桶个配额成功")
+    #步骤21：获得桶的配额
+    getquota=_get_bucket_quota_lyz.get_bucket_quota_excHaveLog(oossip,createBucketname,certificateid,logger)
+    if getquota == -1:
+        return -1
+    if int(getquota)!=quota:
+        logger.info("error##################################################3")
+        logger.info("***********获得的桶配额和设置的桶配额不符合************")
+        return -1
+    else:
+        logger.info("***********获取桶配额成功*************")
+    #步骤22：上传一个大于该配额的文件
+    cmdquota = 'curl -s -i http://' + oossip + ':20480/' + createBucketname + '/' + putObjectname+'quota' + ' -X PUT -T "' + objectpath + '" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential=' + certificateid + '"'
+    logger.info(cmdquota)
+    (return_codequota, outputquota) = commands.getstatusoutput(cmdquota)
+    logger.info(outputquota)
+    if outputquota.find('Insufficient Storage Space')>=0:
+        logger.info('************配额成功拦截文件***************')
+    else:
+        logger.info("error########################################")
+        logger.info("配额没有成功拦截上传的文件，没有报错Insufficient storage space")
+        return -1
+    #步骤23：取消桶配额
+    res2=_set_bucket_quota_lyz.set_bucket_quota_excHaveLog(oossip, createBucketname, certificateid, 0,logger)
+    if res2 == -1:
+        return -1
+    logger.info("************取消桶配额成功***************")
+    #步骤24：取消桶配额后再次上传文件
+    recc11=common.add_objectHaveLog(oossip, createBucketname, putObjectname+'quota1', objectpath, certificateid,logger)
+    if recc11 == -1:
+        return -1
+    logger.info("***********取消桶的配额后上传文件成功********************")
+    #步骤25：设置桶的acl
+    logger.info('************开始设置桶改的acl*****************')
+    logger.info('源端和对象端的账户信息是 %s' %accountdicts)
+    accountuidsrc=accountdicts[accountnames[0]][1]
+    accountemailsrc=accountdicts[accountnames[0]][2]
+    accountuiddst=accountdicts[accountnames[1]][1]
+    accountemaildst=accountdicts[accountnames[1]][2]
+    logger.info('accountuidsrc is %s,accountemailsrcis %s,accountuiddst is %s,accountemaildst is %s' %(accountuidsrc,accountemailsrc,accountuiddst,accountemaildst))
+    res=_set_bucketacl_lyz.setBucketAclHaveLog(oossip,createBucketname,certificateids[0],accountdicts[accountnames[0]][1],accountdicts[accountnames[0]][2],accountdicts[accountnames[1]][1],accountdicts[accountnames[1]][2],'FULL_CONTROL',logger)
+    if res == -1:
+        return -1
+    logger.info('*************************桶的acl设置成功**************************')
+    #步骤26：验证桶的acl获取成功
+    reg=_getAllObjectsOfBucket_lyz.getAllObjectOfBucketHaveLog(oossip,createBucketname,certificateids[1],logger)
+    if reg == -1:
+        return -1
+    logger.info('************用被赋予的account的acl的certificate获取Bucket的acl')
+    req=_query_bucketacl_lyz.querybucketAclHaveLog(oossip,createBucketname,certificateids[1],logger)
+    if req == -1:
+        return -1
+    logger.info('*******************桶的acl验证成功*******************')
+    #步骤27：设置对象的acl
+    res3=_set_objectacl_lyz.setobjectaclHaveLog(oossip,createBucketname,putObjectname+str(0),certificateids[0],accountdicts[accountnames[0]][1],accountdicts[accountnames[0]][2],accountdicts[accountnames[1]][1],accountdicts[accountnames[1]][2],['FULL_CONTROL'],logger)
+    if res3 == -1:
+        return -1
+    logger.info('************************对象的acl赋予成功*******************************************')
+    #_downloadObjectandPrint_lyz.downloadObject(oossip,createBucketname,putObjectname+str(0),certificateids[1])
+    #logger.info('******************用被赋予的account的certificateid打印对象内容成功******************************')
+    req2=_query_objectacl_lyz.queryObjectAclHaveLog(oossip,createBucketname,putObjectname+str(0),certificateids[1],logger)
+    if req2 == -1:
+        return -1
+    logger.info('*****************对象的acl获取成功*******************************')
+    #步骤28：删除创建的两个桶中的所有对象并删除桶
+    objectscreateBuckets = common.getAllObjectOfBucketHaveLog(oossip, createBucketname, certificateid,logger)
+    if objectscreateBuckets == -1:
+        return -1
+    for obj in objectscreateBuckets:
+        recc14=common.deleteObjectHaveLog(oossip, createBucketname, obj, certificateid,logger)
+        if recc14 == -1:
+            return -1
+    objectscreateBucketscopy = common.getAllObjectOfBucketHaveLog(oossip, createBucketname+'copy', certificateid,logger)
+    if objectscreateBucketscopy == -1:
+        return -1
+    for obj2 in objectscreateBucketscopy:
+        recc15=common.deleteObjectHaveLog(oossip, createBucketname+'copy', obj2, certificateid,logger)
+        if recc15 == -1:
+            return -1
+    logger.info('删除桶%s 和桶%s中的所有对象成功' %(createBucketname,createBucketname+'copy'))
+    recc16=common.delete_bucketHaveLog(oossip,createBucketname,certificateid,logger)
+    if recc16 == -1:
+        return -1
+    recc17=common.delete_bucketHaveLog(oossip, createBucketname+'copy', certificateid,logger)
+    if recc17 == -1:
+        return -1
+    logger.info('***************删除桶%s和桶%s成功***********'  %(createBucketname,createBucketname+'copy'))
+    #步骤29：删除下载的对象
+    for i in range(10):
+        putObjectnamenum10 = putObjectname + str(i)
+        downobjectpathall = os.path.join(downobjectpath, putObjectnamenum10 + 'down')
+        downobjectpathall2 = os.path.join(downobjectpath, putObjectnamenum10 + 'copydown')
+        os.popen('rm -rf '+downobjectpathall )
+        os.popen('rm -rf '+downobjectpathall2)
+    logger.info('*******删除下载的对象成功****************')
+
+    #步骤30：删除创建的两个账户下的certificate,然后删除两个账户
+    for certificate in certificateids:
+        red=_delete_certificate.deleteCertificateHaveLog(mgrip,certificate,logger)
+        if red==-1:
+            return -1
+    for accountid in accountids:
+        redd=_delete_account_lyz.acc_delHaveLog(mgrip,accountid,logger)
+        if redd==-1:
+            return -1
+    logger.info('time o is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+
+if __name__=="__main__":
+    #(mgrip, accountname, oossip, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,
+    #splitobjectpathdir, splitfilename, num)
+    #(mgrip, accountname, oossip, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota):
+    allOPerations('stabilitylog','10.2.20.118','zidongtestk','10.2.20.120','zidongtestkbuc','testjobj','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplita','/opt/s3uploadfile','test',2,'objectsplitcanclea',1024)
+    #_putobjectBySplit_lyz.upObjectBySplit('10.2.40.18', 'aaaa10271', 'objectsplit0', '000024P00B8AVJNI00001XAXLTGX5XFN', '/opt/s3uploadfile','test',2)

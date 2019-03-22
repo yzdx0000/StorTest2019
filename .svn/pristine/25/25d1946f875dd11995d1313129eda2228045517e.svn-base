@@ -1,0 +1,17 @@
+# -*- coding:utf-8 -*
+import os,sys,commands
+#import imports3libpath
+import _checkresult_lyz
+import _delete_object_lyz
+#########################################
+#函数作用：批量删除同一个bucket 下的所有object
+#函数输入：oossip,bucketname,objectnamelist,certificateid
+##########################################
+def deleteManyObject(oossip,bucketname,objectnamelist,certificateid):
+    for objectname in objectnamelist:
+       re= _delete_object_lyz.deleteObject(oossip,bucketname,objectname,certificateid)
+       if re==-1:
+           return -1
+
+    
+    	

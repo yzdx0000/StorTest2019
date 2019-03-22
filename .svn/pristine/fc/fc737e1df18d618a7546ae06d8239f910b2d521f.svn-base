@@ -1,0 +1,24 @@
+# -*-coding:utf-8 -*
+
+import utils_path
+import common2
+import get_config
+
+conf_file = common2.CONF_FILE
+
+
+def login():
+    deploy_ips = get_config.get_env_ip_info(conf_file)
+    client_ips = get_config.get_allclient_ip()
+    osan = common2.oSan()
+    vip = osan.get_vip_address_pools(n_id="1", s_ip=deploy_ips[0])
+    vip = osan.analysis_vip(vip[0])
+    for ip in vip:
+        for cli in client_ips:
+            target = osan.discover_scsi(cli, ip)
+            osan.iscsi_login(cli, target)
+    return vip
+
+
+if __name__ == '__main__':
+    login()

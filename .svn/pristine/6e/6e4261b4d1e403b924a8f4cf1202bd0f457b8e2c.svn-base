@@ -1,0 +1,82 @@
+# -*- coding:utf-8 8-*
+#################################################
+#该脚本用来不停的从宕机，然后在主上测试s3的基础命令
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+import conf_lyz
+#参数说明：masterip：主的ip；slaveip：从的ip；pathOfScript:要执行的脚本在从上的路径; stabilityScript:要执行的s3的稳定性脚本名称,然后是_stability1lib_lyz这个脚本需要的参数
+def slavemgrfaultAndS3(num,conffilename,masterip,masteripmiip,slaveip,slaveipmiip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    confo = conf_lyz.confrelate()
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo = _fault_all_lyz.statusrecovery()
+    # 前期准备：从配置文件中读取参数
+    # print 'masterip is :' %masterip
+    argvs = [masterip, masteripmiip, slaveip, slaveipmiip, oossip, num]
+    print "argvs is : %s" % argvs
+    readargvs = confo.readmanyconf(conffilename, 'public', argvs)
+    masterip = readargvs[0]
+    masteripmiip = readargvs[1]
+    slaveip = readargvs[2]
+    slaveipmiip = readargvs[3]
+    oossip = readargvs[4]
+    num = readargvs[5]
+    print 'masterip is %s,masteripmiip is %s,slaveip is %s,slaveipmiip is %s,oossip is %s' % (
+    masterip, masteripmiip, slaveip, slaveipmiip, oossip)
+    argvs2 = [accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname,
+              splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota]
+    readargvs2 = confo.readmanyconf(conffilename, 's3', argvs2)
+    accountname = readargvs2[0]
+    createBucketname = readargvs2[1]
+    putObjectname = readargvs2[2]
+    objectpath = readargvs2[3]
+    downobjectpath = readargvs2[4]
+    splitobjectname = readargvs2[5]
+    splitobjectpathdir = readargvs2[6]
+    splitfilename = readargvs2[7]
+    numofsplit = readargvs2[8]
+    cancleupobjectname = readargvs2[9]
+    quota = readargvs2[10]
+    print 'accountname,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota is '
+    print accountname, createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname, quota
+
+
+    num=int(num)
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo=_fault_all_lyz.statusrecovery()
+    for i in range(num):
+        #步骤1：执行s3的指令集
+        re=_stability1lib_lyz.allOPerations(masterip,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota)
+        if re==-1:
+            return -1
+        #步骤2：给从断电
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print 'time of poweoff is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        faulto.poweroff(slaveipmiip)
+        time.sleep(180)
+        #步骤3：再次执行s3的指令集
+        print 'time of s3 is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        re1=_stability1lib_lyz.allOPerations(masterip, accountname,oossip, createBucketname, putObjectname,objectpath, downobjectpath, splitobjectname, splitobjectpathdir, splitfilename,numofsplit, cancleupobjectname, quota)
+        if re1==-1:
+            return -1
+        #步骤4：给从上电
+        print 'time of poweon is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        faulto.poweron(slaveipmiip)
+        #步骤5：等待从上电成功
+        statusrecoveryo.ifpoweron(slaveip)
+        time.sleep(300)
+        #步骤6：再次执行s3的指令集
+        re2=_stability1lib_lyz.allOPerations(masterip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit,cancleupobjectname, quota)
+        if re2==-1:
+            return -1
+if __name__=="__main__":
+    #mgrfaultAndS3(masterip, slaveip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname,quota)
+    #slavemgrfaultAndS3(2,'100.100.100.16','10.2.40.66','100.100.100.17','10.2.40.67','s1123a','100.100.100.18','bucket1123a','object1123a','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit1103o','/opt/s3uploadfile','test',2,'objectsplitcancle03o',1024)
+    slavemgrfaultAndS3('num', 'faultconf_lyz.conf', 'masterip', 'masteripmiip', 'slaveip', 'slaveipmiip', 'accountname','oossip', 'createBucketname', 'putObjectname', 'objectpath', 'downobjectpath', 'splitobjectname','splitobjectpathdir', 'splitfilename', 'numofsplit', 'cancleupobjectname', 'quota')
+    #slavemgrfaultAndS3(num, conffilename, masterip, masteripmiip, slaveip, slaveipmiip, accountname, oossip,createBucketname, putObjectname, objectpath, downobjectpath, splitobjectname, splitobjectpathdir,splitfilename, numofsplit, cancleupobjectname, quota):

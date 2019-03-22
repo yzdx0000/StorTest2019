@@ -1,0 +1,273 @@
+#!/usr/bin/python
+# -*-coding:utf-8 -*
+import ctypes
+import inspect
+import os
+import time
+import threading
+
+import utils_path
+import log
+import cosbench_lib_0111
+import faultrun
+import common
+import prepare_clean
+import result
+import check_environment
+import s3_data_consistency_1225
+import get_config
+##########################################################################
+#
+# Author: lichengxu
+# date 2018-12-28
+# @summary：
+#    主线程
+# @steps:
+#    1、获取各种参数
+#    2、运行子线程
+#    3、循环判断线程返回值
+#    4、检查环境
+#
+# @changelog：
+##########################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[
+    0]                 # 本脚本名字
+FILE_NAME = FILE_NAME.replace('-', '_')
+
+
+def _async_raise(tid, exctype):
+    """raises the exception, performs cleanup if needed"""
+    tid = ctypes.c_long(tid)
+    if not inspect.isclass(exctype):
+        exctype = type(exctype)
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        tid, ctypes.py_object(exctype))
+    if res == 0:
+        raise ValueError("invalid thread id")
+    elif res != 1:
+        # """if it returns a number greater than one, you're in trouble,
+        # and you should call it again with exc=NULL to revert the effect"""
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
+
+
+def stop_thread(thread):
+    _async_raise(thread.ident, SystemExit)
+
+
+class MyThread(threading.Thread):
+    def __init__(self, func, args=(), name=""):
+        super(MyThread, self).__init__()
+        self.func = func
+        self.args = args
+        self.name = name
+
+    def run(self, ):
+        self.result = self.func(*self.args)
+
+    def get_result(self):
+        try:
+            return self.result  # 如果子线程不使用join方法，此处可能会报没有self.result的错误
+        except Exception:
+            return None
+
+    def get_func_name(self):
+        return self.name
+
+
+def case():
+    """
+    参数说明：
+    client_ip :             客户端IP
+    oOss_ip :               发送请求到集群IP
+    cosbench_path:          cosbench的安装路径
+    file_path：              需要运行的cosbench文件
+    prepare_stage_time：     prepare阶段运行的最长时间
+    main_stage_time：        main阶段运行的最长时间
+    config_path:             故障配置文件
+    fault_nums:              故障次数
+    :return:
+    """
+    log.info("****************获取参数*****************")
+    account_name = FILE_NAME.replace('_', '-')
+    # 获取cosbench参数
+    cosbench_param_dict = get_config.get_cosbench_param()
+    cosbench_path = cosbench_param_dict['cosbench_path']
+    cosbench_client_ip_lst = cosbench_param_dict['cosbench_client_ip_lst']
+    create_file_path = cosbench_param_dict['create_file_path']
+    xml_path_lst = cosbench_param_dict['xml_path_lst']
+    init_base_time = int(cosbench_param_dict['init_base_time'])
+    prepare_base_time = int(cosbench_param_dict['prepare_base_time'])
+    main_base_time = int(cosbench_param_dict['main_base_time'])
+    print cosbench_client_ip_lst, create_file_path
+
+    # 获取故障参数
+    fault_param = get_config.get_fault_param()
+    fault_config_path = fault_param['fault_config_path']
+    fault_num = int(fault_param['fault_num'])
+    print fault_config_path, fault_num
+
+    # 获取一致性参数
+    data_consistency_param = get_config.get_data_consistency_param()
+    src_parent_dir = data_consistency_param['src_parent_dir']
+    dst_parent_dir = data_consistency_param['dst_parent_dir']
+    vdb_thread_num = int(data_consistency_param['vdb_thread_num'])
+    loop_execute_num = int(data_consistency_param['loop_execute_num'])
+    print src_parent_dir, dst_parent_dir, vdb_thread_num, loop_execute_num
+
+    # 获取S3 ip
+    s3_access_ips_list = get_config.get_s3_access_ips()
+
+    # 获取集群 IP
+    parastor_ip_0 = get_config.get_parastor_ip(num=0)
+
+    client_ip = cosbench_client_ip_lst[0]
+    oOss_ip = s3_access_ips_list[0]
+    node_ip_lst = [parastor_ip_0]
+    file_path = xml_path_lst[0]
+    log.info("=======================参数获取完毕==============================")
+
+    obj_fault_test = faultrun.Fault_test()
+    cosbench_test = cosbench_lib_0111.CosbenchTest()
+
+    thread_lst = []
+    # cosbench 在prepare 阶段做故障
+    t_cosbench = MyThread(
+        cosbench_test.cosbench_check_prepare,
+        args=(
+            client_ip,
+            oOss_ip,
+            account_name,
+            cosbench_path,
+            file_path,
+            init_base_time,
+            prepare_base_time,
+            main_base_time),
+    )
+    t_checkEnv = MyThread(check_environment.check_env_loop,
+                          args=(node_ip_lst),
+                          )
+    t_s3 = MyThread(s3_data_consistency_1225.data_consistency_run, args=(
+        src_parent_dir, dst_parent_dir, vdb_thread_num, loop_execute_num), )
+    thread_lst.append(t_cosbench)
+    thread_lst.append(t_checkEnv)
+    thread_lst.append(t_s3)
+
+    for t in thread_lst:
+        t.setDaemon(True)
+        t.start()
+
+    while True:
+        # 判断是否启用故障
+        if (obj_fault_test.is_running is False) and (
+                cosbench_test.IF_MAKE_FAULT is True):
+            log.info("start fault...")
+            obj_fault_test.start(fault_config_path, fault_num)
+            break
+        time.sleep(30)
+
+    while True:
+        if t_checkEnv.is_alive() is False:
+            while t_cosbench.is_alive():
+                stop_thread(t_cosbench)
+            while t_s3.is_alive():
+                stop_thread(t_s3)
+            # stop_thread(t_checkEnv)
+
+            obj_fault_test.stop()
+            cosbench_test.cancel_cosbench(client_ip, cosbench_path)
+
+            # 检查结束进程的返回值RC
+            rc = t_checkEnv.get_result()
+            if rc != 0:
+                log.error("t_checkEnv.get_result() : %s " % rc)
+                log.error("t_checkEnv thread is stopping in abnormal")
+                common.judge_rc(
+                    rc, 0, "t_checkEnv thread is stopping in abnormal")
+            else:
+                log.info("t_checkEnv thread is stop in normal")
+            break
+
+        # 当cosbench 运行结束了
+        elif t_cosbench.is_alive() is False:
+            # stop_thread(t_cosbench)
+            while t_s3.is_alive():
+                stop_thread(t_s3)
+            while t_checkEnv.is_alive():
+                stop_thread(t_checkEnv)
+
+            obj_fault_test.stop()
+
+            # 检查结束进程的返回值RC
+            rc = t_cosbench.get_result()
+            if rc != 0:
+                log.error("t_cosbench.get_result() : %s " % rc)
+                log.error("t_cosbench thread is stopping in abnormal")
+                # common.judge_rc(
+                #     rc, 0, "t_cosbench thread is stopping in abnormal")
+            else:
+                log.info("t_cosbench thread is stop in normal")
+            break
+
+        # 当一致性函数运行结束
+        elif t_s3.is_alive() is False:
+            while t_cosbench.is_alive():
+                stop_thread(t_cosbench)
+            # stop_thread(t_s3)
+            while t_checkEnv.is_alive():
+                stop_thread(t_checkEnv)
+
+            obj_fault_test.stop()
+            cosbench_test.cancel_cosbench(client_ip, cosbench_path)
+            # 检查结束进程的返回值RC
+            rc = t_s3.get_result()
+            if rc != 0:
+                log.error("t_s3.get_result() : %s " % rc)
+                log.error("t_s3 thread is stopping in abnormal")
+                common.judge_rc(rc, 0, "t_s3 thread is stopping in abnormal")
+            else:
+                log.info("t_s3 thread is stop in normal")
+            break
+
+        # 当故障线程先结束了
+        elif obj_fault_test.is_running == False:
+            for t in thread_lst:
+                while t.is_alive():
+                    stop_thread(t)
+            cosbench_test.cancel_cosbench(client_ip, cosbench_path)
+            # 怎么判断故障线程是正常结束的？
+            log.info("obj_fault_test thread is stop in normal")
+            break
+
+        time.sleep(300)
+
+    # 循环检查线程是否都已经结束（可有可无）
+    for i in range(10000):
+        time.sleep(10)
+        if (t_checkEnv is True) or (t_cosbench is True) or (
+                t_s3 is True) or (obj_fault_test.is_running is True):
+            continue
+        else:
+            break
+
+    log.info("检查环境")
+    prepare_clean.test_prepare(FILE_NAME, )
+
+    log.info('%s success!' % FILE_NAME)
+    result.result(FILE_NAME, 0)
+
+
+def main():
+    prepare_clean.s3_test_prepare(FILE_NAME, env_check=False)
+    case()
+    # s3_common.cleaning_environment([ ])
+    # log.info('%s finish!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)
+
+
+
+

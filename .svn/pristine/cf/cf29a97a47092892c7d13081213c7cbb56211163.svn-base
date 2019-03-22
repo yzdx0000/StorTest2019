@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="smallfile" description="sample benchmark for s3">
+
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW20U3QGCQYPMR3H5F2EL1TO9IPQEEFKML18N2ECRFNHL93J6X;secretkey=99804d841a48407e078e72f0babcd97169dd7c4e;endpoint=http://20.10.10.48:20480;path_style_access=true;timeout=30000;" />
+
+  <workflow>
+<workstage name="init">
+        <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW20U3QGCQYPMR3H5F2EL1TO9IPQEEFKML18N2ECRFNHL93J6X;secretkey=99804d841a48407e078e72f0babcd97169dd7c4e;endpoint=http://20.10.10.48:20480;path_style_access=true;timeout=720000;" />
+      <work type="init" workers="64" config="cprefix=zhsmallpressc;containers=r(1,100)" />
+    </workstage>
+    <workstage name="prepare">
+      <work type="prepare" workers="100" config="cprefix=zhsmallpressc;oprefix=apple;containers=r(1,100);objects=r(1,80000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB" />
+    </workstage>
+
+    <workstage name="mn">
+      <work name="mn1" workers="100" runtime="7200">
+        <operation type="write" ratio="70" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(1,10000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(10001,20000);hashCheck=False" />
+	</work>
+      <work name="mdn2" workers="100" runtime="7200">
+        <operation type="read" ratio="100" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(20001,40000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+	</work>
+      <work name="mn3" workers="100" runtime="7200">
+        <operation type="write" ratio="30" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(40001,50000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(50001,60000);hashCheck=False" />
+	</work>
+      <work name="mn4" workers="100" runtime="7200">
+        <operation type="write" ratio="40" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(60001,70000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+        <operation type="read" ratio="60" config="cprefix=zhsmallpressc;oprefix=apple;containers=u(1,100);objects=u(70001,80000);hashCheck=False" />
+      </work>
+    </workstage>
+
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zhsmallpressc;oprefix=apple;containers=r(1,100);objects=r(1,80000)" />
+    </workstage>
+
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zhsmallpressc;containers=r(1,100)" />
+    </workstage>
+
+  </workflow>
+
+</workload>

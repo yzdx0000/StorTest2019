@@ -1,0 +1,111 @@
+#-*-coding:utf-8 -*
+#!/usr/bin/python
+#功能：用于清除有关账户的所有数据，调用该函数仅需要提供oOmsip,oossip,accountname,email
+import os
+import xml.dom.minidom
+import commands
+import _analysexml_lp
+import _readconffile_lp
+import _getrelatedid_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+def delete_objects_logger(mgrip,dsip,accountname,email,logger):
+    (accountid,accountuid,certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,accountname,email,logger)
+    if(accountid==-1):
+        logger.info("************the account %s  not exist*******************" % accountname)
+        exit(-1)
+    buckets=_analysexml_lp.analyzebucket_xml_logger(mgrip,dsip,accountname,email,logger)
+    if(buckets==-1):
+        logger.info("********************get the bucket list fail**************************")
+        exit(-1)
+    for i in range(0,len(buckets)):
+        (objnames,objsizes)=_analysexml_lp.analyzeobject_xml_logger(mgrip,dsip,buckets[i],accountname,email,logger)
+        if(objnames==-1):
+            logger.info("*******************get the object list fail**********************")
+        else:
+            for j in range(0,len(objnames)):
+#删除对象
+	        logger.info("begin to delete objects")
+	        cmd='curl -s -i http://'+dsip+':20480/'+buckets[i]+'/'+objnames[j]+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+                logger.info(cmd)
+	        output=os.popen(cmd).read()
+                logger.info(output)
+	        num1=output.find('HTTP/1.1')
+                num2=output[(num1+9):(num1+12)]
+	        if(num2=='200'):
+#删除之后，查看一下该对象元数据，确认该对象是否已成功删除
+		    cmd1=cmd='curl -s -i http://'+dsip+':20480/'+buckets[i]+'/'+objnames[j]+' -X HEAD -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+		    logger.info(cmd1)
+		    output1=os.popen(cmd).read()
+                    logger.info(output1)
+		    num3=output1.find('HTTP/1.1')
+        	    num4=output1[(num3+9):(num3+12)]
+		    if(num4=='404'):
+		        logger.info("delete %s in %s success" % (objnames[j],buckets[i]))
+		    else:
+		        logger.info("delete %s in %s fail" % (objnames[j],buckets[i]))
+                        return -1
+#所有桶中的对象删除完毕后，删除桶
+        cmd2='curl -s -i http://'+dsip+':20480/'+buckets[i]+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+        logger.info(cmd2)
+        output2=os.popen(cmd2).read()
+        logger.info(output2)
+        num5=output2.find('HTTP/1.1')
+        num6=output2[(num5+9):(num5+12)]
+        if(num6=='200'):
+#桶删除成功后，查询桶的元数据，确认该桶是否已成功删除
+            cmd3=cmd='curl -s -i http://'+dsip+':20480/'+buckets[i]+' -X HEAD -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+            logger.info(cmd3)
+            output3=os.popen(cmd3).read()
+            logger.info(output3)
+            num7=output3.find('HTTP/1.1')
+            num8=output3[(num7+9):(num7+12)]
+            if(num8=='404'):
+                #i+=1
+                logger.info("delete %s success!" % buckets[i])
+            else:
+                logger.info("delete %s fail!" % buckets[i])
+                return -1
+
+#删除证书
+    certificates=_getrelatedid_lp.getacerids_logger(mgrip,accountname,email,logger)
+    for i in range(len(certificates)):
+        cmd1="ssh "+mgrip+" \"parastor_pos delcertificate certificateid="+certificates[i]+"\""
+        logger.info(cmd1)
+        (rc1,output)=commands.getstatusoutput(cmd1)
+        logger.info(output)
+        if(rc1!=0):
+            logger.info("*************delete certificateid:"+certificates[i]+" fail*************")
+            return -1
+        else:
+            logger.info("delete certificateid:"+certificates[i]+" success")
+#删除账户
+    cmd1="ssh "+mgrip+" \"parastor_pos delaccount accountid="+accountid+"\""
+    logger.info(cmd1)
+    (rc1,output)=commands.getstatusoutput(cmd1)
+    logger.info(output)
+    if(rc1!=0):
+        logger.info("*************delete account fail*************")
+        return -1
+    else:
+        logger.info("delete account success")
+
+
+
+if __name__ == '__main__':
+    logfilename='test'
+    # 创建日志输出文件
+    output = getoutputpath_lp.getoutputpath()
+    logfilepath = os.path.join(output, logfilename)
+    ifmkdir = commonfunction_lp.touchfile(logfilepath)
+    logger = _log_lp.log(logfilename)
+    if ifmkdir:
+        logger.info('%s is alreay exists and we delete it and create a new one' % logfilepath)
+    else:
+        logger.info('%s is created ok' % logfilepath)
+    delete_objects_logger('10.2.40.24','10.2.40.22','saturday','saturday@sugon.com',logger)
+#    delete_objects_logger('10.2.40.24','www.sugon.com','saturday','saturday@sugon.com',logger)
+#    delete_objects_logger('10.2.40.24','www.sugon.com','friday','friday@sugon.com',logger)
+#    delete_objects_logger('10.2.40.24','www.sugon.com','sunday','sunday@sugon.com',logger)

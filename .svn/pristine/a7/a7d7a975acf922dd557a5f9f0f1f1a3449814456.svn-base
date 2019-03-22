@@ -1,0 +1,34 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建证书模块
+#使用方法：调用"cer_add()"函数，指定账户id即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/11
+#**********************************************#
+import os,sys
+import commands
+
+#命令生成函数
+def cer_add_cmd(mgrip,acc_id):
+	cmd = 'ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos addcertificate accountid='+acc_id+'"' 	#拼串片段，无需关注。
+	#cmd = ''.join((part1,acc_id))#生成指令
+	return cmd
+
+#创建证书函数
+def cer_add(mgrip,acc_id):#输入参数为:"账户id"
+	cmd = cer_add_cmd(mgrip,acc_id)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	if (output[0:1]!='a'):
+		print "create error!"
+		return -1
+	str1 = output[output.find("#") + 1:]						#字符串筛选片段，无需关注
+	str2 = str1[str1.find(":") + 1:]						#字符串筛选片段，无需关注
+	cer_id = str2[0:32]								#字符串筛选片段，无需关注
+	return cer_id
+if __name__=="__main__":
+	certificateid=cer_add(sys.argv[1],sys.argv[2])
+	print certificateid
+#调试代码
+#cer_id=cer_add('000000000000001f')
+#print cer_id

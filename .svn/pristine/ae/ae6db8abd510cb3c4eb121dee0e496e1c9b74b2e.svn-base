@@ -1,0 +1,482 @@
+# -*- coding:utf-8 -*
+import commands,sys,os
+import _checkresult_lyz
+import getoutputpath_lyz
+import _xmlanalyzeAllBucket
+import _xmlanalyzeAllObjectOfBucket
+import time
+#函数名称：sshlistaccounts
+#函数用途：该函数在主MGR上执行，获取所有account名称和id
+#函数输入：主MGR的地址
+#函数输出：一个列表，每个元素是一个账户信息，形式是字典，键是accountname，值是[accountid，email]
+#函数创建者：刘艳哲
+def sshlistaccounts(mgrip):
+	(status,output)=commands.getstatusoutput('ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listaccounts"')
+	#print status
+	print output
+	accountnum=output.count('accountid')
+	beforestartAccountid=0
+	dicts=[]
+	for i in range(accountnum):
+		#截取accountid
+	       	accountidstart=output.find('accountid:',beforestartAccountid)
+		accountidstend=output.find('#accountuid',beforestartAccountid)
+		accountid=output[(accountidstart+10):accountidstend]
+		# 截取accountuid
+		accountuidstart = output.find('accountuid', beforestartAccountid)
+		accountuidend = output.find('accountname', beforestartAccountid)
+		accountuid = output[(accountuidstart + 11):accountuidend]
+		#截取accountname
+		accountnamestart=output.find('accountname:',beforestartAccountid)
+		accountnameend=output.find('#email',beforestartAccountid)
+		accountname=output[(accountnamestart+12):accountnameend]
+		#截取email
+		emailstart=output.find('email',beforestartAccountid)
+		emailend=output.find('#quota',beforestartAccountid)
+		email=output[(emailstart+6):emailend]
+		info=[]
+		info.append(accountid)
+		info.append(accountuid)
+		info.append(email)
+		dict={accountname:info}
+		dicts.append(dict)
+		beforestartAccountid=emailend+1
+		#print dict
+	print dicts
+	return dicts
+		
+	
+
+#函数名称：sshListcertificatesHaveReturn
+#函数用途：根据accountid获取所有的certificateid
+#输入：mgrid,accountid；返回值：所有certificateid
+def sshListcertificatesHaveReturn(mgrip,accountid):
+	#1、运行listcertificates命令
+	(status,output)=commands.getstatusoutput('ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listcertificates accountid='+accountid+'"')
+	print output
+	#2、找到certificate的certificateinfo
+	infostart=output.find('[')
+	infoend=output.find(']')
+	certificateinfo=output[int(infostart+1):infoend]
+	#print certificateinfo
+	#3、找到每一个certificate的信息
+	count=certificateinfo.count('{')
+	beforcersatrt=0
+	benforcerend=0
+	certificatePerInfo=[]
+	for i in range(count):
+		cerstart=certificateinfo.find('{',beforcersatrt)
+		cerend=certificateinfo.find('}',benforcerend)
+		beforcersatrt=cerstart+1
+		benforcerend=cerend+1
+		#print cerstart,cerend
+		certificate=certificateinfo[(cerstart+1):cerend]
+		#print certificate
+		certificatePerInfo.append(certificate)
+	#4、找到每一个certificateid
+	certificateids=[]
+	for j in range(count):
+		certificatePerInfoo=certificatePerInfo[j]
+		cerIdStart=certificatePerInfoo.find(':')
+		cerIdEnd=certificatePerInfoo.find('%')
+		certificateid=certificatePerInfoo[(cerIdStart+1):cerIdEnd]
+		certificateids.append(certificateid)
+	print certificateids
+	return certificateids
+
+#函数名称：getAllBucketOfCertificateid
+#函数作用：查询某个证书下有哪些桶
+#函数输入：oOss所在ip，certificateid
+#函数输出：print出该证书下有哪些桶
+def getAllBucketOfCertificateid(oossip,certificateid):
+	cmd='curl -s -i http://'+oossip+':20480 -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	#output=os.system(cmd)
+	print output
+	reccc=_checkresult_lyz.checkresult(status, output)
+	if reccc==-1:
+		return -1
+	outputdir= getoutputpath_lyz.getoutputpath()
+	#print  output
+	os.system('cd ' + outputdir + ';touch fileAllBuckets')
+	fileAllBucketsallpath = os.path.join(outputdir, 'fileAllBuckets')
+	with open(fileAllBucketsallpath, 'w') as fo:
+		fo.write(output)
+	objects = _xmlanalyzeAllBucket.analyze_xml()
+	#print objects
+	return objects
+	#print objects
+def getAllBucketOfCertificateidHaveLog(oossip,certificateid,logger):
+	cmd='curl -s -i http://'+oossip+':20480 -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	#output=os.system(cmd)
+	logger.info(output)
+	reccc1=_checkresult_lyz.checkresult(status, output)
+	if reccc1 == -1:
+		return -1
+	outputdir= getoutputpath_lyz.getoutputpath()
+	#print  output
+	os.system('cd ' + outputdir + ';touch fileAllBuckets')
+	fileAllBucketsallpath = os.path.join(outputdir, 'fileAllBuckets')
+	with open(fileAllBucketsallpath, 'w') as fo:
+		fo.write(output)
+	objects = _xmlanalyzeAllBucket.analyze_xml()
+	#print objects
+	return objects
+
+def getAllBucketOfCertificateid1(oossip,certificateid):
+	cmd='curl  -i http://'+oossip+':20480 -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	#output=os.system(cmd)
+	print output
+	reccc2=_checkresult_lyz.checkresult(status, output)
+	if reccc2 == -1:
+		return -1
+	'''
+	outputdir= getoutputpath_lyz.getoutputpath()
+	#print  output
+	os.system('cd ' + outputdir + ';touch fileAllBuckets')
+	fileAllBucketsallpath = os.path.join(outputdir, 'fileAllBuckets')
+	with open(fileAllBucketsallpath, 'w') as fo:
+		fo.write(output)
+	objects = _xmlanalyzeAllBucket.analyze_xml()
+	#print objects
+	return objects
+	'''
+def getAllBucketOfCertificateid1HaveLog(oossip,certificateid,logger):
+	cmd='curl  -i http://'+oossip+':20480 -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	#output=os.system(cmd)
+	logger.info(output)
+	reccc3=_checkresult_lyz.checkresultHaveLog(status, output,logger)
+	if reccc3 == -1:
+		return -1
+#函数名称：getAllObjectOfBucket
+#函数作用：查询桶内对象列表
+#函数输入：oOss所在ip，bucket名称，certificateid
+#函数输出：print出该bucket下的所有对象的列表
+def getAllObjectOfBucket(oossip,bucketname,certificateid):
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	#print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	#print output
+	reccc4=_checkresult_lyz.checkresult(status,output)
+	if reccc4 == -1:
+		return -1
+	outputdir=getoutputpath_lyz.getoutputpath()
+	os.system('cd '+outputdir+';touch fileAllObjects')
+	fileAllObjectsallpath=os.path.join(outputdir,'fileAllObjects')
+	with open(fileAllObjectsallpath,'w') as fo:
+		fo.write(output)
+	certificates=_xmlanalyzeAllObjectOfBucket.analyze_xml()
+	return certificates
+def getAllObjectOfBucketHaveLog(oossip,bucketname,certificateid,logger):
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	reccc5=_checkresult_lyz.checkresultHaveLog(status,output,logger)
+	if reccc5 == -1:
+		return -1
+	outputdir=getoutputpath_lyz.getoutputpath()
+	os.system('cd '+outputdir+';touch fileAllObjects')
+	fileAllObjectsallpath=os.path.join(outputdir,'fileAllObjects')
+	with open(fileAllObjectsallpath,'w') as fo:
+		fo.write(output)
+	certificates=_xmlanalyzeAllObjectOfBucket.analyze_xml()
+	return certificates
+
+#函数名称：delete_bucket
+#函数作用：删除指定bucket
+#函数输入：oossip,bucketname,certificateid
+#将删除结果打印出来
+#例如：delete_bucket('10.2.40.18','bucketname102608','000020ZYTUAP29Z1000020ZYSD52KRHK')
+def delete_bucket(oossip,bucketname,certificateid):
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput('curl -i http://'+oossip+':20480/'+bucketname+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"')
+	reccc6=_checkresult_lyz.checkresult(status,output)
+	if reccc6== -1:
+		return -1
+	print status
+	print output
+def delete_bucketHaveLog(oossip,bucketname,certificateid,logger):
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput('curl -i http://'+oossip+':20480/'+bucketname+' -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"')
+	reccc7=_checkresult_lyz.checkresult(status,output)
+	if reccc7 == -1:
+		return -1
+	logger.info(status)
+	logger.info(output)
+#函数名称：利用路径上传object
+#需要参数：parastor ds的ip、bucketname、objectname、要上传的文件所在路径、证书id
+#正确用法：python scriptname ip bucketname objectname objectpath certificateid
+##例子：python scriptname 10.2.40.18 bucket1 objecthehe1 /opt/put 000020ZYTUAP29Z100001XAXNEV2354P
+def add_object(ip,bucketname,objectname,path,certificateid):
+	cmd='curl -s -i http://'+ip+':20480/'+bucketname+'/'+objectname+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(return_code,output)=commands.getstatusoutput(cmd)
+	print output
+	reccc8=_checkresult_lyz.checkresult(return_code,output)
+	if reccc8 == -1:
+		return -1
+	#result=os.popen(cmd)
+	return output
+def add_objectHaveLog(ip,bucketname,objectname,path,certificateid,logger):
+	cmd='curl -s -i http://'+ip+':20480/'+bucketname+'/'+objectname+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	reccc9=_checkresult_lyz.checkresultHaveLog(return_code,output,logger)
+	if reccc9 == -1:
+		return -1
+	#result=os.popen(cmd)
+	return output
+def add_objects(ip,bucketname,objectname,path,certificateid):
+	objectname=objectname+'a'
+	for i in range(100):
+		print 'bucketname is %s' %bucketname
+		cmd='curl -s -i http://'+ip+':20480/'+bucketname+'/'+objectname+str(i)+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+		print cmd
+		(return_code,output)=commands.getstatusoutput(cmd)
+		print output
+		reccc10=_checkresult_lyz.checkresult(return_code,output)
+		if reccc10 == -1:
+			return -1
+		#result=os.popen(cmd)
+
+	    #return output
+def add_objectstomanybuckets(ip,bucketname,objectname,path,certificateid):
+	#objectname=objectname+'a'
+	for i in range(100):
+		print 'bucketname is %s' %(bucketname + str(i))
+		for j in range(20):
+			cmd='curl -s -i http://'+ip+':20480/'+bucketname + str(i)+'/'+objectname+str(j)+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+			print cmd
+			(return_code,output)=commands.getstatusoutput(cmd)
+			print output
+			rec11=_checkresult_lyz.checkresult(return_code,output)
+			if reccc11 == -1:
+				return -1
+		#result=os.popen(cmd)
+
+	    #return output
+def add_objectnocheck(ip,bucketname,objectname,path,certificateid):
+	cmd='curl -s -i http://'+ip+':20480/'+bucketname+'/'+objectname+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(return_code,output)=commands.getstatusoutput(cmd)
+	#_checkresult_lyz.checkresult(return_code,output)
+	#result=os.popen(cmd)
+	print 'time is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+	print output
+	return output
+def add_objectnocheckHaveLog(ip,bucketname,objectname,path,certificateid,logger):
+	cmd='curl -s -i http://'+ip+':20480/'+bucketname+'/'+objectname+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	#_checkresult_lyz.checkresult(return_code,output)
+	#result=os.popen(cmd)
+	logger.info('time is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+	logger.info(output)
+	return output
+
+#函数名称：downloadObject
+#函数作用：将指定对象下载到指定路径下
+#函数你输入：oossip，bucketname，objectname，下载路径path，certificateid
+#函数输出：print下载结果
+#函数用法： python scriptname oossip bucketname objectname path certificateid
+def downloadObject(oossip,bucketname,objectname,path,certificateid):
+	cmd='curl -s http://'+oossip+':20480/'+bucketname+'/'+objectname+' -o '+path+' -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+def downloadObjectHaveLog(oossip,bucketname,objectname,path,certificateid,logger):
+	cmd='curl -s http://'+oossip+':20480/'+bucketname+'/'+objectname+' -o '+path+' -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+def downloadObjectFromManyBucket(oossip,bucketname,objectname,path,certificateid):
+	for i in range(100):
+		for j in range(20):
+			patha=os.path.join(path,'bucket'+bucketname+str(i)+'object'+objectname+str(j))
+			print 'patha is %s' %patha
+			cmd='curl -s http://'+oossip+':20480/'+bucketname+str(i)+'/'+objectname+str(j)+' -o '+patha+' -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+			(status,output)=commands.getstatusoutput(cmd)
+			print output
+def downloadandCheckObject(oossip,bucketname,objectname,path,certificateid):
+	cmd='curl -s http://'+oossip+':20480/'+bucketname+'/'+objectname+' -o '+path+' -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+def downloadObjectHavereturn(oossip,bucketname,objectname,path,certificateid):
+	cmd='curl -s http://'+oossip+':20480/'+bucketname+'/'+objectname+' -o '+path+' -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	return cmd
+#函数名称：copyObject
+#函数作用：将该对象复制到其他桶中
+#函数输入：oossip,dest_bucket,dest_obj,certificateid,src_bucket,src_obj
+#函数输出：将复制是否成功print出来
+#使用方法copyObject（scriptname oossip dest_bucket dest_obj certificateid src_bucket src_obj）
+def copyObject(oossip,dest_bucket,dest_obj,certificateid,src_bucket,src_obj):
+	cmd='curl -s -i http://'+oossip+':20480/'+dest_bucket+'/'+dest_obj+' -X PUT -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'" -H "x-amz-copy-source: /'+src_bucket+'/'+src_obj+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	_checkresult_lyz.checkresult(status,output)
+	print output
+
+def copyObjectHaveLog(oossip,dest_bucket,dest_obj,certificateid,src_bucket,src_obj,logger):
+	cmd='curl -s -i http://'+oossip+':20480/'+dest_bucket+'/'+dest_obj+' -X PUT -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'" -H "x-amz-copy-source: /'+src_bucket+'/'+src_obj+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	_checkresult_lyz.checkresultHaveLog(status,output,logger)
+	logger.info(output)
+
+def checkmd5sum(src,dest):
+	#print 'src is %s' %src
+	#print 'dest is %s' %dest
+	md5ofSrco=os.popen('md5sum '+src).read()
+	md5ofDesto=os.popen('md5sum '+dest).read()
+	#print 'md5ofSrco is %s' %md5ofSrco
+	#print 'md5ofDesto is %s' %md5ofDesto
+	md5ofSrc = md5ofSrco.split()[0]
+	md5ofDest=md5ofDesto.split()[0]
+	#print 'md5ofSrc is %s' %md5ofSrc
+	#print 'md5ofDest is %s' %md5ofDest
+	if md5ofSrc!=md5ofDest:
+		print 'error################################################'
+		print 'md5 of %s and %s is not the same' %(src,dest)
+		return -1
+	else:
+		print 'md5 of %s and %s is  same' % (src, dest)
+		return True
+def checkmd5sumHaveLog(src,dest,logger):
+	#print 'src is %s' %src
+	#print 'dest is %s' %dest
+	md5ofSrco=os.popen('md5sum '+src).read()
+	md5ofDesto=os.popen('md5sum '+dest).read()
+	#print 'md5ofSrco is %s' %md5ofSrco
+	#print 'md5ofDesto is %s' %md5ofDesto
+	md5ofSrc = md5ofSrco.split()[0]
+	md5ofDest=md5ofDesto.split()[0]
+	#print 'md5ofSrc is %s' %md5ofSrc
+	#print 'md5ofDest is %s' %md5ofDest
+	if md5ofSrc!=md5ofDest:
+		logger.error('error################################################')
+		logger.error('md5 of %s and %s is not the same' %(src,dest))
+		return -1
+	else:
+		logger.info('md5 of %s and %s is  same' % (src, dest))
+		return True
+def checkmd5sumWriteTofile(file,src, dest):
+	# print 'src is %s' %src
+	# print 'dest is %s' %dest
+	md5ofSrco = os.popen('md5sum ' + src).read()
+	md5ofDesto = os.popen('md5sum ' + dest).read()
+	# print 'md5ofSrco is %s' %md5ofSrco
+	# print 'md5ofDesto is %s' %md5ofDesto
+	md5ofSrc = md5ofSrco.split()[0]
+	md5ofDest = md5ofDesto.split()[0]
+	# print 'md5ofSrc is %s' %md5ofSrc
+	# print 'md5ofDest is %s' %md5ofDest
+	if md5ofSrc != md5ofDest:
+		print 'error################################################'
+		print 'md5 of %s and %s is not the same' % (src, dest)
+		f=open(file,'a')
+		cotenta='error###############################################'
+		cotent='md5 of '+src+' and '+dest+' is not the same'
+		f.write(cotenta)
+		f.write(cotent)
+		f.close()
+	else:
+		print 'md5 of %s and %s is  same' % (src, dest)
+		f = open(file, 'a')
+		cotent = ' same'
+		f.write(cotent)
+		f.close()
+		return True
+
+#函数名称：deleteObject
+#函数作用：删除对象
+#函数输入：
+def deleteObject(oossip,bucketname,objectname,certificateid):
+	cmd='curl -i http://%s:20480/%s/%s -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,certificateid)
+	#print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	_checkresult_lyz.checkresult(status, output)
+def deleteObjectHaveLog(oossip,bucketname,objectname,certificateid,logger):
+	cmd='curl -i http://%s:20480/%s/%s -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,certificateid)
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	logger.info(output)
+	_checkresult_lyz.checkresultHaveLog(status, output,logger)
+#该脚本用来设置桶的acl
+def setBucketAcl(oossip,bucketname,ownercertificateid,owner_accountuid,owneraccount_email,des_accountuid,dstaccount_email,operation):
+	cmd="curl -i http://%s:20480/%s?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>'" %(oossip, bucketname, ownercertificateid, owner_accountuid, owneraccount_email, des_accountuid, dstaccount_email,operation)
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	_checkresult_lyz.checkresult(status,output)
+
+#该脚本用来设置object的acl
+def setobjectacl(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credential,dest_mail,operation):
+	cmd="curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'" %(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credential,dest_mail,operation)
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	_checkresult_lyz.checkresult(status,output)
+
+def splitaccountinfo(output,email):
+	#截取accountname
+	accountnamestart=output.find('accountname')
+	accountnameend=output.find('#accountid')
+	accountname=output[(accountnamestart+12):accountnameend]
+	# 截取accountid
+	accountidstart = output.find('accountid:')
+	accountidstend = output.find('#accountuid')
+	accountid = output[(accountidstart + 10):accountidstend]
+	# 截取accountuid
+	accountuidstart = output.find('accountuid')
+	accountuidend = output.find('#create_date')
+	accountuid = output[(accountuidstart + 11):accountuidend]
+	accountdit={accountname:[accountid,accountuid,email]}
+	return accountdit
+
+#该函数用来查询指定的进程是否存在
+#函数输入：ip，processname
+#函数输出：True 或者 False
+import os,sys,commands
+def ifExistsProcess_lyz(ip,processname):
+	cmd = 'ssh '+ip+' "ps aux | grep '+ processname+' |grep -v grep | wc -l"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	if int(output)>=1:
+		print 'True'
+		return True
+	else:
+		print 'False'
+		return False
+
+def getallpaths():
+	objectpaths=[]
+	for i in range(1, 1001):
+		if len(str(i)) == 1:
+			objectpath = 'vdb_f000' + str(i) + '.file'
+		elif len(str(i)) == 2:
+			objectpath = 'vdb_f00' + str(i) + '.file'
+		elif len(str(i)) == 3:
+			objectpath = 'vdb_f0' + str(i) + '.file'
+		else:
+			objectpath = 'vdb_f' + str(i) + '.file'
+		objectpaths.append(objectpath)
+	print objectpaths
+
+if __name__=="__main__":
+	dict=splitaccountinfo('accountname:aa#accountid:0000228ASUSWL1V7#accountuid:0000228ASUSWL1V700001ZJXZXL623PS#create_date:324583886728','aa@qq.com')
+	print dict
+

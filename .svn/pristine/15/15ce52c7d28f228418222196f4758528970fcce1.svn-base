@@ -1,0 +1,50 @@
+# -*- coding:utf-8 -*
+import commands
+import sys,os
+
+import _checkresult_lyz
+import getoutputpath_lyz
+import _xmlanalyzeAllObjectOfBucket
+import _xmlanalyzeAllObjectOfBucketOver1000
+#函数名称：getAllObjectOfBucket
+#函数作用：查询桶内对象列表
+#函数输入：oOss所在ip，bucket名称，certificateid
+#函数输出：print出该bucket下的所有对象的列表
+def getAllObjectOfBucket(oossip,bucketname,certificateid):
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	#print output
+	re=_checkresult_lyz.checkresult(status,output)
+	if re == -1:
+		return -1
+	outputdir=getoutputpath_lyz.getoutputpath()
+	os.system('cd '+outputdir+';touch fileAllObjects')
+	fileAllObjectsallpath=os.path.join(outputdir,'fileAllObjects')
+	with open(fileAllObjectsallpath,'w') as fo:
+		fo.write(output)
+	objects=_xmlanalyzeAllObjectOfBucket.analyze_xml()
+	print objects
+	#print outpout
+        return objects
+def getAllObjectOfBucketHaveLog(oossip,bucketname,certificateid,logger):
+	cmd='curl -s -i http://'+oossip+':20480/'+bucketname+' -X GET -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	logger.info(cmd)
+	(status,output)=commands.getstatusoutput(cmd)
+	#print output
+	re=_checkresult_lyz.checkresultHaveLog(status,output,logger)
+	if re == -1:
+		return -1
+	outputdir=getoutputpath_lyz.getoutputpath()
+	os.system('cd '+outputdir+';touch fileAllObjects')
+	fileAllObjectsallpath=os.path.join(outputdir,'fileAllObjects')
+	with open(fileAllObjectsallpath,'w') as fo:
+		fo.write(output)
+	objects=_xmlanalyzeAllObjectOfBucket.analyze_xml()
+	logger.info(objects)
+	#print outpout
+        return objects
+if __name__=="__main__":
+	getAllObjectOfBucket(sys.argv[1],sys.argv[2],sys.argv[3])
+	#getAllObjectOfBucket('10.2.40.18','bucket1','000020ZYTUAP29Z1000020ZYSD52KRHK')
+	

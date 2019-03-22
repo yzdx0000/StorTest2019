@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="s3-sample" description="sample benchmark for s3">
+
+  <storage type="s3" config="accesskey=00003TU3ZNVAENV900003TU3ZNUZMVRQ;secretkey=001a8fa96ae48ab20c4a5bfe445fb6ab028fc148;endpoint=http://www.dws.com:20480;path_style_access=true;timeout=120000;" />
+
+  <workflow>
+
+    <workstage name="init">
+  	<storage type="s3" config="accesskey=00003TU3ZNVAENV900003TU3ZNUZMVRQ;secretkey=001a8fa96ae48ab20c4a5bfe445fb6ab028fc148;endpoint=http://www.dws.com:20480;path_style_access=true;timeout=720000;" />
+      <work type="init" workers="64" config="cprefix=dwsd012;containers=r(1,64)" />
+    </workstage>
+
+    <workstage name="prepare">
+      <work type="prepare" workers="64" config="cprefix=dwsd012;oprefix=apple;containers=r(1,64);objects=r(1,256);sizes=h(1|64|30,200|500|10,1000|3000|10,7000|8000|50)KB" />
+    </workstage>
+
+    <workstage name="main">
+      <work name="main1" workers="200" runtime="36000">
+        <operation type="write" ratio="70" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(1,32);sizes=h(1|64|30,200|500|10,1000|3000|10,7000|8000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(33,64);hashCheck=False" />
+	</work>
+      <work name="main2" workers="200" runtime="36000">
+        <operation type="write" ratio="60" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(65,96);sizes=h(1|64|30,200|500|10,1000|3000|10,7000|8000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="40" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(97,128);hashCheck=False" />
+	</work>
+      <work name="main3" workers="200" runtime="36000">
+        <operation type="write" ratio="30" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(129,160);sizes=h(1|64|30,200|500|10,1000|3000|10,7000|8000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(161,192);hashCheck=False" />
+	</work>
+      <work name="main4" workers="200" runtime="36000">
+        <operation type="write" ratio="40" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(193,224);sizes=h(1|64|30,200|500|10,1000|3000|10,7000|8000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="60" config="cprefix=dwsd012;oprefix=apple;containers=u(1,64);objects=u(225,256);hashCheck=False" />
+      </work>
+    </workstage>
+
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=dwsd012;oprefix=apple;containers=r(1,64);objects=r(1,256)" />
+    </workstage>
+
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=dwsd012;containers=r(1,64)" />
+    </workstage>
+
+  </workflow>
+
+</workload>

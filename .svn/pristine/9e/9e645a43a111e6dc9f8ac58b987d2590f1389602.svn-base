@@ -1,0 +1,219 @@
+#!/usr/bin/python
+# -*- encoding=utf8 -*-
+
+import os
+import sys
+import commands
+import time
+from optparse import OptionParser
+
+sys.path.append('/home/StorTest/test_cases/libs')
+
+import get_config
+import common
+
+global LOOPFLAG
+global CONTINUEFLAG
+global STOPCORE
+
+# /home/StorTest/Scripts
+scripts_path = os.path.dirname(os.path.abspath(__file__))
+# /home/StorTest
+stortest_path = os.path.dirname(scripts_path)
+# /home/StorTest/test_cases/cases/test_case
+TEST_CASE_PATH = os.path.join(stortest_path, 'test_cases', 'cases', 'test_case')
+
+test_file_len = 70
+case_result_len = 20
+time_str_len = 20
+
+
+##############################################################################
+# ##name  :      check_path_exist
+# ##parameter:   path:文件路径
+# ##author:      baoruobing
+# ##date  :      2017.07.12
+# ##Description: 检查文件路径是否存在
+##############################################################################
+def check_path_exist(path):
+    rc, msg = commands.getstatusoutput("ls %s" % (path))
+    if 0 == rc:
+        return True
+    else:
+        return False
+
+
+def result_to_file(test_file, abs_result_file, case_result, run_time):
+    '''
+    name  :   result_to_file
+    :param    test_file: 脚本名字
+    :param    abs_result_file: 完整的result名字
+    :param    case_result: 脚本运行的结果，Failed or Success
+    author:   baoruobing
+    :return:  是否有core, True是有core，False是没有core
+    '''
+    print ("%s %s!!!" % (test_file, case_result))
+    core_flag = False
+
+    str1_tmp = test_file.ljust(test_file_len)
+    str2_tmp = case_result.ljust(case_result_len)
+
+    m, s = divmod(run_time, 60)
+    h, m = divmod(m, 60)
+    time_str = "%dh:%dm:%ds" % (h, m, s)
+
+    '''检查是否环境是否有core'''
+    core_file_dic = common.get_corefile_info()
+    if core_file_dic:
+        print 'core info: %s' % str(core_file_dic)
+        core_flag = True
+        str3_tmp = time_str.ljust(time_str_len)
+        str4_tmp = str(core_file_dic) + '\n'
+        input_str = [str1_tmp, str2_tmp, str3_tmp, str4_tmp]
+    else:
+        str3_tmp = time_str + '\n'
+        input_str = [str1_tmp, str2_tmp, str3_tmp]
+    with open(abs_result_file, 'a') as data:
+        data.writelines(input_str)
+
+    return core_flag
+
+
+def arg_analysis():
+    global LOOPFLAG
+    global CONTINUEFLAG
+    global STOPCORE
+
+    parser = OptionParser()
+    parser.add_option("-l", "--loop",
+                      type="int",
+                      dest="loop",
+                      default=1,
+                      help="When you want to loop run the case, configure this parameter. "
+                           "default: %default, rang is 1-1000")
+
+    parser.add_option("-c", "--continue",
+                      action="store_true",
+                      dest="con",
+                      help="If you want to continue to run test when the case failed, configure this parameter")
+
+    parser.add_option("-s", "--stop",
+                      action="store_true",
+                      dest="stop_core",
+                      help="If you want to stop to run test when the core exist, configure this parameter")
+
+    options, args = parser.parse_args()
+    if options.loop < 1 or options.loop > 1000:
+        parser.error("the range of -l or --loop is 1-1000")
+    LOOPFLAG = options.loop
+
+    if options.con is True:
+        CONTINUEFLAG = True
+    else:
+        CONTINUEFLAG = False
+
+    if options.stop_core is True:
+        STOPCORE = True
+    else:
+        STOPCORE = False
+
+    return
+
+
+def run_tests():
+    global LOOPFLAG
+    global CONTINUEFLAG
+    global STOPCORE
+
+    # 获取脚本执行结果的存放路径
+    test_result_dir = get_config.get_testresult_path()
+
+    # 创建执行结果文件
+    '''获取当前时间'''
+    now_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
+    file_name = now_time + '_test_result.txt'
+    str1 = '用例'.ljust(test_file_len+2)
+    str2 = '结果'.ljust(case_result_len+2)
+    str3 = '时间'.ljust(time_str_len+2)
+    str4 = 'core\n'
+    input_str = [str1, str2, str3, str4]
+    abs_result_file = os.path.join(test_result_dir, file_name)
+    with open(abs_result_file, 'w') as data:
+        data.writelines(input_str)
+
+    # 获取用例列表文件
+    case_list_file = get_config.get_caselist_file()
+    test_files = get_config.get_case_list(case_list_file)
+    # print "---- start running start.py ----"
+    # os.system("python /root/baoruobing/test/script_true/start.py")
+    core_flag = False
+    core_stop_flag = False
+    success = 0
+    failed = 0
+    skip = 0
+    for i in range(LOOPFLAG):
+        '''检查是否触发了core退出的标志'''
+        if core_stop_flag is True:
+            break
+        for mem in test_files:
+            '''检查有core是否退出'''
+            if STOPCORE is True and core_flag is True:
+                core_stop_flag = True
+                break
+            case_list_file = mem[0]
+            num = mem[1]
+            test_file = mem[2]
+            test_file_path = TEST_CASE_PATH + '/' + test_file
+            # 检查文件是否存在
+            result = check_path_exist(test_file_path)
+            if result is False:
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print ("The %s line:%s, %s is not exist!!!" % (case_list_file, num, test_file_path))
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                continue
+
+            '''获取脚本的模块名和文件名'''
+            print "\n------------ start running %s ------------" % test_file
+            start_time = time.time()
+            status = os.system("python -u " + test_file_path)
+            status = status >> 8
+            end_time = time.time()
+            run_time = int(end_time - start_time)
+            if 0 != status and status != 255:
+                core_flag = result_to_file(test_file, abs_result_file, 'Failed', run_time)
+                '''有用例失败停止运行'''
+                print "-------- %s failed!!! --------" % test_file
+                failed += 1
+                if CONTINUEFLAG is False:
+                    break
+            elif 255 == status:
+                core_flag = result_to_file(test_file, abs_result_file, 'Skipped', run_time)
+                skip += 1
+            else:
+                core_flag = result_to_file(test_file, abs_result_file, 'Success', run_time)
+                success += 1
+
+    with open("{}".format(abs_result_file), "a+")  as f:
+        f.write("##############概览#####################" + "\n")
+        f.write("total:{}".format(int((success + failed + skip) / LOOPFLAG)) + "\n")
+        f.write("pass:{}".format(int((success) / LOOPFLAG)) + "\n")
+        f.write("failed:{}".format(int((failed) / LOOPFLAG)) + "\n")
+        f.write("skipped:{}".format(int((skip) / LOOPFLAG)) + "\n")
+
+    cmd = "cat " + abs_result_file
+    res, msg = commands.getstatusoutput(cmd)
+    if (res != 0):
+        print "File does not exist!!!"
+        exit(1)
+    else:
+        print msg
+
+
+if __name__ == '__main__':
+    arg_analysis()
+    run_tests()
+    print "The test is finished!!!!!!!!!!!!!!!!!!"

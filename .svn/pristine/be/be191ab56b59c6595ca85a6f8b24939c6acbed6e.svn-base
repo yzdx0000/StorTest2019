@@ -1,0 +1,101 @@
+#-*-coding:utf-8 -*
+import os
+import time
+
+import utils_path
+import common
+import snap_common
+import log
+import shell
+import get_config
+import prepare_clean
+import random
+import nas_common
+import json
+"""
+author@liangxy
+date: 2018-08-01
+@summary：
+     缺陷自动化：使用du命令无法统计parastor文件系统子目录文件情况
+@steps:
+    1、在卷目录下创建测试目录，在其中创建随机数个文件夹和文件
+    2、回到卷目录使用du -s命令统计文件数目
+    3、在测试目录使用du -s命令统计文件数目
+    4、清理环境，返回结果
+@changelog：
+    
+"""
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+DEFECT_PATH = get_config.get_one_defect_test_path()
+BASE_DEFECT_PATH = os.path.dirname(DEFECT_PATH)
+
+
+def get_du_rst(execute_path, target_path, case_ip):
+    """
+    author:LiangXiaoyu
+    func:将du -s命令在execute目录执行，返回targe目录的结果
+    :param execute_path: 执行命令所在目录
+    :param target_path: du -s统计的目录
+    :param case_ip: 执行命令的ip
+    :return: rst_test_du:目标目录内的文件大小
+    """
+    cmd_test_du = ("cd %s && du -s %s" % (execute_path, target_path))
+    rc_test_dir, stdout_test_dir = common.run_command(case_ip, cmd_test_du)
+    rst_test_du = stdout_test_dir.strip().split()[0]
+    if 0 != rc_test_dir:
+        log.error("du in test path filed")
+        raise Exception("case file")
+    return rst_test_du
+
+
+def random_choose_node(ob_node):
+    """
+        name  :      delete_disk_random_beta
+        parameter:   common库中的node类
+        author:      LiangXiaoyu
+        date  :      2018.07.13
+        Description: 返回一个随机得到的node_id和IP
+        @changelog：
+    """
+    nodeid_list = ob_node.get_nodes_id()
+    '''随机选一个节点'''
+    fault_node_id = random.choice(nodeid_list)
+    return fault_node_id
+
+
+def case():
+    log.info("case begin")
+    """随机节点"""
+    ob_node = common.Node()
+    case_ip_lst = ob_node.get_external_client_ips()
+    case_ip = random.choice(case_ip_lst)
+    test_path = os.path.join(DEFECT_PATH, FILE_NAME)
+    file_names_count = 5
+    """使用iozone创建file_names_count个文件"""
+    for i in range(0, file_names_count):
+        test_file = os.path.join(test_path, '%d'% i)
+        cmd = ("iozone -s 1m -i 0 -f %s -w" % test_file)
+        log.info(cmd)
+        rc, stdout = common.run_command(case_ip, cmd)
+        if rc != 0:
+            raise Exception(
+                "Execute command: \"%s\" failed. \nstdout: %s " % (cmd, stdout))
+    rst_test_du = get_du_rst(test_path, test_path, case_ip)
+    rst_volume_du = get_du_rst(BASE_DEFECT_PATH, test_path, case_ip)
+    cmp_rst_du = cmp(rst_test_du, rst_volume_du)
+    if 0 != cmp_rst_du:
+        log.error("du reslut is not equal:%s != %s" % (rst_volume_du, rst_test_du))
+        raise Exception("case file")
+    log.info("case succeed")
+    return
+
+
+def main():
+    prepare_clean.defect_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.defect_test_clean(FILE_NAME)
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

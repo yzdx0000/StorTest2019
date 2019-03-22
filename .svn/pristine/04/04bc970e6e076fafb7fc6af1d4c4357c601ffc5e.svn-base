@@ -1,0 +1,84 @@
+# -*-coding:utf-8 -*
+#************************************************************
+#实现功能：add_object_logger利用路径向指定对象中上传若干个对象
+#函数说明：先上传对象，并验证该对象元数据是否存在，如果元数据存在则下载对象，通过比较前后md5值确定对象是否上传成功
+#所需参数：调用add_object_logger前，objstartnum,objendnum,mgrip,oossip,bucketname,objnamepre,accountname,email,downpath
+#作者：刘萍
+#更改日期：2018/01/12
+#***********************************************************
+import os
+import commands
+import time
+import _readconffile_lp
+import _getrelatedid_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+
+def add_object_logger(start,end,mgrip,dsip,bucketname,objectname,accountname,email,downpath,logger):
+    output = getoutputpath_lp.getoutputpath()
+    (accountid,accountuid,certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,accountname,email,logger)
+    if (os.path.exists(output + "/iozone.DUMMY.0")):
+        d=os.system("rm -rf " + output + "/iozone.DUMMY.0")
+        if(d==0):
+            logger.info("rm -rf " + output + "/iozone.DUMMY.0 success")
+    c=os.system("cd "+output+";"+"iozone -t 1 -s 10M -i 0 -w")
+    path=os.path.abspath(output + "/iozone.DUMMY.0")
+    j=0
+    for i in range(start,end+1):
+        (state1,info)=commands.getstatusoutput('ls -l '+path)
+	if(state1==0):
+	    size_source=info.split()[4]
+            md5_info=os.popen('md5sum '+path).read()
+	    md5_sourece=md5_info.split()[0]
+	    cmd=' curl -s -i http://'+dsip+':20480/'+bucketname+'/'+objectname+str(i)+' -X PUT -T "'+path+'" -H "Expect: " -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+	    logger.info(cmd)
+	#	(state2,output2)=commands.getstatusoutput(cmd)
+	    output2=os.popen(cmd).read()
+	    logger.info(output2)
+	    num1=output2.find('HTTP/1.1')
+	    num2=output2[(num1+9):((num1+12))]
+	    if (num2=='200'):
+#########****************先查看一下该对象元数据是否存在,-s是为了阻止curl产生时间信息*****************************#######
+		cmd3='curl -s -i http://'+dsip+':20480/'+bucketname+'/'+objectname+str(i)+' -X HEAD -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+		logger.info(cmd3)
+		(state3,output3)=commands.getstatusoutput(cmd3)
+		logger.info(output3)
+		num3=output3.find('HTTP/1.1')
+		num4=output3[(num3+9):((num3+12))]        #查找结果的状态号#######
+		if(num4=='200'):
+		    a=output3.find('Content-Length:')
+		    b=output3.find('x-amz-request-id')
+		    c=output3[(a+16):b]                 ##截取object大小####
+		    size_dest=c.strip()                ######使用strip去掉字符串前后空格######
+###################******元数据存在的情况下，下载该对象，并校验md5值*******#############################
+		    if(size_dest==size_source):
+                        cmd4='curl -s http://'+dsip+':20480'+'/'+bucketname+'/'+objectname+str(i)+' -o '+downpath+'/'+objectname+str(i)+' -H "Authorization:AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+			logger.info(cmd4)
+			(state4,output4)=commands.getstatusoutput(cmd4)
+			logger.info(output4)
+			if(state4==0):
+			    file=os.path.exists(downpath+'/'+objectname+str(i))
+			    if(file):
+			        cmd5='md5sum '+downpath+'/'+objectname+str(i)
+				md5_info1=os.popen(cmd5).read()
+				md5_dest=md5_info1.split()[0]
+				if(md5_sourece==md5_dest):
+				    j+=1
+				    logger.info("the num of successful objects for putting is %s" % j)
+				    rm_code=os.system('rm -rf '+downpath+'/'+objectname+str(i))
+				else:
+				    logger.info("the %s%s in the %s md5 is not same " %(objectname,i,bucketname))
+				    return -1
+                        else:
+                            logger.info("put success but get %s%s in the %s fail" % (objectname,i,bucketname))
+                            return -1
+		else:
+		    logger.info("the %s%s not in %s" % (objectname,i,bucketname))
+		    return -1
+	    else:
+		logger.info("put %s%s fail in %s" % (objectname,i,bucketname))
+		return -1
+
+

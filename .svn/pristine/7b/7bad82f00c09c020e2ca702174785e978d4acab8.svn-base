@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <!-- S3 访问分区对外IP -->
+    <S3_access_ips>
+        <S3_access_ip>50.10.10.213</S3_access_ip>
+        <S3_access_ip>50.10.10.214</S3_access_ip>
+        <S3_access_ip>50.10.10.215</S3_access_ip>
+    </S3_access_ips>
+
+    <!-- cosbench 相关参数 -->
+    <cosbench_param>
+        <!-- cosbench 路径，非特殊要求，一般不用修改 -->
+        <cosbench_path>
+            /home/StorTest/test_cases/tools/Cosbench/0.4.2.c4
+        </cosbench_path>
+        <!-- cosbench客户端IP -->
+        <cosbench_client_ips>
+            10.2.40.92
+        </cosbench_client_ips>
+        <!-- cosbench 运行的XML文件，写入文件的绝对路径 -->
+        <xml_paths>
+            /home/StorTest/test_cases/cases/test_case/P300/S3/cosbench_test/config/lps3cosbench
+            /home/StorTest/test_cases/cases/test_case/P300/S3/cosbench_test/config/lps3cosbench_no_init
+        </xml_paths>
+        <!-- cosbench 运行一个任务在每个阶段的超时时间，一般设置好的（不用修改） -->
+        <init_base_time>300000</init_base_time>
+        <prepare_base_time>3000000</prepare_base_time>
+        <main_base_time>3000000</main_base_time>
+    </cosbench_param>
+
+    <!-- 故障相关参数 -->
+    <fault_param>
+        <!-- 故障配置文件的存放路径 -->
+        <fault_config_path>
+            /home/StorTest/test_cases/cases/test_case/P300/S3/cosbench_test/config
+        </fault_config_path>
+        <!-- 故障的运行次数 -->
+        <fault_num>1000</fault_num>
+    </fault_param>
+
+    <!-- S3 业务网域名 -->
+    <s3_domain_name>
+        www.s3.com
+    </s3_domain_name>
+
+    <!-- S3 一致性相关参数 -->
+    <data_consistency_param>
+        <!-- 文件存放目录 -->
+        <parent_dir>/mnt/parastor_nas</parent_dir>
+        <!-- vdbench 创建的线程数（等于文件数） -->
+        <vdb_thread_num>100</vdb_thread_num>
+        <!-- vdbench 创建的目录宽度 -->
+        <vdb_width>30</vdb_width>
+        <!--  执行一轮的超时时间  -->
+        <round_timeout>7200</round_timeout>
+    </data_consistency_param>
+
+    <!-- vdbench nas客户端相关参数 -->
+    <nas_vdbench_param>
+        <!-- vdbench nas: vdbench flag, 不用修改 -->
+        <vdbflagname>vdbench_nas</vdbflagname>
+        <!-- vdbench运行模板：'small','big','middle',默认是'None' -->
+        <vdb_flag>None</vdb_flag>
+        <!-- nas客户端的挂载目录 -->
+        <anchor_path>/mnt/parastor_nas</anchor_path>
+        <!-- 校验文件存放目录 -->
+        <journal_path>/opt/jnl</journal_path>
+        <!-- nas 客户端IP -->
+        <ip>10.2.40.84</ip>
+        <!-- vdbench 配置文件参数 -->
+        <elapsed>600000</elapsed>
+        <output_path>/opt/outputnas</output_path>
+        <operations>(read,write)</operations>
+        <format>yes</format>
+        <threads>256</threads>
+        <depth>4</depth>
+        <width>5</width>
+        <files>5000</files>
+        <size>(4k,20,8k,20,16k,20,64k,20,128k,20)</size>
+        <xfersize>4k</xfersize>
+        <!-- vdbench 校验参数 -->
+        <jn_check_internal_step>10s</jn_check_internal_step>
+        <jn_map_storage_time>1h</jn_map_storage_time>
+    </nas_vdbench_param>
+
+    <!-- vdbench posix客户端相关参数 -->
+    <posix_vdbench_param>
+        <!-- vdbench posix: vdbench flag, 不用修改 -->
+        <vdbflagname>vdbench_posix</vdbflagname>
+        <!-- vdbench运行模板：'small','big','middle',默认是'None' -->
+        <vdb_flag>None</vdb_flag>
+        <!-- posix客户端的挂载目录 -->
+        <anchor_path>/mnt/xutd</anchor_path>
+        <!-- 校验文件存放目录 -->
+        <journal_path>/opt/jnl</journal_path>
+        <!-- 私有客户端IP -->
+        <ip>10.2.40.181</ip>
+        <!-- vdbench 配置文件参数 -->
+        <elapsed>600000</elapsed>
+        <output_path>/opt/outputposix</output_path>
+        <operations>(read,write)</operations>
+        <format>yes</format>
+        <threads>256</threads>
+        <depth>4</depth>
+        <width>5</width>
+        <files>3000</files>
+        <size>(4k,10,8k,10,16k,10,64k,20,128k,20,1M,10,2M,10,4M,10)</size>
+        <xfersize>4k</xfersize>
+        <!-- vdbench 校验参数 -->
+        <jn_check_internal_step>10s</jn_check_internal_step>
+        <jn_map_storage_time>1h</jn_map_storage_time>
+    </posix_vdbench_param>
+
+    <!-- 日志收集相关参数 -->
+    <log_collect_param>
+        <!-- 指定收集日志的脚本 -->
+        <log_collect_scripts_path>/home/StorTest/test_cases/cases/test_case/P300/S3/cosbench_test/lib/CollectLogs_3.0.py</log_collect_scripts_path>
+        <!-- 存放日志节点IP -->
+        <log_storage_ip>10.2.40.92</log_storage_ip>
+        <!-- 存放日志路径 -->
+        <log_storage_path>/mnt/log/lichx</log_storage_path>
+    </log_collect_param>
+
+    <!-- iozone nas客户端相关参数 -->
+    <nas_iozone_param>
+        <iozonethreads>50</iozonethreads>
+        <size>10g</size>
+        <xfersize>4k</xfersize>
+        <num>1000000</num>
+    </nas_iozone_param>
+
+    <!-- iozone posix客户端相关参数 -->
+    <posix_iozone_param>
+        <iozonethreads>50</iozonethreads>
+        <size>10g</size>
+        <xfersize>1m</xfersize>
+        <num>2000000</num>
+    </posix_iozone_param>
+    
+    <mdtest_param>
+        <depth>3</depth>
+        <width>3</width>
+        <files>3</files>
+        <sizes>4k</sizes>
+        <num>2</num>
+    </mdtest_param>
+    
+
+</testconfig>
+

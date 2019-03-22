@@ -1,0 +1,36 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：远程查询账户列表模块
+#使用方法：
+#1.指定pos主机ip，作为用户输入参数。
+#2.调用"query_acc_list()"函数。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/11
+#**********************************************#
+import os,sys
+import commands
+
+#命令生成函数
+def acc_query_cmd(opara_ip):
+	part1 = "ssh "
+	part2 = " /home/parastor/bin/sysctl/parastor_pos listaccounts"	 	#拼串片段，无需关注。
+	part3 = " cat /mnt/parastor/.listaccounts"
+	part4 = " grep -o accountid /mnt/parastor/.listaccounts|wc -l"
+	cmd1 = ''.join((part1,opara_ip,part2))#生成创建list文件的指令
+	cmd2 = ''.join((part1,opara_ip,part3))#生成查询list文件的指令
+	cmd3 = ''.join((part1,opara_ip,part4))#生成统计账户个数的指令
+	return cmd1,cmd2,cmd3
+
+#查询账户函数
+def query_acc_list(opara_ip):#输入参数为:"pos主机ip"
+	(cmd1,cmd2,cmd3) = acc_query_cmd(opara_ip)
+	(return_code1,output1)=commands.getstatusoutput(cmd1)
+	(return_code2,output2)=commands.getstatusoutput(cmd2)
+	(return_code3,output3)=commands.getstatusoutput(cmd3)
+	return output2,output3
+
+#调试代码
+#(list,num)=query_acc_list(sys.argv[1])
+#print list
+#print ("\033[0;33maccount number is: %s\033[0m"%num)

@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+
+<!--
+fault1    拔盘故障
+fault2    磁盘重建
+fault3    拔元数据盘
+fault4    下点电故障
+fault5    节点重建
+fault6    主oJmgs故障
+fault7    zk故障
+fault8    其他进程故障
+-->
+
+<testconfig>
+    <!-- 管理专项高可用job故障 -->
+	<jobs>
+        <create_node_pools>
+            <stages>4
+                <stage_1>
+                    <!-- YES（NO）为是否做该故障 (0：支持) (-1：预期失败,去故障重试成功) (-2：不涉及) -->
+                    <fault>YES,0</fault>
+                    <fault>NO,-2</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_node_pools>
+
+        <create_storage_pool>
+            <stages>5
+                <stage_1>
+                    <fault>YES,-1</fault>
+                    <fault>NO,-2</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>NO,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_storage_pool>
+
+        <update_node_pools>
+            <stages>3
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>NO,-2</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </update_node_pools>
+
+        <expand_storage_pool>
+            <stages>0
+                <stage_1>
+                    <fault>YES,-1</fault>
+                    <fault>NO,-2</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </expand_storage_pool>
+
+        <create_volumes>
+            <stages>3
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_volumes>
+
+        <create_client_auth>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </create_client_auth>
+
+        <update_client_auth>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </update_client_auth>
+
+        <delete_client_auth>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </delete_client_auth>
+
+        <create_access_zone>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </create_access_zone>
+
+        <enable_nas>
+            <stages>4
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </enable_nas>
+
+        <create_subnet>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </create_subnet>
+
+        <add_vip_address_pool>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </add_vip_address_pool>
+
+        <create_auth_group>
+            <stages>3
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_auth_group>
+
+        <create_auth_user>
+            <stages>3
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </create_auth_user>
+
+        <create_ftp_export>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_ftp_export>
+
+        <create_nfs_export>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_nfs_export>
+
+        <create_smb_export>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </create_smb_export>
+
+        <update_vip_address_pool>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </update_vip_address_pool>
+
+        <update_subnet>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </update_subnet>
+
+        <delete_vip_address_pool>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </delete_vip_address_pool>
+
+        <delete_subnet>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </delete_subnet>
+
+        <update_access_zone>
+            <stages>11
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,-1</fault>
+                </stage_1>
+            </stages>
+        </update_access_zone>
+
+
+        <disable_nas>
+            <stages>4
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </disable_nas>
+
+
+        <delete_access_zone>
+            <stages>5
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </delete_access_zone>
+
+
+        <update_volume>
+            <stages>3
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>NO,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>NO,0</fault>
+                </stage_1>
+            </stages>
+        </update_volume>
+
+
+        <delete_volumes>
+            <stages>2
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>NO,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>NO,0</fault>
+                </stage_1>
+            </stages>
+        </delete_volumes>
+
+
+        <delete_storage_pool>
+            <stages>0
+                <stage_1>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,0</fault>
+                    <fault>YES,-1</fault>
+                    <fault>YES,0</fault>
+                </stage_1>
+            </stages>
+        </delete_storage_pool>
+    </jobs>
+
+    <node_ip_power_off>10.22.132.43</node_ip_power_off>
+    <node_ip_remove>10.22.132.43</node_ip_remove>
+    <!-- 阶段设置从1到10 -->
+    <stage_set>1</stage_set>>
+
+</testconfig>

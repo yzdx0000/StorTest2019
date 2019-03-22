@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://pos.com/doc/2006-03-01">
+<Name>bucket1</Name>
+<Prefix></Prefix>
+<Marker></Marker>
+<Maxkeys>2</Maxkeys>
+<IsTruncated>False</IsTruncated>
+<Contents>
+<Key>kongdongsplit</Key>
+<LastModified>2017-10-19T03:11:25.000Z</LastModified>
+<ETag>14b208884ae7ffb4531a4bb3df514a03</ETag>
+<Size>5368709120</Size>
+<StorgeClass>STANDARD</StorgeClass>
+<Owner>
+<ID>000020ZYTUAP29Z100001ZJXZXL623PS</ID>
+<DisPlayName>kongdongsplit</DisPlayName>
+</Owner>
+</Contents>
+<Contents>
+<Key>objecthehe1</Key>
+<LastModified>2017-10-19T07:07:45.000Z</LastModified>
+<ETag>14b208884ae7ffb4531a4bb3df514a03</ETag>
+<Size>75</Size>
+<StorgeClass>STANDARD</StorgeClass>
+<Owner>
+<ID>000020ZYTUAP29Z100001ZJXZXL623PS</ID>
+<DisPlayName>objecthehe1</DisPlayName>
+</Owner>
+</Contents>
+</ListBucketResult>

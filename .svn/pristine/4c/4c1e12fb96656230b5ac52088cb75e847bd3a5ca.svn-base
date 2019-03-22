@@ -1,0 +1,46 @@
+# -*- coding:utf-8 -*
+#函数明名称：checkerror
+#函数作用：检查指定输出字符串中是否有200ok，如果没有，就证明命令执行失败，退出整个python程序
+#函数输入：字符串
+#函数输出：如果有"200 ok"则 返回False，如果没有，返回True且退出整个程序
+import commands,sys,os
+def checkoutput(output):
+	successornot=output.find('200 OK')
+	if successornot >=0:
+		return True
+	else:
+		return False
+#if __name__=="__main__":
+	#(status,out)=commands.getstatusoutput('curl -i http://10.2.40.18:20480/bucketname18 -X PUT -H "Authorization: AWS4-HMAC-SHA256 Credential=000020ZYTUAP29Z1000020ZYSD52KRHK"')
+	#print out
+	#a=checkerror(out)
+	#print a
+def checkstatus(status):
+	if status==0:
+		return True
+	else:
+		return False
+def checkresult(status,output):
+	statusresult=checkstatus(status)
+	if statusresult:
+		outresult=checkoutput(output)
+		if not outresult:
+			print '################################################'
+			print 'output not 200 ok'
+			return -1
+	else:
+		print '################################################'
+		print "shell status error"
+		return -1
+def checkresultHaveLog(status,output,logger):
+	statusresult=checkstatus(status)
+	if statusresult:
+		outresult=checkoutput(output)
+		if not outresult:
+			logger.error('################################################')
+			logger.error('output not 200 ok')
+			return -1
+	else:
+		logger.error('################################################')
+		logger.error("shell status error")
+		return -1

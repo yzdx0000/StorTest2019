@@ -1,0 +1,293 @@
+#-*-coding:utf-8 -*
+import os
+import time, random, commands
+from multiprocessing import Process, Value, Manager
+
+import utils_path
+import common
+import log
+import shell
+import get_config
+
+##########################################
+#
+# Author: baorb
+# date 2017-08-21
+#@summary：
+#    本测试主要测试P300降级功能。
+#@steps:
+#    1、2节点集群，创建节点池4+4:1
+#    2、创建卷，4+4:1和3+3:1和2+2:1，挂载1个私有客户端
+#    3、运行00分别给个3卷创建100个1M文件
+#    4、运行01读写脚本，故障第二个节点，触发被动修复
+#    5、脚本运行结束，等待修复完成
+#    6、创建卷，1+1:0,3+1:0,2+2:0,4+2:0等等，mount客户端
+#    7、运行00分别给几个卷创建100个1m文件
+#    8、运行01读写脚本，删除一块盘，触发主动重建
+#    9、脚本运行结束，重建完成
+#    10、恢复故障节点，触发展平，观察卷1、2、3上的文件已经展平
+#
+#@changelog：
+##########################################
+
+VOLUME_LST1 = [[4, 4, 1, 1], [3, 3, 1, 1], [2, 2, 1, 1]]
+VULUME_LST2 = [[1, 1, 0, 1], [3, 1, 0, 1], [2, 2, 0, 1], [4, 2, 0, 1]]
+
+manager = Manager()
+eth_lst = manager.list()
+
+def run00(mount_path, client_ip):
+    tools_path = get_config.get_tools_path()
+    init_tool_path = tools_path + "/tools/datacheck/00.init.sh"
+    vdbench_tool_path = get_config.get_vdbench_path()
+    init_cmd = ("%s %s %s %s" % (init_tool_path, vdbench_tool_path, client_ip, mount_path))
+    rc = common.command(init_cmd)
+    if rc != 0:
+        raise Exception("00.init.sh is failed!!!!!!")
+
+
+def run01(mount_path, client_ip):
+    tools_path = get_config.get_tools_path()
+    init_tool_path = tools_path + "/tools/datacheck/01.datacheck.sh"
+    vdbench_tool_path = get_config.get_vdbench_path()
+    init_cmd = ("%s %s %s %s" % (init_tool_path, vdbench_tool_path, client_ip, mount_path))
+    rc = common.command(init_cmd)
+    if rc != 0:
+        raise Exception("00.init.sh is failed!!!!!!")
+
+
+def del_disk():
+    ob_node = common.Node()
+    ob_disk = common.Disk()
+    #node_ids = ob_node.get_nodes_id()
+    fault_node_id = 1
+    wait_time1 = random.randint(30, 60)
+    time.sleep(wait_time1)
+    disk_ids, disks_TotaBytes, disks_UsedBytes = ob_disk.get_all_disks_id_and_bytes(fault_node_id)
+    fault_disk_id = random.choice(disk_ids)
+    #删除磁盘
+    ob_disk.remove_disks(fault_disk_id)
+    return
+
+def get_lnode_id():
+    system_ip = get_config.get_parastor_ip(0)
+    cmd = '/home/parastor/tools/nWatch -t oRole -i 1 -c oRole#rolemgr_view_dump'
+    rc, stdout, stderr = shell.ssh(system_ip, cmd)
+    if 0 != rc:
+        log.error(
+            "Execute command: \"%s\" failed. \nstdout: %s \nstderr: %s" % (cmd, stdout, stderr))
+        raise Exception(
+            "Execute command: \"%s\" failed. \nstdout: %s \nstderr: %s" % (cmd, stdout, stderr))
+    stdout_lst = stdout.split('\n')
+    index = None
+    for line in stdout_lst:
+        if 'lnodeid:' in line:
+            index = stdout_lst.index(line)
+    if None == index:
+        return None
+    node_id = stdout_lst[index-1].split(',')[1].split(':')[-1].strip()
+    return node_id
+
+def check_flatten(node_id):
+    system_ip = get_config.get_parastor_ip(0)
+    cmd = '/home/parastor/tools/nWatch -t oPara -i %s -c oPara#vmgr_vset_dump -a "vmgrid=1 fout=0 fpath=/a/b/c"'%node_id
+    cmd = 'ssh %s %s'%(system_ip, cmd)
+    rc, stdout = commands.getstatusoutput(cmd)
+    if 0 != rc:
+        log.error(
+            "Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        raise Exception(
+            "Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+    stdout_lst = stdout.splitlines()
+    for line in stdout_lst:
+        if '[VSET]' in line and 'type:data' in line:
+            index = line.find('rb:') + len('rb:')
+            if '1' != line[index]:
+                return False
+    return True
+
+def case():
+
+    '''创建节点池'''
+    ob_nodepool = common.Nodepool()
+    ob_nodepool.create_node_pool('nodepool1', '1,2', 4, 4, 1, 1)
+    nodepool_id = ob_nodepool.get_node_pool_id_by_name('nodepool1')
+
+    '''创建存储池'''
+    ob_storage_pool = common.Storagepool()
+    ob_storage_pool.create_storage_pool_by_nodepoolid('stor1', nodepool_id)
+    storagepool_id = ob_storage_pool.get_storagepool_id('stor1')
+
+    time.sleep(10)
+
+    '''创建卷'''
+    ob_volume = common.Volume()
+    num = 1
+    volume_id_lst1 = []
+    volume_name_lst1 = []
+    for layout in VOLUME_LST1:
+        volume_name = 'volume1%d' % num
+        ob_volume.create_volume(volume_name, storagepool_id, layout[0], layout[1], layout[2], layout[3])
+        volume_id = ob_volume.get_volume_id(volume_name)
+        volume_name_lst1.append(volume_name)
+        volume_id_lst1.append(volume_id)
+        num += 1
+
+    '''创建授权'''
+    client_ip = get_config.get_client_ip(0)
+    volume_id = ','.join(volume_id_lst1)
+    ob_clientauth = common.Clientauth()
+    ob_clientauth.create_client_auth(client_ip, volume_id)
+
+    '''安装客户端'''
+    ob_client = common.Client()
+    ob_client.set_client(client_ip)
+    num = 1
+    mount_path_lst1 = []
+    for volume_name_tmp in volume_name_lst1:
+        mount_path = '/mnt/parastor1%d/' % num
+        mount_path_lst1.append(mount_path)
+        ob_client.mount_client(client_ip, mount_path, volume_name_tmp)
+        num += 1
+
+    '''运行00'''
+    process_lst = []
+    for mount_path in mount_path_lst1:
+        p = Process(target=run00, args=(mount_path, client_ip,))
+        process_lst.append(p)
+        p.start()
+    for p in process_lst:
+        p.join()
+
+    for p in process_lst:
+        if p.exitcode != 0:
+            raise Exception("vdbench 00 is failed!!!!!!")
+
+    '''修改参数'''
+    system_ip = get_config.get_parastor_ip(0)
+    cmd = 'pscli --command=update_param --section=MGR --name=node_isolate_timeout --current=60000'
+    rc, stdout, stderr = shell.ssh(system_ip, cmd)
+    if 0 != rc:
+        log.error(
+            "Execute command: \"%s\" failed. \nstdout: %s \nstderr: %s" % (cmd, stdout, stderr))
+        raise Exception(
+            "Execute command: \"%s\" failed. \nstdout: %s \nstderr: %s" % (cmd, stdout, stderr))
+
+    ob_node = common.Node()
+    node_ids = ob_node.get_nodes_id()
+    del_node_id = node_ids[-1]
+    process_lst = []
+    for mount_path in mount_path_lst1:
+        p = Process(target=run01, args=(mount_path, client_ip,))
+        process_lst.append(p)
+        p.start()
+    p2 = Process(target=ob_node.remove_nodes, args=(del_node_id,))
+    p2.start()
+
+    for p in process_lst:
+        p.join()
+    p2.join()
+
+    for p in process_lst:
+        if p.exitcode != 0:
+            raise Exception("vdbench 01 is failed!!!!!!")
+
+    '''不断检查坏对象是否修复'''
+    count = 0
+    log.info("wait 60 seconds")
+    time.sleep(60)
+    while True:
+        count += 1
+        log.info("the %d times check badjobnr" % count)
+        log.info("wait 60 seconds")
+        time.sleep(60)
+        if True == common.check_badjobnr():
+            break
+
+    '''创建卷'''
+    num = 1
+    volume_id_lst2 = []
+    volume_name_lst2 = []
+    for layout in VOLUME_LST1:
+        volume_name = 'volume2%d' % num
+        ob_volume.create_volume(volume_name, storagepool_id, layout[0], layout[1], layout[2], layout[3])
+        volume_id = ob_volume.get_volume_id(volume_name)
+        volume_name_lst2.append(volume_name)
+        volume_id_lst2.append(volume_id)
+        num += 1
+
+    '''创建授权'''
+    client_ip = get_config.get_client_ip(0)
+    volume_id = ','.join(volume_id_lst2)
+    ob_clientauth = common.Clientauth()
+    ob_clientauth.create_client_auth(client_ip, volume_id)
+
+    '''挂载路径'''
+    num = 1
+    mount_path_lst1 = []
+    for volume_name_tmp in volume_name_lst1:
+        mount_path = '/mnt/parastor2%d/' % num
+        mount_path_lst1.append(mount_path)
+        ob_client.mount_client(client_ip, mount_path, volume_name_tmp)
+        num += 1
+
+    '''运行00'''
+    process_lst = []
+    for mount_path in mount_path_lst1:
+        p = Process(target=run00, args=(mount_path, client_ip,))
+        process_lst.append(p)
+        p.start()
+    for p in process_lst:
+        p.join()
+
+    for p in process_lst:
+        if p.exitcode != 0:
+            raise Exception("vdbench 00 is failed!!!!!!")
+
+    '''运行01， 同时拔盘故障'''
+    process_lst = []
+    for mount_path in mount_path_lst1:
+        p = Process(target=run01, args=(mount_path, client_ip,))
+        process_lst.append(p)
+        p.start()
+    p2 = Process(target=del_disk, args=())
+    p2.start()
+
+    for p in process_lst:
+        p.join()
+    p2.join()
+
+    for p in process_lst:
+        if p.exitcode != 0:
+            raise Exception("vdbench 01 is failed!!!!!!")
+
+    '''恢复网络'''
+    ob_node = common.Node()
+    node_ip = ob_node.get_node_ip_by_id(2)
+    for eth in eth_lst:
+        cmd = 'ssh %s "ifdown %s"' % (node_ip, eth)
+        log.info("node %s ifdown %s" % (node_ip, eth))
+        rc = common.command(cmd)
+        if 0 != rc:
+            log.warn("node %s  ifdown %s failed!!!" % (node_ip, eth))
+
+    '''不断检查是否展评完毕'''
+    while True:
+        time.sleep(20)
+        node_id = get_lnode_id()
+        if True == check_flatten(node_id):
+            break
+
+    log.info("case succeed!")
+
+def main():
+    file_name = os.path.basename(__file__)
+    file_name = file_name[:-3]
+    log_file_path = log.get_log_path(file_name)
+    log.init(log_file_path, True)
+    case()
+    log.info('succeed!')
+    return
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,7 @@
+#!/bin/bash
+echo '29-0-1-16_lyz.py'
+python 29-0-1-16_lyz.py
+echo '29-0-2-10_lyz.py'
+python 29-0-2-10_lyz.py
+echo '29-0-2-28_lyz.py'
+python 29-0-2-28_lyz.py

@@ -1,0 +1,86 @@
+# -*-coding:utf-8 -*
+
+import os
+
+import utils_path
+import log
+import common
+import get_config
+import web_common
+import quota_common
+import prepare_clean
+
+#######################################################
+# 函数功能：界面自动化-----创建、修改、删除业务子网，以及创建、修改、删除ip地址池
+# 脚本作者：duyuli
+# 日期：2018-12-05
+#######################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                  # 本脚本名字
+subnet_name = "subnet"
+subnet_name_modify = subnet_name + "_modify"
+svip_mask = "255.255.252.0"
+svip = "50.2.42.99"
+vip_address = ["50.2.42.101-111", "50.2.42.112"]
+vip_address_modify = ["50.2.42.113-124"]
+svip_modify = "50.2.42.100"
+
+
+def case():
+    driver = web_common.init_web_driver()
+
+    obj_web_acess = web_common.Access_Manage(driver)
+
+    # 创建访问分区
+    obj_web_acess.create_access_zone(quota_common.QUOTA_ACCESS_ZONE, nodes_all=True, nfs=True, smb=True, ftp=True)
+
+    # 创建subnet vip_pool
+    obj_web_acess.create_subnet(quota_common.QUOTA_ACCESS_ZONE,
+                                subnet_name,
+                                svip,
+                                svip_mask,
+                                get_config.get_subnet_network_interface()[1].split(",")[1:2],
+                                get_config.get_vip_domain_name()[0],
+                                vip_address)
+
+    # 修改业务子网
+    obj_web_acess.modify_subnet(quota_common.QUOTA_ACCESS_ZONE, subnet_name,
+                                subnet_name_modify=subnet_name_modify,
+                                svip=svip_modify)
+
+    # 删除指定的vip池
+    obj_web_acess.delete_vip_pool(quota_common.QUOTA_ACCESS_ZONE,
+                                  subnet_name_modify,
+                                  get_config.get_vip_domain_name()[0])
+
+    # 增加指定的vip池
+    obj_web_acess.add_vip_pool(quota_common.QUOTA_ACCESS_ZONE,
+                               subnet_name_modify,
+                               get_config.get_vip_domain_name()[0],
+                               vip_address)
+
+    # 修改指定的vip池
+    obj_web_acess.modify_vip_pool(quota_common.QUOTA_ACCESS_ZONE,
+                                  subnet_name_modify,
+                                  get_config.get_vip_domain_name()[0],
+                                  domain_name_modify=get_config.get_vip_domain_name()[1],
+                                  ip_address_list=vip_address_modify)
+
+    # 删除subnet vip_pool
+    obj_web_acess.delete_subnet(quota_common.QUOTA_ACCESS_ZONE, subnet_name_modify)
+
+    # 删除访问分区
+    obj_web_acess.delete_access_zone(quota_common.QUOTA_ACCESS_ZONE)
+
+    web_common.quit_web_driver(driver)
+
+
+def main():
+    prepare_clean.nas_test_prepare(FILE_NAME, env_check=False)
+    case()
+    prepare_clean.test_clean()
+    log.info("%s succeed" % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

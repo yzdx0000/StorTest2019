@@ -1,0 +1,3 @@
+a=str(256 * 1024 * (1024 + 20))
+print type(a)
+print int(a)

@@ -1,0 +1,121 @@
+# -*- coding:utf-8 _*-
+# Author:liuhe
+# Date  :2018-10-24
+"""
+测试内容:逻辑卷写满前扩容
+
+步骤:
+1）在访问区配置中，每个节点取1块磁盘创建副本模式存储池，创建存储池pool1；
+2）创建逻辑卷属性默认，选择pool1存储池，创建逻辑卷LUN1，设置容量为10GB；
+3）将逻辑卷映射至主机
+4）修改逻辑卷属性，将容量修改为100GB，提交，主机重新扫描逻辑卷容量有变化，并能写入100GB数据
+
+检查项:
+1）存储池创建成功
+2）逻辑卷创建成功
+3）修改成功，100GB数据写入成功
+"""
+import os, sys
+import time
+import threading
+import utils_path
+import Lun_managerTest
+import common
+import log
+import get_config
+import login
+
+import decorator_func
+from get_config import config_parser as cp
+import env_manage_lun_manage
+
+
+def setup():
+    global osan
+    global client_ips
+    global deploy_ips
+    conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+    file_name = os.path.basename(__file__)
+    file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+    log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+    log.init(log_file_path, True)  # 初始化日志文件
+
+    deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+    client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+
+    osan = Lun_managerTest.oSan()
+
+
+node_ip1 = env_manage_lun_manage.deploy_ips[0]
+node_ip2 = env_manage_lun_manage.deploy_ips[1]
+client_ip1 = env_manage_lun_manage.client_ips[0]
+esxi_ip = env_manage_lun_manage.Esxi_ips
+
+storage_pool_id = env_manage_lun_manage.osan.get_storage__type_id(s_ip=node_ip1, type="BLOCK")
+az_id = env_manage_lun_manage.osan.get_access_zone_id(s_ip=node_ip1)[0]
+storage_pool_size = env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1, command='get_storage_pools', ids="ids",
+                                                                 indexname="storage_pools", argv2="total_bytes",
+                                                                 argv1=storage_pool_id)
+
+def run_vdb(maxdates):
+    # 修改vdbench配置文件的参数值
+    time.sleep(30)
+    seekpct = 0  # 随机
+    rdpct1 = 0  # 读写比例(0是全写)
+    rdpct2 = 100
+    xfersize1 = "(4k,20,8k,20,1k,35,10k,25)"
+    lun1 = env_manage_lun_manage.osan.ls_scsi_dev(client_ip=client_ip1)
+    min_seq_w = env_manage_lun_manage.co2_osan.gen_vdb_xml(maxdata=maxdates,lun=lun1, xfersize=xfersize1, seekpct=seekpct, rdpct=rdpct1)
+    env_manage_lun_manage.co2_osan.run_vdb(client_ip=client_ip1, vdb_xml=min_seq_w, output=node_ip1)
+
+
+def get_iscsi_size_form_host():
+    log.info("从主机端获取逻辑卷容量")
+    lun1 = env_manage_lun_manage.osan.ls_scsi_dev(client_ip=client_ip1)
+    get_lun_total = env_manage_lun_manage.break_down.get_lun_size(client_ip1, lun1)
+    return get_lun_total
+
+
+def case():
+    hg_id = env_manage_lun_manage.osan.create_host_group(s_ip=node_ip1, hg_name='myhostgroup1')
+    h_id = env_manage_lun_manage.osan.add_host(s_ip=node_ip1, h_name='host1', hg_id=hg_id)
+    ini_id = env_manage_lun_manage.osan.add_initiator(s_ip=node_ip1, h_id=h_id, iqn=cp("add_initiator", "iqn"),
+                                                      alias=cp("add_initiator", "alias"))
+    decorator_func.judge_target(
+        env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1, command="get_initiators", indexname="initiators",
+                                                     argv2="auth_type", ids="ids", argv1=ini_id), "NONE")
+    log.info("建逻辑卷属性默认，选择pool1存储池，创建逻辑卷LUN1")
+    env_manage_lun_manage.osan.update_iscsid_conf(cli_ip=client_ip1, CHAPTYPE='None', s_ip=client_ip1)
+    lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes='1024000000', lun_type="THICK",
+                                                   lun_name='LUN1', stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+    env_manage_lun_manage.osan.map_lun(s_ip=node_ip1, lun_ids=lun_id, hg_id=hg_id)
+    log.info("挂载到主机并获取到lun容量")
+    login.login()
+    lun_size1 = get_iscsi_size_form_host()
+    log.info('运行vdbench过程中修改逻辑卷属性，将容量修改为100GB')
+    threads = []
+    threads.append(threading.Thread(target=run_vdb,args=(str(int(lun_size1) + 1) + "G"),))
+    threads.append(threading.Thread(target=env_manage_lun_manage.osan.update_lun))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    log.info("重新挂载")
+    env_manage_lun_manage.osan.iscsi_logout_all(client_ip1)
+    login.login()
+    lun_size2 = get_iscsi_size_form_host()
+    if lun_size1 < lun_size2:
+        log.info("lun have change success")
+        return
+    else:
+        log.error("lun change failed")
+
+
+def main():
+    setup()
+    case()  # 用例步骤
+    env_manage_lun_manage.clean()  # 环境清理
+
+
+if __name__ == '__main__':
+    main()

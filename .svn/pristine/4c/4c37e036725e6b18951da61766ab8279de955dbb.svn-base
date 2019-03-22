@@ -1,0 +1,10 @@
+
+*SD:	Storage Definition
+*WD:	Workload Definition
+*RD:	Run Definition
+*
+sd=sd1,lun=/dev/sdc
+wd=wd1,sd=sd1,xfersize=4096,rdpct=0
+rd=run1,wd=wd1,iorate=1,elapsed=1000,interval=1,openflags=o_direct
+
+

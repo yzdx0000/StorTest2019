@@ -1,0 +1,11 @@
+1. 准备工作：
+    (1)、配置访问管理:包括访问区、Local认证服务器、业务子网
+    (2)、修改配置文件p300_test_config.xml标签<nodes>、<mount_paths>
+    (3)、修改配置文件p300_nas_config.xml标签<vip_address_pool_info>下的<domain_names>、离散型vip地址<vip_addresses>
+                                        标签<nfs_client_info>下的<nfs_client_ip>、<nfs_mount_path>
+                                        标签<access_zone_info>下的<access_zone_name>
+    注：对于脚本23-5-0-1.py，还需修改配置文件p300_test_config.xml标签<clients>下的第一个<client>
+2. 直接执行xxx.py即可(xxx为对应脚本名称)，每个脚本执行的操作请参见每个脚本开头部分
+3. 若脚本执行成功，会自动清理环境，无需人为操作
+4. 若脚本执行失败，则脚本会记录错误信息，然后退出执行
+5. 若脚本执行失败，需要手动清理环境，可根据执行失败的位置，参照步骤2的说明操作

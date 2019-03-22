@@ -1,0 +1,14 @@
+def assertNotequal(first, second, failed_msg='judge failed', suc_msg="judge success"):
+    """
+
+    :param first:
+    :param second:
+    :param failed_msg:
+    :return:
+    """
+    if not first != second:
+        exit(1)
+    else:
+        print suc_msg
+
+assertNotequal(" ", " ", 'judge failed')

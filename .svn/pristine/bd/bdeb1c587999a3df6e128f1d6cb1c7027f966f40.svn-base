@@ -1,0 +1,47 @@
+# -*- coding: utf-8 -*-
+
+#######本脚本用于设置桶容量###########
+
+import subprocess,sys,commands
+
+#添加自定义模块*****
+#import _create_logfile_zh    #记录日志模块
+import _checkresult_lyz
+#定义“获取设置桶配额命令”函数，四个参数依次表示：节点IP、桶名称、所有者认证、配额 
+def set_bucket_quota_cmd(ip,bucket_name,certificate_id,quota):
+    cmd='curl -i http://'+str(ip)+':20480/'+str(bucket_name)+'?quota -XPUT -H '+' \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><Quotaxmlns=\"http://pos.com/doc/2006-03-01\"><StorageQuota>'+str(quota)+'</StorageQuota></Quota>\''  #执创设置桶容量命令本身
+    return cmd
+
+#定义设置桶配额函数，四个参数依次表示：节点IP、桶名称、所有者认证、配额
+def set_bucket_quota_exc(ip,bucket_name,certificate_id,quota):
+    cmd=set_bucket_quota_cmd(ip,bucket_name,certificate_id,quota)   #获取设置桶配额命令
+    #child=subprocess.Popen(str(cmd),shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)      #调用shell执行命令
+    #child.wait()
+    #将命令执行的结果输出到指定文件，记录日志*****
+    #_create_logfile_zh.create_logfile(cmd,child)
+    (status, output) = commands.getstatusoutput(cmd)
+    print output
+    re=_checkresult_lyz.checkresult(status, output)
+    if re==-1:
+        return -1
+def set_bucket_quota_excHaveLog(ip,bucket_name,certificate_id,quota,logger):
+    cmd=set_bucket_quota_cmd(ip,bucket_name,certificate_id,quota)   #获取设置桶配额命令
+    #child=subprocess.Popen(str(cmd),shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)      #调用shell执行命令
+    #child.wait()
+    #将命令执行的结果输出到指定文件，记录日志*****
+    #_create_logfile_zh.create_logfile(cmd,child)
+    (status, output) = commands.getstatusoutput(cmd)
+    logger.info(output)
+    re=_checkresult_lyz.checkresultHaveLog(status, output,logger)
+    if re==-1:
+        return -1
+#函数自验*****
+if __name__=="__main__":
+    #ds_ip=raw_input("please input ds ip: ")
+    #bucket_name=raw_input("please input bucket name: ")
+    #certificate_id=raw_input("please input certificate id: ")
+    #quota=raw_input("please input quota: ")
+    #set_bucket_quota_exc(ds_ip,bucket_name,certificate_id,quota)
+    set_bucket_quota_exc(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4])
+    
+

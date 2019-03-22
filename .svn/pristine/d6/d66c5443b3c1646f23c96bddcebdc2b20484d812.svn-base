@@ -1,0 +1,31 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：上传对象模块
+#使用方法：调用"object_create()"函数，指定ostor_ip、桶名、对象名、上传文件绝对路径、证书id。
+#作者：王建磊
+#创建时间：2017/10/19
+#更新时间：2017/10/19
+#**********************************************#
+import os,sys
+import commands
+
+#上传对象命令生成函数
+def object_create_cmd(ostor_ip,bucketname,objectname,filepath,credential):
+	part1 = "curl -i http://" 							#拼串片段，无需关注。
+	part2 = ":20480/" 							 	#拼串片段，无需关注。
+	part3 = " -XPUT -T "
+	part4 = " -H \"Authorization: AWS4-HMAC-SHA256 Credential="			#拼串片段，无需关注。
+	cmd = ''.join((part1,ostor_ip,part2,bucketname,"/",objectname,part3,filepath,part4,credential,"\""))#生成上传对象的指令
+	return cmd
+
+#创建对象函数
+def object_create(ostor_ip,bucketname,objectname,filepath,credential):	#输入参数为:"ostor_ip"，"桶名"，"对象名"，"文件路径"，"证书id"
+	cmd = object_create_cmd(ostor_ip,bucketname,objectname,filepath,credential)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	return output
+
+#调试代码
+#cmd=bucket_add_cmd('10.2.30.xx','hehe','0000000001')
+#print cmd
+#output = bucket_add("10.10.222.6","test1","000023GNCOR3TGZU00001ZRM69FDH4O2")
+#print output

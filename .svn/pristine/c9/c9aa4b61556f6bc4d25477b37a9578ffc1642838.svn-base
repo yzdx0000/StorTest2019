@@ -1,0 +1,18 @@
+10.2.40.27 10.2.40.24
+The name of bucket which belong to account aaa is: caccb.
+And the name of object exist in above bucket is: dabbc.
+Account "aaa" has been get! object creating...
+bucket create return code: 409.
+error! bucket conflict.bucket name changing......
+The new bucket name is iqbnbc
+Account "aaa" has been get! object creating...
+bucket create return code: 200.
+object create return code: 200.
+accid1,email1,ak1=00003PMYYCHBTP3L,aaa@sugon.com,00003PMYYCHBTP3L00003PMYYCRT2XJM
+Account "bbb" has been get!
+accid2,email2,ak2=00003PMYYBUEBXW3,bbb@sugon.com,00003PMYYBUEBXW300003PMYYBVDMT78
+bucket write acl set success!
+object read acl set success!
+obj uploaded. testcase 29-0-9-1 is success!
+obj get success! testcase 29-0-9-1 is success!
+1

@@ -1,0 +1,57 @@
+# -*- coding:utf-8 8-*
+#################################################
+#一个ds在执行s3的操作，给其他的ds轮流宕机
+#################################################
+import os,sys,commands,time
+#import imports3libpath
+import _fault_lyz
+import _stability1lib_lyz
+import common
+import _fault_all_lyz
+import deleteAllAccount_lyz
+import random
+#参数说明：pathOfScript:要执行的脚本在从上的路径; stabilityScript:要执行的s3的稳定性脚本名称,然后是_stability1lib_lyz这个脚本需要的参数
+#dsips必须是一个列表，里面装着想要断网的所有的ds的ip；dsipmiips也是一个列表，和dsips一一对应,
+def mgrfaultAndS3(num,mgrip,dsips,dsipmiips,accountname,oossip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota):
+    num=int(num)
+    faulto = _fault_all_lyz.fault()
+    statusrecoveryo=_fault_all_lyz.statusrecovery()
+    dsnum=len(dsips)
+    for i in range(num):
+        if dsnum>1:
+            rand = random.randint(0,(dsnum-1))
+        else:
+            rand=dsnum
+        print 'rand is %d' %rand
+        dsip=dsips[rand]
+        print 'dsip is %s' %dsip
+        dsipmiip=dsipmiips[rand]
+        print 'dsipmiip is %s' % dsipmiip
+        #步骤1：给ds宕机
+        faulto.poweroff(dsipmiip)
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print '*************************************************************************************************************'
+        print '****************************ds宕机第%s次成功，等待2分钟********************************************************' %(i)
+        time.sleep(120)
+        #步骤2：给ds开机
+        faulto.poweron(dsipmiip)
+        print '****************************等待ds %s 开机' %dsip
+        time.sleep(300)
+        #步骤3：等待ds开机成功
+        statusrecoveryo.ifpoweron(dsip)
+        # 步骤4：等待ds的oOss起来
+        statusrecoveryo.ifprocessStart(dsip, 'oOss')
+        print 'time of oOss ok is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        time.sleep(70)
+        print 'time of after oOss ok 70s %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+
+        #步骤5：执行s3的指令集
+        re=_stability1lib_lyz.allOPerations(mgrip,accountname,dsip,createBucketname,putObjectname,objectpath,downobjectpath,splitobjectname,splitobjectpathdir,splitfilename,numofsplit,cancleupobjectname,quota)
+        #deleteAllAccount_lyz.deleteAllAccount(slaveip,oossip)
+        if re==-1:
+            return -1
+
+if __name__=="__main__":
+    #mgrfaultAndS3(masterip, slaveip, accountname, oossip, createBucketname, putObjectname, objectpath,downobjectpath, splitobjectname, splitobjectpathdir, splitfilename, numofsplit, cancleupobjectname,quota)
+    mgrfaultAndS3(5,'100.100.100.16',['100.100.100.18','100.100.100.19'],['10.2.40.68','10.2.40.69'],'s1123c','100.100.100.18','bucket1123c','object1123c','/opt/s3uploadfile/10Mfile','/opt/s3uploadfile/down','objectsplit1103o','/opt/s3uploadfile','test',2,'objectsplitcancle03o',1024)

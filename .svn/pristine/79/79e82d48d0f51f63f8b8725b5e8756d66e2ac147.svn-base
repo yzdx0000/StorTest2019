@@ -1,0 +1,109 @@
+#!/bin/bash
+
+log_host="10.2.40.41"
+node_list=("10.2.42.20" "10.2.42.21" "10.2.42.22")
+host_list=("10.2.42.13" )
+#LOG TYPE:oSan,oStor,oRole,oPara,oJob,jnl,oJmgs,target,mgcd,mgs,obs.etc
+log_list=("oSan" "oStor" "mgcd" "oRole" "target" "backup" "oPara" "oJob" "jnl" "oJmgs" "mgs" "obs")
+my_dir="/mnt/sdb/X1000/wangxiang/"  #end with "/"
+
+if ssh root@$log_host test ! -e $my_dir
+then
+	ssh $log_host "mkdir -p $my_dir"
+fi
+
+bug_id=$1
+if [ "$bug_id" == "" ]
+then
+	echo "Please Input the BUG ID!!!"
+	exit 1
+fi
+
+log_dir="${my_dir}bug${bug_id}"
+ssh $log_host "mkdir ${log_dir}"
+ssh $log_host "mkdir ${log_dir}/zk"
+ssh $log_host "mkdir ${log_dir}/vdb_log"
+ssh $log_host "mkdir ${log_dir}/sys_message"
+ssh $log_host "mkdir ${log_dir}/host_message"
+ssh $log_host "mkdir ${log_dir}/node_out_log"	
+ssh $log_host "mkdir ${log_dir}/host_out_log"	
+
+case_log=`ls -t /home/StorTest/test_cases/log/case_log/ | head -n 1`
+echo "Begin transport case log..."
+scp /home/StorTest/test_cases/log/case_log/${case_log} root@${log_host}:${log_dir}
+
+echo "Transporting LOG is running..."
+for node_ip in ${node_list[@]}
+do
+	echo "Begin transport node $node_ip log..."
+	node_id=${node_ip##*.}
+	ssh $log_host "mkdir ${log_dir}/log${node_id}"
+	node_log_dir="${log_dir}/log${node_id}"
+	for log_name in ${log_list[@]}
+	do
+		echo "Begin transport $log_name log..."
+		ssh $node_ip "scp -r /home/parastor/log/*${log_name}* root@${log_host}:${node_log_dir} "
+	done
+	echo "Begin transport otrace data log..."		
+	ssh $node_ip "scp -r /home/parastor/log/otrace/ root@${log_host}:${log_dir}/otrace${node_id}"
+	echo "Begin transport zk log..."
+	ssh $node_ip "scp /root/zk/zookeeper.log root@${log_host}:${log_dir}/zk/zk_log${node_id}"
+	echo "Begin transport mgcd_zookeeper log..."
+	ssh $node_ip "scp /tmp/mgcd_zookeeper.log root@${log_host}:${log_dir}/zk/mgcd_zookeeper${node_id}"
+	echo "Begin transport system message log..."
+	ssh $node_ip "scp /var/log/messages root@${log_host}:${log_dir}/sys_message/message${node_id}"
+	
+	echo "Begin transport pscli log..."
+	date +"Time:%Y%m%d-%H:%M:%S" >>node_sys.log
+	echo "pscli message in node $node_ip:" >>node_sys.log
+	echo "get_targets message:" >>node_sys.log
+	ssh $node_ip "pscli --command=get_targets" >>node_sys.log
+	echo "" >>node_sys.log
+	echo "get_initiators message:" >>node_sys.log
+	ssh $node_ip "pscli --command=get_initiators" >>node_sys.log
+	echo "" >>node_sys.log
+	echo "get_luns message:" >>node_sys.log
+	ssh $node_ip "pscli --command=get_luns" >>node_sys.log
+	echo "" >>node_sys.log
+	echo "get_lun_maps message:" >>node_sys.log
+	ssh $node_ip "pscli --command=get_lun_maps" >>node_sys.log
+	echo "" >>node_sys.log
+ 	
+	scp node_sys.log root@${log_host}:${log_dir}/node_out_log/node_pscli.log${node_id}
+	rm -f node_sys.log
+	echo "All logs have been Done in $node_ip node!!!"
+	echo ""
+done
+
+for host_ip in ${host_list[@]}
+do
+	echo "Begin transport host $host_ip vdbench log..."
+	host_id=${host_ip##*.}
+	ssh $host_ip "scp -r /root/output/10.2.41.152/ root@${log_host}:${log_dir}/vdb_log/vdb_log${host_id}"
+	echo "Begin transport host $host_ip message log..."
+	ssh $host_ip "scp /var/log/messages root@${log_host}:${log_dir}/host_message/message${host_id}"
+
+	echo "Begin transport host $host_ip disk log..."
+	date +"Time:%Y%m%d-%H:%M:%S" >>host_scsi.log
+	echo "lsscsi message in host ${host_ip}:" >>host_scsi.log
+	echo "disk message:" >>host_scsi.log
+	ssh $host_ip "fdisk -l" >>host_scsi.log
+	echo "" >>host_scsi.log
+	echo "disk message in host ${host_ip}:"
+	ssh $host_ip "lscsi" >>host_scsi.log
+	echo "" >>host_scsi.log
+	
+	echo "Begin transport host $host_ip scsi log..."
+	echo "iscsi session message in host ${host_ip}:" >>host_scsi.log 
+	ssh $host_ip "iscsiadm -m session -P 3" >>host_scsi.log
+	echo "" >>host_scsi.log
+	echo "iscsi initiator name message in host ${host_ip}:" >>host_scsi.log
+	ssh $host_ip "cat /etc/iscsi/initiatorname.iscsi" >>host_scsi.log
+	echo ""
+	
+	scp host_scsi.log root@${log_host}:${log_dir}/host_out_log/host_scsi.log${host_id}
+	rm -f host_scsi.log
+done
+
+echo "All logs have been transport to LOG host!!!"
+

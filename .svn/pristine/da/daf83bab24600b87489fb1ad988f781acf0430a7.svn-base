@@ -1,0 +1,41 @@
+3_20_14_17_23  [ERROR,S310]:  Warning: Permanently added '10.2.40.18' (RSA) to the list of known hosts.
+bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_25  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_17_25  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_22  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_23  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_18_24  [ERROR,S310]:  bash: /home/parastor/bin/sysctl/parastor_pos: No such file or directory
+3_20_14_23_39  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_39  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_39  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_39  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_39  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_40  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_40  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_40  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_14_23_40  [ERROR,S310]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!
+3_20_17_24_8  [ERROR,tstacc0]:  ADDACCOUNT##ADDACCOUNT failed: -12000002.
+ Possible Reason##POS_DISKIO_DB_EXCEPT:sql execute failed!

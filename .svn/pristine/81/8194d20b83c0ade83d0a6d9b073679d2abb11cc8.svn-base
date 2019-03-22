@@ -1,0 +1,134 @@
+#!/usr/bin/python
+#-*-coding:utf-8 -*
+"""
+:Date: 2019-01-28
+:Author: wuyq
+:Description:
+function: Try to find the best performance configuration.
+:Changerlog:
+"""
+import os
+import commands
+import time
+import xml
+import ConfigParser
+import datetime
+import utils_path
+import common2
+import common
+import log
+import get_config
+import login
+import breakdown
+
+# 参数实例化
+conf_file = common2.CONF_FILE
+osan = common2.oSan()
+reliable = breakdown.Os_Reliable()
+disk = breakdown.disk()
+node = common.Node()
+conf = ConfigParser.ConfigParser()
+
+# 初始化日志文件
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]
+log_file_path = log.get_log_path(file_name)
+log.init(log_file_path, True)
+
+# 获取集群节点信息
+deploy_ips = get_config.get_env_ip_info(conf_file)
+client_ips = get_config.get_allclient_ip()
+
+config_info = xml.dom.minidom.parse(conf_file)
+replica = config_info.getElementsByTagName('replica')[0].firstChild.nodeValue
+strip_width = config_info.getElementsByTagName('stripwidth')[0].firstChild.nodeValue
+node_parity = int(replica) - 1
+lun_nums = osan.get_lun_nums(deploy_ips[0])
+
+now_path = os.getcwd()
+per_result_path = os.path.join(now_path, 'per_result')
+if os.path.exists(per_result_path) is False:
+    os.mkdir(per_result_path)
+
+current_time = datetime.datetime.now()
+now_time = current_time.strftime('%Y-%m-%d_%H-%M-%S')
+per_log = per_result_path + '/perf_res_' + now_time + '.log'
+per_write = open(per_log, 'a+')
+per_write.write("============================\n")
+per_write.write("The Performance Test Result.\nTime:%s.\nReplications:%s.\nStrip_Width:%s.\nLun_Nums:%s\n"
+                % (now_time, replica, strip_width, lun_nums))
+per_write.write("============================\n\n")
+per_write.close()
+
+# 解析性能配置文件
+conf.read('perf_test.conf')
+io_model_list = conf.sections()
+for parm in io_model_list:
+    if 'vdbench' in parm:
+        io_model_list.remove(parm)
+
+def process():
+    iorate = conf.get('vdbench-conf', 'iorate')
+    threads = conf.get('vdbench-conf', 'threads')
+    maxdata = 0
+    for client_ip in client_ips:
+        cmd = ("ssh %s 'free -h' | sed -n '2p' | awk '{print $4}' | sed 's/[A-Z]//g'" % client_ip)
+        res = commands.getoutput(cmd)
+        maxdata += int(res)
+    data_conf = osan.gen_stress_vdb(xfersize='(4k,30,16k,30,64k,20,256k,20)',
+                                    rdpct=0,
+                                    seekpct=0,
+                                    iorate=iorate,
+                                    maxdata=maxdata,
+                                    threads=threads)
+    log.info("Steps in advance:Embedded data, full memory")
+    osan.run_vdb(client_ips[0], data_conf, output=client_ips[0], time=36000)
+    time.sleep(30)
+
+    for io_model in io_model_list:
+        log.info("Start to performance test...")
+        log.info("=========================================")
+        log.info("IO model: %s" % io_model)
+        log.info("=========================================")
+        log.info("Step1:Generate vdbench performance test parameters.")
+        xfersize = conf.get(io_model, 'xfersize')
+        rdpct = conf.get(io_model, 'rdpct')
+        seekpct = conf.get(io_model, 'seekpct')
+        # Generate the vdbench configuration file
+        perf_io = osan.gen_stress_vdb(xfersize=xfersize,
+                                      rdpct=rdpct,
+                                      seekpct=seekpct,
+                                      iorate=iorate,
+                                      threads=threads)
+
+        log.info("Step2:Begin performance testing...")
+        # output = xfersize + rppct + seekpct model
+        out_name = str(xfersize) + '_' + str(rdpct) + '_' + str(seekpct)
+        osan.run_vdb(client_ips[0], perf_io, output=out_name, time=120)
+
+        time.sleep(10)
+        log.info("Step3:Statistical test results.")
+        result_path = '/root/output/' + out_name + '_nor'
+        cmd = ("ssh %s 'cat %s/summary.html' | grep 'avg' | awk -F 'avg' '{print $2}'" % (client_ips[0], result_path))
+        rc, result = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("Can't view the output of vdbench in %s" % client_ips[0])
+            os._exit(1)
+        else:
+            io_model_info = ('>>>>> xfersize:%s. rdpct:%s. seekpct:%s <<<<<' % (xfersize, rdpct, seekpct))
+            split_line = "-----------------------------------------------------------"
+            title_line = "|  iops  | bandwidth | resp_time | resp_max | queue_depth |"
+            per_write = open(per_log, 'a+')
+            per_write.write(io_model_info + '\n')
+            per_write.write(split_line + '\n')
+            per_write.write(title_line + '\n')
+            res_info = result.split()
+            res_line = ("| %-6s | %-9s | %-9s | %-8s | %-11s |"
+                        % (res_info[1], res_info[2], res_info[5], res_info[8], res_info[10]))
+            per_write.write(split_line + '\n')
+            per_write.write(res_line + '\n')
+            per_write.write(split_line + '\n\n')
+            per_write.close()
+
+if __name__ == '__main__':
+    process()

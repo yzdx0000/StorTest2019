@@ -1,0 +1,78 @@
+# -*-coding:utf-8 -*
+from multiprocessing import Process
+import os
+import time
+import random
+
+import utils_path
+import common
+import log
+import make_fault
+import get_config
+import prepare_clean
+import tool_use
+import prepare_clean
+
+#################################################################
+#
+# Author: chenjy1
+# Date: 2018-08-27
+# @summary：
+#    非集群管理器节点无需启动zookeeperserver
+# @steps:
+#    1.查看节点服务状态，获取有oJmgs的节点
+#    2.查看是否启动zk
+# @changelog：
+#################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                # 本脚本名字
+VDBENCH_PATH = os.path.join(prepare_clean.DEFECT_PATH, FILE_NAME)          # /mnt/volume1/defect_case/qc_9
+ZK_CHECK = "/root/zk/bin/zkServer.sh  status"                           # 查看zk
+
+
+def case():
+    log.info("case begin")
+
+    ob_node = common.Node()
+    log.info("1> 查看节点服务状态，获取有oJmgs的节点")
+
+    rc, stdout = common.get_services()
+    common.judge_rc(rc, 0, "get_services failed")
+    pscli_info = common.json_loads(stdout)
+    node_ojmgs_stat_dict = {}
+
+    pernode_stat = ['ip', False]
+    for node in pscli_info['result']['nodes']:
+        node_ip = ob_node.get_node_ip_by_id(node['node_id'])
+        pernode_stat[0] = node_ip
+        bool_ojmgs = False
+        for service in node['services']:
+            if service['service_type'] == "oJmgs":
+                bool_ojmgs = True
+                break
+        pernode_stat[1] = bool_ojmgs
+        tmp_lst = pernode_stat[:]  # 注意不能直接使用pernode_stat
+        node_ojmgs_stat_dict[node['node_id']] = tmp_lst
+    log.info(node_ojmgs_stat_dict)
+
+    log.info("2> 查看非管理节点是否启动zk")
+    cmd = ZK_CHECK
+    log.info(node_ojmgs_stat_dict.values())
+    for ip_ojmgs_lst in node_ojmgs_stat_dict.values():
+        if ip_ojmgs_lst[1] == False:
+            rc, stdout = common.run_command(ip_ojmgs_lst[0], cmd)
+            log.info("ip : %s stdout : %s " % (ip_ojmgs_lst[0], stdout))
+            if 'Mode' in stdout:
+                common.except_exit("zk server start in non management node")
+
+    return
+
+
+def main():
+    prepare_clean.defect_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.defect_test_clean(FILE_NAME, fault=True)
+    log.info('%s succeed!' % FILE_NAME)
+
+if __name__ == '__main__':
+    common.case_main(main)

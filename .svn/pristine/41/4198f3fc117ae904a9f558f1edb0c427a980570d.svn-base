@@ -1,0 +1,22 @@
+#-*-coding:utf-8 -*
+import os,sys,commands
+import _checkresult_lyz
+def querybucketAcl(oossip,bucketname,certificateid):
+    cmd='curl -i http://%s:20480/%s?acl -XGET -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,certificateid)
+    print cmd
+    (status,output)=commands.getstatusoutput(cmd)
+    print output
+    re=_checkresult_lyz.checkresult(status, output)
+    if re==-1:
+        return -1
+def querybucketAclHaveLog(oossip,bucketname,certificateid,logger):
+    cmd='curl -i http://%s:20480/%s?acl -XGET -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,certificateid)
+    logger.info(cmd)
+    (status,output)=commands.getstatusoutput(cmd)
+    logger.info(output)
+    re=_checkresult_lyz.checkresultHaveLog(status, output,logger)
+    if re==-1:
+        return -1
+if __name__=="__main__":
+    querybucketAcl(sys.argv[1],sys.argv[2],sys.argv[3])
+

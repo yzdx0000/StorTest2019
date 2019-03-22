@@ -1,0 +1,31 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于删除指定账户###########
+#需要执行del_account_exc，参数包括：oOms节点ip，accountid
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+def del_account_cmd(ip,account_id):
+    cmd='/home/parastor/bin/sysctl/parastor_pos'+' delaccount'+' accountid='+str(account_id)  #执行删除指定账户命令本身
+    cmd='ssh '+str(ip)+' -C '+"'"+cmd+"'"   #到管理节点去执行删除指定账户命令
+    return cmd
+
+def del_account_exc(ip,account_id):
+    cmd=del_account_cmd(ip,account_id)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    del_account_exc(all_argvs['master_mgr_ip'],all_argvs['account_id'])
+    del_account_exc(all_argvs['master_mgr_ip'],'00003P6T9RXMXKRA')   
+

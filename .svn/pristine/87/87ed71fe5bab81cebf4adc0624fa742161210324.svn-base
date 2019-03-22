@@ -1,0 +1,67 @@
+#!/usr/bin/python
+# -*-coding:utf-8 -*
+#*********************#
+#实现功能：add_buckets用于上传对象，getbucklist用于得到bucket列表
+#调用getbucklist时，需要修改mgrip,oossip,accountname,email
+#作者：刘萍
+#更改日期：2018/01/12
+#**********************#
+import os
+import commands
+import time
+import sys
+import _readconffile_lp
+import _getrelatedid_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+
+def add_buckets_logger(mgrip,oossip,accountname,email,startnum,endnum,bucketname,logger):
+    (accountid,accountuid,certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,accountname,email,logger)
+    j=0
+    for i in range(startnum,endnum+1):
+        cmd1=' curl -s -i http://'+oossip+':20480/'+bucketname+str(i)+' -X PUT -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+        output1=os.popen(cmd1).read()
+        num1=output1.find('HTTP/1.1')
+        num2=output1[(num1+9):((num1+12))]
+        logger.info(cmd1)
+        logger.info(output1)
+        if (num2=='200'):
+            cmd2='curl -s -i http://'+oossip+':20480/'+bucketname+str(i)+'?acl'+' -X HEAD -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'"'
+            logger.info(cmd2)
+            output2=os.popen(cmd2).read()
+            logger.info(output2)
+            num3=output2.find('HTTP/1.1')
+            num4=output2[(num3+9):((num3+12))]
+            if(num4=='200'):
+                j+=1
+                logger.info("the %s%s put success!" % (bucketname,i))
+            else:
+                logger.info("the bucket %s%s put fail" % (bucketname,i))
+                return -1
+        else:
+            return -1
+    bucklen=endnum-startnum
+    if(j<bucklen):
+        logger.info("The number of buckets %s actually is less than required buckets num %s" % (j,bucklen))
+        return -1
+    else:
+        logger.info("all bucksets form %s to %s put success!"%(startnum,endnum))
+
+def getbucklist_logger(mgrip,oossip,accountname,email,logger):
+    (accountid,accountuid,certificateid)=_getrelatedid_lp.accountrea_logger(mgrip,accountname,email,logger)
+    cmd4='curl -i http://%s:20480 -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(oossip,certificateid)
+    logger.info(cmd4)
+    (state4,output4)=commands.getstatusoutput(cmd4)
+    logger.info(output4)
+    num5=output4.find('HTTP/1.1')
+    num6=output4[(num5+9):((num5+12))]
+    if(num6=='200'):
+        logger.info("get the bucket list success")
+    else:
+        logger.info("get the bucket list error")
+        return -1
+
+
+

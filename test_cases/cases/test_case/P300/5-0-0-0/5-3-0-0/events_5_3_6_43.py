@@ -1,0 +1,114 @@
+# -*-coding:utf-8 -*
+from multiprocessing import Process
+import os
+import time
+import random
+
+import utils_path
+import common
+import snap_common
+import log
+import prepare_clean
+import get_config
+import tool_use
+import commands
+import logging
+import event_common
+
+####################################################################################
+#
+# author liyao
+# date 2018-08-13
+# @summary：
+#    取消硬盘重建作业成功
+# @steps:
+#   1、部署3节点集群环境
+#   2、获取集群中任一节点的一块数据盘
+#   3、执行删除磁盘命令
+#   4、删除未完成时，执行cancel_remove_disks命令，输入参数正确，预期执行成功
+#   5、执行get_events，检查结果显示是否正确
+#
+# @changelog：
+####################################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                  # 本脚本名字
+EVENT_TRUE_PATH = os.path.join(event_common.EVENT_TEST_PATH, FILE_NAME)
+DATA_DIR = os.path.join(EVENT_TRUE_PATH, 'data_dir')                  # /mnt/volume1/event/events_5_3_1_11/data_dir/
+CREATE_EVENT_PATH = os.path.join('event', FILE_NAME)                   # /event/events_5_3_6_21
+SYSTEM_IP_0 = get_config.get_parastor_ip(0)
+SYSTEM_IP_1 = get_config.get_parastor_ip(1)
+SYSTEM_IP_2 = get_config.get_parastor_ip(2)
+
+
+def case():
+    ''''函数执行主体'''
+    '''获取当前时间'''
+    cmd = 'date +%s'
+    rc, stdout = common.run_command(SYSTEM_IP_1, cmd)
+    script_start_time = int(stdout)  # 获取操作事件信息的起始时间
+
+    '''2> 获取集群中任一节点的一块数据盘'''
+    """获取集群内所有节点的id"""
+    ob_node = common.Node()
+    ob_disk = common.Disk()
+    ob_storage_pool = common.Storagepool()
+    nodeid_list = ob_node.get_nodes_id()
+
+    """随机选一个节点"""
+    fault_node_id = random.choice(nodeid_list)
+
+    """获取节点内的所有数据盘的物理id"""
+    share_disk_names, monopoly_disk_names = ob_disk.get_share_monopoly_disk_names(fault_node_id)
+
+    """随机获取一个数据盘"""
+    fault_disk_name = random.choice(monopoly_disk_names)
+    fault_disk_id = ob_disk.get_diskid_by_name(fault_node_id, fault_disk_name)
+    fault_disk_uuid = ob_disk.get_disk_uuid_by_name(fault_node_id, fault_disk_name)
+    fault_disk_usage = ob_disk.get_disk_usage_by_name(fault_node_id, fault_disk_name)
+    storage_pool_id = ob_disk.get_storage_pool_id_by_diskid(fault_node_id, fault_disk_id)
+
+    '''3> 删除上述磁盘'''
+    ob_disk.remove_disks_asyn(fault_disk_id)
+
+    log.info('waiting for 10s')
+    time.sleep(10)
+
+    '''4> 删除未完成时，执行cancel_remove_disks命令，输入参数正确，预期执行成功'''
+    rc, disk_info = common.get_disks(fault_node_id)
+    common.judge_rc(rc, 0, "get disk info failed")
+    disks_info_json = common.json_loads(disk_info)
+    flag = True
+    for disk_info_json in disks_info_json["result"]["disks"]:
+        if fault_disk_id == disk_info_json["id"] and "DISK_STATE_REBUILDING_ACTIVE" == disk_info_json["state"]:
+            rc, stdout = ob_disk.cancel_delete_disk(fault_disk_id)
+            common.judge_rc(rc, 0, 'cancel remove disks failed !!!')
+            flag = False
+            break
+    # 执行失败则恢复环境
+    if flag:
+        ob_disk.add_disks(fault_node_id, fault_disk_uuid, fault_disk_usage)
+        fault_disk_id_new = ob_disk.get_disk_id_by_uuid(fault_node_id, fault_disk_uuid)
+        ob_storage_pool.expand_storage_pool(storage_pool_id, fault_disk_id_new)
+        raise Exception("disk state is not rebuilding")
+
+    '''5> 执行get_events，检查结果显示是否正确'''
+    delay_time = event_common.DELAY_TIME
+    log.info('waiting for %s' % delay_time)
+    time.sleep(delay_time)
+
+    code = '0x02060053'
+    description = 'cancel remove disks'
+    event_common.check_events_result(script_start_time, code, description)
+
+    return
+
+
+def main():
+    prepare_clean.test_prepare(FILE_NAME, env_check=True)
+    case()
+    prepare_clean.test_clean()
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

@@ -1,0 +1,243 @@
+#! /usr/bin/python
+# -*- coding:utf-8 -*-
+#**********************************************#
+# 标题：功能测试，用例编号29-0-17-69
+# 使用方法：python 29-0-17-69_wjl.py
+# 小文件多段上传测试。拷贝段测试。
+# 作者：王建磊
+# 创建时间：2018/10/10
+#**********************************************#
+import sys
+import os
+import commands
+import json
+import time
+import ConfigParser
+import random
+
+current_pyth = os.getcwd()
+pwd = os.path.dirname(current_pyth)
+sys.path.append(pwd + "/S3Lib")
+import utils_path
+import common
+import s3_common
+import log
+import get_config
+import prepare_clean
+import result
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+FILE_NAME = FILE_NAME.replace('-', '_')
+account_name1 = FILE_NAME + "_" + "account_a"
+email1 = account_name1 + "@sugon.com"
+split_seg = {}
+
+# 创建账户及证书
+
+
+def create_acc_cer(account_name, email):
+    rc, account_id = s3_common.add_account(account_name, email, 0)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "create account failed!!!")
+    rc, ak, sk = s3_common.add_certificate(account_id)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "create certificate failed!!!")
+    return ak, sk, account_id
+
+# 获取sig函数
+
+
+def create_sig(sk, StringToSign):
+    sig = s3_common.mk_sig(sk, StringToSign)
+    sig = s3_common.mk_sig_code(sig)
+    return sig
+
+
+def judge_result(rc, filename):
+    if rc == 0:
+        pass
+    else:
+        result.result(filename, "-1")
+
+# 结果判断函数
+
+
+def juge(output):
+    result_sig = output[output.find("1.1 ") + 4:][:3]
+    print "result:%s" % result_sig
+    if result_sig == '403':
+        return 0
+    else:
+        return -1
+
+# 获取桶配额函数
+
+
+def bucket_get_quota(bucketname, AK, sig):
+    rc, opt = s3_common.get_bucket_quota_by_sig(bucketname, AK, sig)
+    return rc, opt
+
+# 设置桶配额函数
+
+
+def bucket_set_quota(bucketname, AK, quota, sig):
+    rc, opt = s3_common.update_bucket_quota_by_sig(bucketname, AK, quota, sig)
+    return rc, opt
+
+# 创建文件函数
+
+
+def create_file(obj_path, amount):
+    a = [0 for x in range(1024 * 1024)]
+    for i in range(len(a) - 10):
+        a[i] = 'a'
+    for j in range(10):
+        data = random.randint(0, 9)
+        a[len(a) - 10 + j] = str(data)
+    a = "".join(a)
+    f = open(obj_path, 'a+')
+    for k in range(amount):
+        f.write(a)
+    f.close()
+
+
+def judge_result_judge(rc):
+    judge_result(rc, FILE_NAME)
+
+
+# 分段函数
+def split_file(o_file_path, split_file_prefix):
+    split_cmd = "split -b 10M -d " + o_file_path + " -a 1 " + split_file_prefix
+    (return_code, output) = commands.getstatusoutput(split_cmd)
+    for i in range(5):
+        split_seg[str(i)] = os.path.isfile(split_file_prefix + str(i))
+    if split_seg["0"] == split_seg["1"] == split_seg["2"] == split_seg["3"] == split_seg["4"]:
+        return 0
+    else:
+        return -1
+
+
+def case():
+    upload_teg = {}
+    o_file_path = "../S3output/" + FILE_NAME
+    split_file_prefix = "../S3output/" + FILE_NAME + "_tfile"
+    log.info("1> 开启签名认证")
+    rc, opt = s3_common.set_oss_http_auth("1")
+    time.sleep(12)
+    judge_result_judge(rc)
+    common.judge_rc(rc, 0, "Open sig-mode failed!")
+
+    # 创建账户a、b
+    log.info("2> 创建账户")
+    ak1, sk1, account_id1 = create_acc_cer(account_name1, email1)
+
+    # 账户中创建桶
+    log.info("3> 在账户中创建桶")
+    log.info("bucket create operation:")
+    bucketname = FILE_NAME + '_bucket'
+    bucketname = bucketname.replace('_', '-')
+    objectname = FILE_NAME + '_object'
+    rc1, opt1 = s3_common.add_bucket_by_sk(bucketname, ak1, sk1)
+    judge_result_judge(rc1)
+    common.judge_rc(rc1, 0, "add bucket %s failed!!!" % bucketname)
+
+    log.info("4> 创建50M文件")
+    create_file(o_file_path, 50)
+    rc, o_md5 = common.run_command_shot_time("md5sum %s" % o_file_path)
+    o_md5 = o_md5[0:32]
+    log.info("o_md5: %s" % o_md5)
+    judge_result_judge(rc)
+    common.judge_rc(rc, 0, "Md5sum file failed!")
+
+    log.info("5> 在桶中上传50M文件")
+    rc1, opt1 = s3_common.add_object_by_sk(
+        bucketname, objectname, o_file_path, ak1, sk1)
+    print opt1
+    judge_result_judge(rc1)
+    common.run_command_shot_time("rm %s* -rf" % o_file_path)
+
+    log.info("6> 初始化分段上传")
+    object_name = objectname + '_segment'
+    rc, upload_id = s3_common.init_put_object_by_segment_by_sig(
+        bucketname, object_name, ak1, sk1)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "init segment failed!!!")
+
+    # 复制对象
+    log.info("7> 将对象拷贝为段")
+    for i in range(5):
+        byte = "\"" + "x-amz-copy-source-range:bytes=" + \
+            str(i * (10485760)) + "-" + str(i + (i + 1) * 10485759) + "\""
+        string = "PUT" + "\n" + "" + "\n" + "" + "\n" + "" + "\n" + \
+                 "x-amz-copy-source:" + "/" + bucketname + "/" + objectname + "\n" + \
+                 "x-amz-copy-source-range:bytes=" + str(i * (10485760)) + "-" + str(i + (i + 1) * 10485759) + "\n" + \
+                 "/" + bucketname + "/" + object_name + "?partNumber=" + str(i + 1) + "&uploadId=" + upload_id
+        log.info(string)
+        sig = create_sig(sk1, string)
+        rc, opt = s3_common.cp_object(bucketname, object_name + "?partNumber=" + str(
+            i + 1) + "\&uploadId=" + upload_id, ak1, bucketname, objectname, sig, byte)
+        judge_result(rc, FILE_NAME)
+        common.judge_rc(rc, 0, "copy part-object failed!!!")
+        log.info("No.%s copy part: %s" % (str(i), opt))
+        upload_teg[str(i)] = ("200 OK" in opt)
+
+    log.info("upload_teg is :%s" % upload_teg)
+    f_copy_seg = (upload_teg["0"] and upload_teg["1"] and upload_teg["2"] and
+                  upload_teg["3"] and upload_teg["4"])
+    if f_copy_seg is True:
+        rc = 0
+    else:
+        rc = -1
+    judge_result_judge(rc)
+
+    # 合并段
+    log.info("8> 合并段")
+    rc, stdout = s3_common.merge_object_seg_by_sig(
+        bucketname, object_name, upload_id, ak1, sk1, 5)
+    log.info(stdout)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "metge object failed!!!")
+
+    # 下载对象
+    log.info("9> 下载合并后的对象")
+    string = "GET" + "\n" + "" + "\n" + "" + "\n" + "" + \
+        "\n" + "" + "/" + bucketname + "/" + object_name
+    sig = create_sig(sk1, string)
+    rc, opt = s3_common.download_object(
+        bucketname, object_name, o_file_path + "_down1", ak1, sig)
+    print rc
+    log.info(opt)
+    rc, d_md5 = common.run_command_shot_time("md5sum %s" % o_file_path + "_down1")
+    d_md5 = d_md5[0:32]
+    log.info("d_md5: %s" % d_md5)
+    print type(d_md5)
+    print d_md5
+    print type(o_md5)
+    print o_md5
+    if d_md5 == o_md5:
+        common.run_command_shot_time("rm %s* -rf" % (o_file_path + "_down1"))
+    else:
+        judge_result_judge(-1)
+        common.judge_rc(-1, 0, "%s failed!" % FILE_NAME)
+
+    log.info("10> 关闭签名认证")
+    rc, opt = s3_common.set_oss_http_auth("0")
+    judge_result_judge(rc)
+    time.sleep(12)
+    common.judge_rc(rc, 0, "Close sig-mode failed!")
+
+
+def main():
+    rc, opt = s3_common.set_oss_http_auth("0")
+    time.sleep(12)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "Close sig-mode failed!")
+    prepare_clean.s3_test_prepare(FILE_NAME, [email1])
+    case()
+    prepare_clean.s3_test_clean([email1])
+    log.info('%s succeed!' % FILE_NAME)
+    result.result(FILE_NAME, "0")
+
+
+if __name__ == '__main__':
+    common.case_main(main)

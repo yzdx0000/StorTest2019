@@ -1,0 +1,21 @@
+#-*- coding:utf-8 -*
+#函数名称：copyObject
+#函数作用：将该对象复制到其他桶中
+#函数输入：oossip,dest_bucket,dest_obj,certificateid,src_bucket,src_obj
+#函数输出：将复制是否成功print出来
+import commands,sys
+def usage():
+	print 'python scriptname oossip dest_bucket dest_obj certificateid src_bucket src_obj'
+def copyObject(oossip,dest_bucket,dest_obj,certificateid,src_bucket,src_obj):
+	cmd='curl -i http://'+oossip+':20480/'+dest_bucket+'/'+dest_obj+' -X PUT -H "Authorization: AWS4-HMAC-SHA256 Credential='+certificateid+'" -H "x-amz-copy-source: /'+src_bucket+'/'+src_obj+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+if __name__=="__main__":
+	if len(sys.argv)!=7:
+		usage()
+	else:
+		copyObject(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6])
+
+	
+	

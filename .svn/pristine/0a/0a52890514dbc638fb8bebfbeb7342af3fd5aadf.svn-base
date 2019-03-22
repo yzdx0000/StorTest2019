@@ -1,0 +1,123 @@
+# -*-coding:utf-8 -*
+import os
+import time
+
+import utils_path
+import common
+import snap_common
+import log
+import shell
+import get_config
+import prepare_clean
+import random
+import nas_common
+import json
+import event_common
+"""
+Author:liangxy
+date: 2018-08-08
+@summary：
+     缺陷自动化——事件初始时间错误（同时覆盖缺陷P300-2955）
+@steps:
+    1、检查系统服务状态正常
+    2、获取系统事件的开始时间和恢复时间列表
+    3、确定合理时间范围：不为0（epoch-time）；开始时间大于当下时间前十年<一年按照365天>；
+    结束时间小于当下时间后一天
+    4、若落在时间范围内，返回成功，否则失败；清理环境
+@changelog：
+    # 返测P300-2955,修改抛异常方式，先存储错误信息，最后抛异常
+"""
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+SNAP_TRUE_PATH = os.path.join(snap_common.SNAP_PATH, FILE_NAME)
+CREATE_SNAP_PATH = os.path.join(snap_common.SNAP_PATH_BASENAME, FILE_NAME)
+YEARS_T = 10
+
+
+def case():
+    log.info("case begin")
+    case_r = 0
+    failed_info = {}
+    failed_info_lst = []
+    """随机客户端节点"""
+    ob_node = common.Node()
+    case_ip_lst = ob_node.get_nodes_ip()
+    case_ip = random.choice(case_ip_lst)
+    """确定节点合理时间阈值"""
+    (rc, stdout) = event_common.get_current_time(case_ip)
+    if 0 != rc:
+        err_str = "get current time on %s failed!!!" % case_ip
+        common.judge_rc(rc, 0, err_str)
+    """任务不会开始于十年前"""
+    t_start_time = int(stdout) - (31536000*YEARS_T)
+    """本脚本不会运行一天"""
+    log.info("current time: %s" % stdout)
+    t_end_time = int(stdout) + 86400
+    log.info("end time limit:%s" % t_end_time)
+    """获取事件初始两个时间"""
+    (rc_get_e, stdout_get_e) = event_common.get_events()
+    if 0 != rc_get_e:
+        err_str = "get events failed!!!"
+        common.judge_rc(rc_get_e, 0, err_str)
+    index = 1
+    for std in stdout_get_e:
+        start_time = int(std["startTimeShort"])
+        end_time = int(std["endTimeShort"])
+        start_time_str = std["startTimeStr"]
+        end_time_str = std["endTimeStr"]
+        if "1970" in start_time_str or "1970" in end_time_str:
+            case_r = -4
+            info = ("case failed!!!start:%s code:%s" %
+                    (start_time_str, std["code"]))
+            failed_info = {(case_r,): info}
+            failed_info_lst.append(failed_info)
+            # common.except_exit(info, case_r)
+        if end_time < start_time:
+            case_r = -1
+            info = ("case failed!!!start:%d after end :%d,code:%s" %
+                    (start_time, end_time, std["code"]))
+            failed_info = {(case_r,): info}
+            failed_info_lst.append(failed_info)
+            # common.judge_rc(case_r, 0, info)
+        if start_time < t_start_time:
+            case_r = -2
+            info = ("case failed!!!start too early:%d,end:%d,code:%s" %
+                    (start_time, end_time, std["code"]))
+            failed_info = {(case_r,): info}
+            failed_info_lst.append(failed_info)
+            # common.judge_rc(case_r, 0, info)
+        if end_time > t_end_time:
+            case_r = -3
+            info = ("case failed!!!start:%d,end too late:%d,code:%s, end time limit + ld:%s" %
+                    (start_time, end_time, std["code"], t_start_time))
+            failed_info = {(case_r,): info}
+            failed_info_lst.append(failed_info)
+            # common.judge_rc(case_r, 0, info)
+        if 0 == start_time and end_time == 0:
+            case_r = -4
+            info = ("case failed!!!start:%d,end:%d,code:%s" %
+                    (start_time, end_time, std["code"]))
+            failed_info = {(case_r,): info}
+            failed_info_lst.append(failed_info)
+            # common.judge_rc(case_r, 0, info)
+        log.info("No. %d event OK" % index)
+        index += 1
+    for info_err in failed_info_lst:
+        log.info("failed info:{}".format(info_err))
+    log.info("case finished!!!")
+    return case_r
+
+
+def main():
+    prepare_clean.defect_test_prepare(FILE_NAME)
+    case_rc = case()
+    prepare_clean.defect_test_clean(FILE_NAME)
+    if case_rc == 0:
+        # 为了在打印的最后一行显示结果，方便当时查看
+        log.info('%s succeed!' % FILE_NAME)
+    else:
+        # debug或者特别的不保留环境的脚本 可能会进入else，否则应该永不会进入else
+        log.info('%s failed! %d' % (FILE_NAME, case_rc))
+
+
+if __name__ == '__main__':
+    common.case_main(main)

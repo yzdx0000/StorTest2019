@@ -1,0 +1,14 @@
+# -*- coding:utf-8 -*
+import os,sys,commands
+import _checkresult_lyz
+#该脚本用来设置object的acl
+def sercertificateacl(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credential,dest_mail,operation):
+	cmd="curl -i http://%s:20480/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'" %(oossip,buc_name,obj_name,owner_credential,owner_accountuid,owner_mail,dest_credential,dest_mail,operation)
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	re=_checkresult_lyz.checkresult(status,output)
+	if re == -1:
+		return -1
+if __name__=="__main__":
+	sercertificateacl(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7],sys.argv[8],sys.argv[9])

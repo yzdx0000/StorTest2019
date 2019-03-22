@@ -1,0 +1,20 @@
+#-*- coding:utf-8 -*
+import os,sys,commands
+
+#删除证书函数
+def deleteCertificate(mgrip,certificateid):
+        cmd='ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos delcertificate certificateid='+certificateid+'"'
+#        print cmd
+        (status,output)=commands.getstatusoutput(cmd)
+#        print output
+
+#获取证书函数
+def get_ak(mgrip,acc_id):
+	cmd='ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listcertificates accountid='+acc_id+'"'
+	(status,output)=commands.getstatusoutput(cmd)
+	ak=output[output.find("certificateid:") + 14:][:32]
+	return ak
+
+if __name__=="__main__":
+	deleteCertificate(sys.argv[1],sys.argv[2])
+

@@ -1,0 +1,13 @@
+#!/bin/bash
+python 29-0-10-1_zh.py
+python 29-0-12-4_zh.py
+python 29-0-12-5_zh.py
+python 29-0-12-7_zh.py
+python 29-0-12-8_zh.py
+python 29-0-5-10_zh.py
+python 29-0-5-11_zh.py
+python 29-0-5-12_zh.py
+python 29-0-5-7_zh.py
+python 29-0-5-8_zh.py
+python 29-0-5-9_zh.py
+

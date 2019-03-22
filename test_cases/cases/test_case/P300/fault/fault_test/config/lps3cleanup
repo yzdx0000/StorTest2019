@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="press2" description="sample benchmark for s3">
+
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW1L10GHBYOJTJ8MDG2EL1TO9IPQEEFKML2C21IZG6LI3FUMQ8;secretkey=ba48b89958aa004f0fe581689e44474430dec9db;endpoint=http://www.50.com:20480;path_style_access=true;timeout=30000;" />
+
+  <workflow>
+    <workstage name="init">
+      <work type="init" workers="64" config="cprefix=zhlp3a;containers=r(1,100)" />
+    </workstage>
+    <workstage name="prepare">
+      <work type="prepare" workers="100" config="cprefix=zhlp3a;oprefix=apple;containers=r(1,100);objects=r(1,8000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB" />
+    </workstage>
+
+    <workstage name="main">
+      <work name="mn1" workers="100" runtime="10800">
+        <operation type="write" ratio="70" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(1,1000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(1001,2000);hashCheck=False" />
+	</work>
+      <work name="mdn2" workers="100" runtime="10800">
+        <operation type="read" ratio="100" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(2001,4000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+	</work>
+      <work name="mn3" workers="100" runtime="10800">
+        <operation type="write" ratio="30" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(4001,5000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(5001,6000);hashCheck=False" />
+	</work>
+      <work name="mn4" workers="100" runtime="10800">
+        <operation type="write" ratio="40" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(6001,7000);sizes=h(1|64|30,65|128|10,129|256|10,257|512|20,513|1024|30)KB;hashCheck=False" />
+        <operation type="read" ratio="60" config="cprefix=zhlp3a;oprefix=apple;containers=u(1,100);objects=u(7001,8000);hashCheck=False" />
+      </work>
+    </workstage>
+
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zhlp3a;oprefix=apple;containers=r(1,100);objects=r(1,8000)" />
+    </workstage>
+
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zhlp3a;containers=r(1,100)" />
+    </workstage> 
+
+  </workflow>
+
+</workload>

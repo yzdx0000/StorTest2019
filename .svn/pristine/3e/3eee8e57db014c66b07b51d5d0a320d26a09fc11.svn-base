@@ -1,0 +1,32 @@
+#-*- coding:utf-8 -*
+import _sshlistaccounts_lyz1
+import _delete_account_lyz
+import commands
+import _sshListcertificatesHaveReturn_lyz1
+import _delete_certificate
+import _getAllBucketOfCertificateid_lyz
+import _getAllBucketOfCertificateid_lyz
+import _delete_object_lyz
+import _delete_Bucket_lyz1
+import _getAllObjectsOfBucket_lyz
+######################################
+#函数作用：删除一个系统的所有account
+#函数参数：主mgrip
+#####################################
+def deleteAllAccount(mgrip,oossip,bucketname,certificate):
+    #步骤2：查询每个账户下的certificateid，如果没有certificateid，直接删除该账户，如果有certificateid，查询他所有的桶，如果有桶则查询所有的对象，删除这些对象再删除桶再删除certificateid，再删除account
+
+	objects=_getAllObjectsOfBucket_lyz.getAllObjectOfBucket(oossip,bucketname,certificate)
+	if objects==-1:
+		return -1
+	if objects!=[]:
+	    for object in objects:
+		red=_delete_object_lyz.deleteObject(oossip,bucketname,object,certificate)
+		if red==-1:
+			return -1
+	redd=_delete_Bucket_lyz1.delete_bucket(oossip,bucketname,certificate)
+	if redd==-1:
+		return -1
+if __name__=="__main__":
+    deleteAllAccount('100.100.100.16','100.100.100.18','yalia85','00003P5R0L29XYZ800003P5R0L1AH3YT')
+

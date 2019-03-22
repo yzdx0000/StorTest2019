@@ -1,0 +1,47 @@
+#-*- coding:utf-8 -*
+import _sshlistaccounts_lyz1
+import _delete_account_lyz
+import commands
+import _sshListcertificatesHaveReturn_lyz1
+import _delete_certificate
+import _getAllBucketOfCertificateid_lyz
+import _getAllBucketOfCertificateid_lyz
+import _delete_object_lyz
+import _delete_Bucket_lyz1
+import _getAllObjectsOfBucket_lyz
+######################################
+#函数作用：获得所有现有的账户的certificateid
+#函数参数：主mgrip
+#####################################
+def deleteAllAccount(mgrip,oossip):
+    #步骤1：查询所有的账户名称
+    print 'start'
+    dicts={}
+    dicts = _sshlistaccounts_lyz1.sshlistaccounts(mgrip)
+    accountname=dicts.keys()
+    print 'accountnames is %s' %accountname
+    accountids=[]
+    #步骤2：查询每个账户下的certificateid，如果没有certificateid，直接删除该账户，如果有certificateid，查询他所有的桶，如果有桶则查询所有的对象，删除这些对象再删除桶再删除certificateid，再删除account
+    allcertificateid=[]
+    for name in accountname:
+        accountid=dicts[name][0]
+        print 'accountid is %s' %accountid
+        #accountids.append(accountid)
+        cers = _sshListcertificatesHaveReturn_lyz1.sshListcertificatesHaveReturn(mgrip, accountid)
+        if cers==-1:
+            return -1
+        print 'cers is %s' %cers
+        allcertificateid.append(cers)
+    print 'allcertificateid is %s' %allcertificateid
+    print '******************************************************'
+    for c in range(len(allcertificateid)):
+        certis=allcertificateid[c]
+        for certificatida in certis:
+            if certificatida=='00003P6A8M6GV51S00003P6A8M8AFCK1':
+                print 'certificate 00003P6A8M6GV51S00003P6A8M8AFCK1 account is %s' %accountname[c]
+
+
+
+if __name__=="__main__":
+    deleteAllAccount('100.100.100.16','100.100.100.18')
+

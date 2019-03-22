@@ -1,0 +1,57 @@
+# -*- coding:utf-8 -*- 
+#*************************
+#使用方法：python AuthSignature.py HTTP_Verb MD5 ConType Date CHeaders CResource sk
+#说明：拼串部分根据使用情况的不同，需要用户进行自定义，所以本脚本仅使用外部传参的方式进行举例。
+#修改日期：2018/01/30  创建
+#	   2018/02/02  参数修改为全局变量，功能不变
+#*************************
+from hashlib import sha1
+import hmac
+import base64
+import sys,os
+
+HTTP_Verb=""
+Content_MD5=""
+Content_Type=""
+Date=""
+CanonicalizedHeaders=""
+CanonicalizedResource=""
+sk=""
+
+#用户根据格式要求传入字串信息。
+def require_args():
+	global HTTP_Verb,Content_MD5,Content_Type,Date,CanonicalizedHeaders,CanonicalizedResource,sk
+	HTTP_Verb=sys.argv[1]
+	Content_MD5=sys.argv[2]
+	Content_Type=sys.argv[3]
+	Date=sys.argv[4]
+	CanonicalizedHeaders=sys.argv[5]
+	CanonicalizedResource=sys.argv[6]
+	sk=sys.argv[7]
+
+#拼串函数，返回送于校验的字串
+def mk_str(HTTP_Verb,Content_MD5,Content_Type,CanonicalizedHeaders,CanonicalizedResource):
+	StringToSign = HTTP_Verb + "\n" + Content_MD5 + "\n" + Content_Type + "\n" + Date + "\n" + CanonicalizedHeaders + CanonicalizedResource
+	return StringToSign
+
+#获取sig函数
+def mk_sig(sk,StringToSign):
+	sig = hmac.new(sk, StringToSign.encode('utf-8'), sha1).digest()
+	return sig
+
+#对sig进行base64编码
+def mk_sig_code(sig):
+	base64sig = base64.b64encode(sig)
+	return base64sig
+
+#测试函数
+def test():
+	StringToSign = HTTP_Verb + "\n" + Content_MD5 + "\n" + Content_Type + "\n" + Date + "\n" + CanonicalizedHeaders + CanonicalizedResource
+	sig = hmac.new(sk, StringToSign.encode('utf-8'), sha1).digest()
+	base64sig = base64.b64encode(sig)
+	print StringToSign
+	print base64sig
+
+if __name__ == '__main__':
+	require_args()
+	test()

@@ -1,0 +1,60 @@
+[node_1]
+id = 1
+ctl_ip_0 = 10.2.41.101
+ctl_eth_0 = eth0
+data_ip_0 = 20.10.11.101
+data_eth_0 = eth1
+data_ip_1 = 30.10.11.101
+data_eth_1 = eth2
+mgr_node = yes
+
+[node_2]
+id = 2
+ctl_ip_0 = 10.2.41.102
+ctl_eth_0 = eth0
+data_ip_0 = 20.10.11.102
+data_eth_0 = eth1
+data_ip_1 = 30.10.11.102
+data_eth_1 = eth2
+mgr_node = yes
+
+[node_3]
+id = 3
+ctl_ip_0 = 10.2.41.103
+ctl_eth_0 = eth0
+data_ip_0 = 20.10.11.103
+data_eth_0 = eth1
+data_ip_1 = 30.10.11.103
+data_eth_1 = eth2
+mgr_node = yes
+
+[client_0]
+ctl_ip_0 = 20.10.11.101
+ctl_eth_0 = eth1
+id = 1
+
+[client_1]
+ctl_ip_0 = 20.10.11.102
+ctl_eth_0 = eth1
+id = 2
+
+[client_2]
+ctl_ip_0 = 20.10.11.103
+ctl_eth_0 = eth1
+id = 3
+
+[client_3]
+ctl_ip_0 = 10.2.41.106
+ctl_eth_0 = eth0
+id = 1000003
+
+[client_4]
+ctl_ip_0 = 10.2.41.105
+ctl_eth_0 = eth0
+id = 1000002
+
+[client_5]
+ctl_ip_0 = 10.2.41.104
+ctl_eth_0 = eth0
+id = 1000001
+

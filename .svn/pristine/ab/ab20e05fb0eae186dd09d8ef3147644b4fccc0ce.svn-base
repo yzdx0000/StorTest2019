@@ -1,0 +1,13 @@
+#-*- coding:utf-8 -*
+import os,sys,commands
+import imports3libpath
+import deleteAllAccount_lyz
+#使用方法 ： python clean.py masterip  oOssip
+#注意：本脚本会删除所有account信息，请谨慎使用
+#前置条件：无
+#日志：无
+def clean(mgrip,oossip):
+    deleteAllAccount_lyz.deleteAllAccount(mgrip,oossip)
+if __name__=="__main__":
+    print sys.argv[1],sys.argv[2]
+    clean(sys.argv[1],sys.argv[2])

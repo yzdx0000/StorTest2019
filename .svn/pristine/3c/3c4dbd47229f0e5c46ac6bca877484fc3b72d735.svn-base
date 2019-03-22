@@ -1,0 +1,84 @@
+# -*-coding:utf-8 -*
+import os
+import time
+import threading
+import logging
+import logging.handlers
+import utils_path
+import log
+import common
+import tool_use
+import s3_common
+import prepare_clean
+import json
+import commands
+
+
+def log_init():
+    file_path = os.path.split(os.path.realpath(__file__))[0]
+    file_name = os.path.basename(__file__)
+    file_name = file_name[:-3]
+    now_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
+    file_name = now_time + '_' + file_name + '.log'
+    file_name = os.path.join(file_path, file_name)
+    print file_name
+    logging.basicConfig(level=logging.DEBUG,
+                        format='[%(levelname)s][%(asctime)s]%(lineno)d:  %(message)s',
+                        datefmt='%y-%m-%d %H:%M:%S',
+                        filename=file_name,
+                        filemode='a')
+
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(levelname)s][%(asctime)s]   %(message)s', '%y-%m-%d %H:%M:%S')
+    console.setFormatter(formatter)
+    logging.getLogger().addHandler(console)
+    return
+class vdbench():
+    def run_vdbench(self, vdbflagname, anchor_path, journal_path,ip,elapsed = None,output_path = None,
+                    operations = None, format = None, threads = None, depth = None,
+                    width = None, files = None, size = None, xfersize = None):
+        obj_vdb = tool_use.Vdbenchrun(elapsed = elapsed,output_path = output_path, operations = operations, format = format, threads = threads, depth = depth, width = width, files = files, size = size, xfersize = xfersize)
+        obj_vdb.run_create_and_operations_jn(anchor_path, journal_path,vdbflagname, ip)
+    def start(self, vdbflagname, vdb_flag,log_file_path,anchor_path, journal_path, ip,elapsed = None,output_path = None,
+              operations = None, format = None, threads = None, depth = None, width = None, files = None,
+              size = None, xfersize = None):
+        """
+        :author:  lyzhb
+        :date: 2018.01.15
+        :description: 把_set_create_and_check_file生成的文件进行vdbench运行
+        :param filename: 脚本名称，这个是vdbenchdayinlog用的
+        :param vdbflagname:vdbench形成的配置文件的名称
+        :param  vdb_flag:  vdbench运行的配置文件的文件大小标志
+                            可以有三个值：'big'，'small'.'bigAndSmall','middle','other'
+                            当该值为前四个时，threads,depth,width,files,size有默认值
+        """
+        #filename = os.path.splitext(os.path.basename(__file__))[0]
+        #log_file_path = log.get_log_path(filename)
+        log.init(log_file_path, True)
+        if vdb_flag == 'big':
+            self.run_vdbench(vdbflagname, anchor_path, journal_path, ip, elapsed=3600000, output_path=output_path,
+                             operations=operations, format=format, threads=10, depth=3,
+                             width=10, files=2, size='(1G,30,500m,50,100m,20)', xfersize='1m')
+        elif vdb_flag == 'small':
+            self.run_vdbench(vdbflagname, anchor_path, journal_path, ip, elapsed=3600000, output_path=output_path,
+                             operations=operations, format=format, threads=30, depth=5,
+                             width=10, files=5, size='(1k,10,3k,10,500k,10,4k,10,111k,10,8k,10,2k,10,800k,5,16k,10,64k,10,128k,5)'
+                             , xfersize='1k')
+        elif vdb_flag == 'bigAndSmall':
+            self.run_vdbench(vdbflagname, anchor_path, journal_path, ip, elapsed=3600000, output_path=output_path,
+                             operations=operations, format=format, threads=20, depth=4,
+                             width=10, files=10, size='(2k,10,4k,10,11k,10,16k,10,100k,10,1000k,10,1500k,10,10m,10,100m,10,1000m,10)', xfersize='1k')
+        elif vdb_flag == 'middle':
+            print 'ip in middle is %s' %ip
+            self.run_vdbench(vdbflagname, anchor_path, journal_path, ip, elapsed=3600000, output_path=output_path,
+                             operations=operations, format=format, threads=20, depth=4,
+                             width=10, files=10,
+                             size='(1000k,10,800k,10,500k,20,1500k,10,2m,20,10m,10,5m,10,8m,10)', xfersize='1k')
+        else:
+            self.run_vdbench( vdbflagname, anchor_path, journal_path, ip,elapsed=3600000,output_path = output_path,
+                          operations = operations, format = format, threads = threads, depth = depth,
+                          width = width, files = files, size = size, xfersize = xfersize)
+if __name__=="__main__":
+    vdb=vdbench()
+    vdb.start('vdbnas','middle','/opt/vdbnechlog','/opt/anchor', '/opt/journal', '10.2.40.184',elapsed = 60,output_path = '/opt/output', operations ='(read,write)', format = 'yes', threads = 3)

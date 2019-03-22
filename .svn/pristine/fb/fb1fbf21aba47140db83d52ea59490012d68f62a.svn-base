@@ -1,0 +1,76 @@
+###############################################################################
+# !!!!!!每一行只配置一个用例，否则除第一个以外的用例都不会执行!!!!!!
+# 可以有空行
+# 单行注释请在每一行的 最开始 使用#，只要此行最开始使用了#，剩余字符均不生效
+#
+# 多行注释请使用 /*开始  */结束(!!!!!注释请占一行!!!!!!)
+/*
+/basic_function/5nodes_system_install.py
+/basic_function/1-0-5-8_mod-nodepoolname.py
+#*/ (这个结束符被注释掉，所以不生效，也就是说#的优先级高于/*和*/)
+/*
+/basic_function/5nodes_system_install.py
+*/  11.py(此结束符生效，而且这一行剩余字符均不生效，!!!!!!11.py是不会执行的!!!!!!)
+# /* 和 */不可以在一行中（/* 11.py */，这种不支持，只能识别开始的/*，后面的内容不支持）
+# 可以加文件，文件名字的最后必须是"_list"，放在case_list统计目录下
+################################################################################
+
+X1000/reliable_test/3-20-01-01.py
+X1000/reliable_test/3-20-01-02.py
+X1000/reliable_test/3-20-01-03.py
+X1000/reliable_test/3-20-01-04.py
+X1000/reliable_test/3-20-01-05.py
+X1000/reliable_test/3-20-01-06.py
+X1000/reliable_test/3-20-01-07.py
+X1000/reliable_test/3-20-01-08.py
+X1000/reliable_test/3-20-01-09.py
+X1000/reliable_test/3-20-01-10.py
+X1000/reliable_test/3-20-01-11.py
+X1000/reliable_test/3-20-01-12.py
+X1000/reliable_test/3-20-01-13.py
+X1000/reliable_test/3-20-01-14.py
+#X1000/reliable_test/3-20-01-15.py
+X1000/reliable_test/3-20-01-16.py
+X1000/reliable_test/3-20-01-17.py
+X1000/reliable_test/3-20-01-18.py
+#X1000/reliable_test/3-20-01-19.py
+#X1000/reliable_test/3-20-01-20.py
+#X1000/reliable_test/3-20-01-21.py
+#X1000/reliable_test/3-20-01-22.py
+#X1000/reliable_test/3-20-01-23.py
+#X1000/reliable_test/3-20-01-24.py
+#X1000/reliable_test/3-20-01-25.py
+#X1000/reliable_test/3-20-01-26.py
+#X1000/reliable_test/3-20-01-27.py
+#X1000/reliable_test/3-20-01-28.py
+#X1000/reliable_test/3-20-01-29.py
+#X1000/reliable_test/3-20-01-30.py
+#X1000/reliable_test/3-20-01-31.py
+#X1000/reliable_test/3-20-01-32.py
+X1000/reliable_test/3-20-01-33.py
+X1000/reliable_test/3-20-01-34.py
+X1000/reliable_test/3-20-01-35.py
+X1000/reliable_test/3-20-01-37.py
+X1000/reliable_test/3-20-01-38.py
+X1000/reliable_test/3-20-01-40.py
+X1000/reliable_test/3-20-01-41.py
+#X1000/reliable_test/3-20-01-43.py
+#X1000/reliable_test/3-20-01-44.py
+#X1000/reliable_test/3-20-01-49.py
+X1000/reliable_test/3-21-01-01.py
+X1000/reliable_test/3-21-01-02.py
+X1000/reliable_test/3-21-01-03.py
+X1000/reliable_test/3-21-01-04.py
+X1000/reliable_test/3-21-01-05.py
+X1000/reliable_test/3-21-01-07.py
+X1000/reliable_test/3-21-01-08.py
+X1000/reliable_test/3-21-01-09.py
+X1000/reliable_test/3-21-01-10.py
+X1000/reliable_test/3-21-01-11.py
+X1000/reliable_test/3-21-01-12.py
+X1000/reliable_test/3-21-01-13.py
+X1000/reliable_test/3-21-01-14.py
+X1000/reliable_test/3-21-01-15.py
+X1000/reliable_test/3-21-01-16.py
+X1000/reliable_test/3-21-01-17.py
+X1000/reliable_test/3-21-01-18.py

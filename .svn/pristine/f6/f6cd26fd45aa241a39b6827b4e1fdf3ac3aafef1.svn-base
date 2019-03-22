@@ -1,0 +1,217 @@
+#!/usr/bin/python
+import sys
+import os
+import commands
+from time import strftime,gmtime
+import re
+import time
+
+log_path=os.path.split(os.path.realpath(__file__))[0]
+log_name=log_path+'/log.dws'
+
+mgr_ip="193.169.11.227"
+owner_acc_name="d01_acc_003"
+owner_acc_mail="d01_003@sugon.com"
+dest_acc_name="d01_acc_004"
+dest_acc_mail="d01_004@sugon.com"
+buc_name="buc_d01_003"
+#cre_id="00001YJA2XNWAVP7000024P01N769WGK"
+domain_name="192.168.60.229:20480"
+obj_name="obj_d01_004"
+big_obj_name="obj_d01_005"
+file_path=log_path+"/dws.log"  #The file to put
+file_to_split=log_path+"/parastor.log_0"  #The file to split ,then put 
+file_splited=log_path   #The path of file has been splited ,we find the splited file in this path
+
+buc_acls=["READ","WRITE","READ_ACP","FULL_CONTROL","WRITE_ACP"]
+obj_acls=["READ","READ_ACP","FULL_CONTROL","WRITE_ACP"]
+
+#sleep_time="4"     # Define the sleep time,in case of the threads get bucket/put obj/get obj etc.. before the bucket or object has'nt created
+
+# Add account
+def add_acc(acc_name,mail_addr):
+	acc_id=[]
+        cmd="ssh %s '/home/parastor/bin/sysctl/parastor_pos addaccount accountname=%s email=%s'" %(mgr_ip,acc_name,mail_addr)
+        res= commands.getstatusoutput(cmd)
+	if res[0] == 0 :
+		acc_id.append(re.split(' ',re.sub('#|:',' ',res[1]).strip())[3])
+		acc_id.append(re.split(' ',re.sub('#|:',' ',res[1]).strip())[5])
+	else:
+		cmd="ssh %s '/home/parastor/bin/sysctl/parastor_pos listaccounts | grep %s | grep %s'" %(mgr_ip,acc_name,mail_addr)
+		res= commands.getstatusoutput(cmd)
+		if res[0] == 0 :
+			acc_id.append(re.split(' ',re.sub('#|:',' ',res[1]).strip())[1])
+			acc_id.append(re.split(' ',re.sub('#|:',' ',res[1]).strip())[3])
+		else:
+			print "add account failed"
+			exit(1)
+	return acc_id
+
+# Add certificate
+
+def add_cer(acc_id):
+        cmd="ssh %s '/home/parastor/bin/sysctl/parastor_pos addcertificate accountid=%s'" %(mgr_ip,acc_id)
+        res= commands.getstatusoutput(cmd)
+        return res
+
+# Get certificate ID
+
+def get_cer_id(acc_id):
+	cmd="ssh %s '/home/parastor/bin/sysctl/parastor_pos listcertificates accountid=%s'" %(mgr_ip,acc_id)
+        res= commands.getstatusoutput(cmd)
+	cer_nums=res[1].count("certificateid")
+        res=re.split(' ',re.sub('\[|\]|{|}|:|#|%|,',' ',re.search('\[.*',res[1]).group()).strip())
+	j=1
+	cer_id=[]
+	for i in range(0,cer_nums):
+	        cer_id.append(res[j])
+		j=j+8
+	return cer_id
+
+# Get certificate
+
+def get_cer_name(string):
+        string=re.split(' ',re.sub('#|:',' ',string).strip())[5]
+        return string
+
+# Record run log
+
+def log_rec(log_str):
+	log_file=open(log_name,'a')
+	log_time=strftime("%Y-%m-%d %H:%M:%S", gmtime())
+	strs=log_time+'\t'+log_str+'\n'
+	log_file.write(strs)
+	log_file.close()
+
+# Put bucket
+def put_bucket(IP,buc_name,credential):
+	cmd='curl -i http://%s/%s -X PUT -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_buckets(IP,credential):
+	cmd='curl -i http://%s -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_bucket(IP,buc_name,credential):
+	cmd='curl -i http://%s/%s -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_bucket_meta(IP,buc_name,credential):
+	time.sleep(4)
+	cmd='curl -I http://%s/%s -X HEAD -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def del_bucket(IP,buc_name,credential):
+	time.sleep(4)
+	cmd='curl -i http://%s/%s -X DELETE -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def del_obj(IP,buc_name,obj_name,credential):
+	time.sleep(4)
+	cmd='curl -i http://%s/%s/%s -X DELETE -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,obj_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def set_bucket_quota(IP,buc_name,credential,quota_num):
+	time.sleep(4)
+	cmd='curl -i http://%s/%s?quota -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><Quotaxmlns=\"http://pos.com/doc/2006-03-01\"><StorageQuota>%s</StorageQuota></Quota>\'' %(IP,buc_name,credential,str(quota_num))
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_bucket_meta(IP,buc_name,credential):
+	time.sleep(4)
+	cmd='curl -i http://%s/%s -X HEAD -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_buc_acl(IP,buc_name,credential):
+	time.sleep(4)
+	cmd='curl -i http://%s/%s?acl -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def set_buc_acl(IP,buc_name,owner_credential,owner_acc_uid,owner_mail,dest_acc_uid,dest_mail,permission):
+	time.sleep(4)
+	cmd="curl -i http://%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'" %(IP,buc_name,owner_credential,owner_acc_uid,owner_mail,dest_acc_uid,dest_mail,permission)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def put_obj(IP,buc_name,obj_name,file_path,credential):
+	time.sleep(2)
+	cmd='curl -i http://%s/%s/%s -X PUT -T %s -H "Expect: Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,obj_name,file_path,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_obj(IP,buc_name,obj_name,file_path,credential):
+	time.sleep(3)
+	cmd='curl -s http://%s/%s/%s -X GET -o %s -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,obj_name,file_path,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	#commands.getstatusoutput("sed -i '1,5d' "+file_path)
+	return cmd_res
+def copy_obj(IP,dest_buc_name,dest_obj_name,credential,src_buc_name,src_obj_name):
+	time.sleep(4)
+	src_file="/"+src_buc_name+"/"+src_obj_name
+	cmd='curl -i http://%s/%s/%s -X PUT -H "Authorization:AWS4-HMAC-SHA256 Credential=%s" -H "x-amz-copy-source:%s/%s"' %(IP,buc_name,obj_name,file_path,credential,src_file)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_obj_meta(IP,buc_name,obj_name,credential):
+	time.sleep(4)
+	cmd='curl -I http://%s/%s/%s -X HEAD -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,obj_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def get_obj_acl(IP,buc_name,obj_name,credential):
+	time.sleep(4)
+	cmd='curl -i http://%s/%s/%s?acl -X GET -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,obj_name,credential)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def set_obj_acl(IP,buc_name,obj_name,owner_credential,owner_acc_uid,owner_mail,dest_acc_uid,dest_mail,permission):
+	time.sleep(4)
+	cmd="curl -i http://%s/%s/%s?acl -X PUT -H \"Authorization:AWS4-HMAC-SHA256 Credential=%s\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>%s</ID><DisplayName>%s</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>%s</ID><DisplayName>%s</DisplayName></Grantee><Permission>%s</Permission></Grant></AccessControlList></AccessControlPolicy>\'" %(IP,buc_name,obj_name,owner_credential,owner_acc_uid,owner_mail,dest_acc_uid,dest_mail,permission)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def split_file(file_path,blk_size):
+	cmd="split -b %s %s" %(blk_size,file_path)
+	cmd_res= commands.getstatusoutput(cmd)
+	return cmd_res
+def put_big_obj(IP,buc_name,obj_name,credential,rank_num):
+	time.sleep(10)
+	part_num=1
+	etags=[] # store etags after put seg
+	#Init put mission
+	init_cmd='curl -i http://%s/%s/%s?uploads -X POST -H "Authorization:AWS4-HMAC-SHA256 Credential=%s"' %(IP,buc_name,obj_name,credential)
+	init_cmd_res= commands.getstatusoutput(init_cmd)
+	strs="fuc:put_big_file,stage:init,rank:"+str(rank_num)+",init_res:"+str(init_cmd_res[0])
+	if init_cmd_res[0] != 0 :
+		strs="Error fuc:put_big_file,stage:init,rank:"+str(rank_num)+",init_res:"+str(init_cmd_res)
+	log_rec(strs)
+	upload_id=re.split(' ',re.sub('<|>',' ',re.search('<UploadId>.*</UploadId>',init_cmd_res[1]).group()).strip())[1]
+	log_rec("upload_id"+upload_id)
+	#print upload_id
+	#Put seg
+	for i in range(97,123):
+	        for j in range(97,123):
+        	        file_name=file_splited+"/x"+chr(i)+chr(j)
+        	        if(os.path.exists(file_name) == True):
+        	                put_cmd='curl -i http://%s/%s/%s?partNumber=%d\&uploadId=%s -X PUT -H "Authorization:AWS4-HMAC-SHA256 Credential=%s" -T %s' %(IP,buc_name,obj_name,part_num,upload_id,credential,file_name)
+				put_cmd_res= commands.getstatusoutput(put_cmd)
+				strs="fun:put_big_file,stage:put,file_name:"+file_name+",rank:"+str(rank_num)+",put_res:"+str(put_cmd_res[0])
+				if put_cmd_res[0] != 0 :
+					strs="Error fun:put_big_file,stage:put,rank:"+str(rank_num)+",put_res:"+str(put_cmd_res)
+				log_rec(strs)
+				#ETag=re.split(' ',re.sub(':|"',' ',re.search('ETag.*',put_cmd_res[1]).group()).strip())[3]
+				ETag="dws"
+				#log_rec(ETag)
+				etags.append(ETag)
+				part_num=part_num+1
+	#print etags
+	#combine segs
+	seg_xml=""
+	for seg_num in range(0,len(etags)):
+		seg_xml=seg_xml+"<Part><PartNumber>%d</PartNumber><ETag>%s</ETag></Part>" %(seg_num+1,etags[seg_num])
+	comb_cmd='curl -i http://%s/%s/%s?uploadId=%s -X POST -H "Authorization:AWS4-HMAC-SHA256 Credential=%s" -d "<CompleteMultipartUpload>%s</CompleteMultipartUpload>"' %(IP,buc_name,obj_name,upload_id,credential,seg_xml)
+	comb_cmd_res=commands.getstatusoutput(comb_cmd)
+	strs="fun:put_big_file,stage:combine,file_name:,rank:"+str(rank_num)+",comb_res:"+str(comb_cmd_res[0])
+	if comb_cmd_res[0] != 0 :
+		strs="Error fun:put_big_file,stage:combine,file_name:,rank:"+str(rank_num)+",comb_res:"+str(comb_cmd_res[0])
+	log_rec(strs)
+	return comb_cmd_res
+	#strs="fun:put_big_file,stage:combine,rank:"+rank_num+",comb_res:"+str(comb_cmd_res[0])
+	#if comb_cmd_res[0] != 0 :
+	#	strs="fun:put_big_file,stage:combine,rank:"+rank_num+",comb_res:"+str(comb_cmd_res)
+	#log_rec(strs)
+
+# Delete bucket

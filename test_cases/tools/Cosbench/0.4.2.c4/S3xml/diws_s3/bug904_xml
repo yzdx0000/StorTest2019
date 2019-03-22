@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="s3-sample" description="sample benchmark for s3">
+ 
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW0VJ2M2CQTQYSL37Y2EL1TO9IPQEEFKML2EL1TO9IPQEENR9R;secretkey=3874309615148ddab8ff0d4dcaf07ab9da1c1d0b;endpoint=http://20.10.10.16:20480;path_style_access=true;timeout=30000;" />
+ 
+  <workflow>
+ 
+    <workstage name="init">
+        <work type="init" workers="100" config="cprefix=zhbug904_xml;containers=r(1,100)" />
+    </workstage>
+ 
+    <workstage name="prepare">
+      <work type="prepare" workers="100" config="cprefix=zhbug904_xml;oprefix=apple;containers=r(1,100);objects=r(1,800);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB" />
+    </workstage>
+ 
+    <workstage name="main">
+      <work name="main1" workers="200" runtime="300">
+        <operation type="write" ratio="70" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(1,100);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(101,200);hashCheck=False" />
+        </work>
+      <work name="main2" workers="200" runtime="300">
+        <operation type="write" ratio="60" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(201,300);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="40" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(301,400);hashCheck=False" />
+        </work>
+      <work name="main3" workers="200" runtime="300">
+        <operation type="write" ratio="30" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(401,500);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(501,600);hashCheck=False" />
+        </work>
+      <work name="main4" workers="200" runtime="300">
+        <operation type="write" ratio="40" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(601,700);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="60" config="cprefix=zhbug904_xml;oprefix=apple;containers=u(1,100);objects=u(701,800);hashCheck=False" />
+      </work>
+    </workstage>
+ 
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zhbug904_xml;oprefix=apple;containers=r(1,100);objects=r(1,800)" />
+    </workstage>
+ 
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zhbug904_xml;containers=r(1,100)" />
+    </workstage>
+ 
+  </workflow>
+ 
+</workload>

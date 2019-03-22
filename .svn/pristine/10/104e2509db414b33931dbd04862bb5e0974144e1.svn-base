@@ -1,0 +1,122 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <jenkins>
+        <ip>10.2.45.209</ip>
+        <path>/home/StorTest</path>
+    </jenkins>
+    <nodes>
+        <node>
+            <ctrl_ip>10.2.45.202</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.45.203</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.45.204</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.45.205</ctrl_ip>
+        </node>
+        <node>
+            <ctrl_ip>10.2.45.206</ctrl_ip>
+        </node>
+    </nodes>
+    <clients>
+        <client>
+            <ctrl_ip>10.2.45.201</ctrl_ip>
+        </client>
+        <client>
+            <ctrl_ip>10.2.45.207</ctrl_ip>
+        </client>
+    </clients>
+    <windows_hosts>
+        <windows_host>
+            <ip>10.2.41.229</ip>
+            <port>8010</port>
+        </windows_host>
+    </windows_hosts>
+    <svips>
+        <svip>
+            <ip>20.1.1.111</ip>
+        </svip>
+         <svip>
+            <ip>20.1.1.112</ip>
+        </svip>
+    </svips>
+    <vips>
+        <vip>
+            <ip>20.1.1.115-118</ip>
+        </vip>
+        <vip>
+            <ip>20.1.1.119-122</ip>
+        </vip>
+    </vips>
+    <esxi>
+        <esxi_ip>
+            <ip>10.2.45.21</ip>
+        </esxi_ip>
+        <esxi_un>
+            <name>root</name>
+        </esxi_un>
+        <esxi_pw>
+            <pw>parastor;123</pw>
+        </esxi_pw>
+    </esxi>
+    <machinetype>vir</machinetype>
+    <replica>3</replica>
+    <stripwidth>3</stripwidth>
+    <!-- 卷 -->
+    <volumes>
+        <volume>volume1</volume>
+    </volumes>
+
+    <!-- 文件系统目录 -->
+    <mount_paths>
+        <mount_path>/mnt/volume1</mount_path>
+    </mount_paths>
+
+    <!-- 快照测试路径 -->
+    <snap_test_paths>
+        <snap_test_path>/mnt/volume1/snap</snap_test_path>
+    </snap_test_paths>
+
+    <!-- 配额测试路径 -->
+    <quota_test_paths>
+        <quota_test_path>/mnt/volume1/quota_test_dir</quota_test_path>
+    </quota_test_paths>
+
+    <!-- NAS测试路径 -->
+    <nas_test_paths>
+        <nas_test_path>/mnt/volume</nas_test_path>
+    </nas_test_paths>
+
+    <!-- S3 访问分区对外IP -->
+    <S3_access_ips>
+        <S3_access_ip>20.2.40.103</S3_access_ip>
+        <S3_access_ip>20.2.40.104</S3_access_ip>
+        <S3_access_ip>20.2.40.105</S3_access_ip>
+    </S3_access_ips>
+
+    <!-- 缺陷脚本测试路径 -->
+    <defect_test_path>/mnt/parastor/defect_case</defect_test_path>
+
+    <!-- 重要!!!执行用例列表文件 -->
+    <caselist>/home/StorTest/test_cases/cases/case_list/lun_reliable_list</caselist>
+
+    <!-- 脚本日志存放路径 -->
+    <test_log_path>/home/StorTest/test_cases/log/case_log</test_log_path>
+
+    <!-- 脚本执行结果存放路径 -->
+    <test_result_path>/home/StorTest/test_cases/log/case_result</test_result_path>
+
+    <!-- 工具路径 -->
+    <tools_path>/home/StorTest/test_cases/tools</tools_path>
+
+    <!-- vdbench工具的路径 -->
+    <vdbench_path>/home/vdbench</vdbench_path>
+    <err_log_ip>10.2.43.227</err_log_ip>
+    <err_log_path>/mnt/bugs/liuhe/</err_log_path>
+
+    <!-- 副本一致性检查开关:on/off -->
+    <uniform>off</uniform>
+</testconfig>

@@ -1,0 +1,117 @@
+# -*- coding:utf-8 _*-
+"""
+@author: wangxiang
+@time: 2018/10/12
+"""
+"""
+测试内容:无LUN映射时更新VIP地址段
+
+步骤:
+1、创建节点池
+2、创建存储池
+3、创建访问区
+4、创建SVIP，填写zone id，svip name，IP地址，掩码，网关，网卡名称，提交后可成功创建
+5、创建VIP，填写 SVIP id，域名，IP地址，协议类型，配置方法，负载均衡类型并启动iSCSI
+6、修改vip地址池的VIP地址段，使和步骤5中的地址不同
+7、创建LUN和映射，使LUN能分配到修改的VIP上；
+8、主机端使用SVIP登录修改的VIP并扫描对应的LUN
+
+检查项:
+1、节点池创建成功
+2、存储池创建成功
+3、访问区创建成功
+4、成功创建SVIP
+5、创建VIP成功
+6、VIP地址段修改成功
+7、创建LUN成功，并且成功分配到修改的VIP
+8、主机端使用修改VIP登录成功，且扫描到对应LUN
+"""
+import os, sys
+import re
+import time
+import utils_path
+import Lun_managerTest
+import common
+import log
+import error
+import get_config
+import login
+import error
+import decorator_func
+from get_config import config_parser as cp
+import env_manage_lun_manage
+
+"""初始化日志和全局变量"""
+conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+error.rel_check_before_run(file_name, jnl_rep=3, free_jnl_num=0, node_num=3)
+
+log.info("---------------全局初始化操作-----------------")
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+node_ip1 = env_manage_lun_manage.deploy_ips[0]
+node_ip2 = env_manage_lun_manage.deploy_ips[1]
+client_ip1 = env_manage_lun_manage.client_ips[0]
+client_ip2 = env_manage_lun_manage.client_ips[1]
+esxi_ip = env_manage_lun_manage.Esxi_ips
+osan = Lun_managerTest.oSan()
+
+
+def case():
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    node_ids = ",".join('%s' % id for id in node_ids_list)
+    node_pool_id = \
+        env_manage_lun_manage.osan.get_option(s_ip=node_ip1, command="get_node_pools", indexname="node_pools",
+                                              argv="id")[-1]
+    osan.startup(node_ip1)
+    storage_pool_id = env_manage_lun_manage.osan.create_storage_pool(s_ip=node_ip1, node_pool_ids=node_pool_id,
+                                                                     name='storage_pool1', )
+    az_id = osan.create_access_zone(s_ip=deploy_ips[0], node_id=node_ids, name='accesszonetest')
+    sub_id = env_manage_lun_manage.osan.create_subnet(s_ip=node_ip1, access_zone_id=az_id, name='subnet1',
+                                                      sv_ip=cp("create_subnet", "sv_ip"),
+                                                      mask=cp("create_subnet", "mask"),
+                                                      gate_way=cp("create_subnet", "gate_way"),
+                                                      network_interface=cp("create_subnet", "network_interface"),
+                                                      vv_ip=cp('create_subnet', 'vv_ip'))
+    svip = osan.get_option_single(s_ip=node_ip1,
+                                  command='get_subnets', ids="ids",
+                                  indexname="subnets",
+                                  argv2="svip",
+                                  argv1=sub_id)
+    vip_id = env_manage_lun_manage.osan.add_vip_address_pool(s_ip=node_ip1, subnet_id=sub_id,
+                                                             domain_name="sugon.com",
+                                                             vip=cp("add_vip_address_pool", "vips"))
+    new_vip=osan.check_ping_ip(svip)
+    osan.update_update_vip_address_pool(
+        env_manage_lun_manage.osan.update_update_vip_address_pool(id=vip_id, s_ip=node_ip1,
+                                                                  vip_addresses="{}".format(new_vip)))
+    hg_id = env_manage_lun_manage.osan.create_host_group(s_ip=node_ip1, hg_name='myhostgroup1')
+
+    h_id = env_manage_lun_manage.osan.add_host(s_ip=node_ip1, h_name='host1', hg_id=hg_id)
+    ini_id = env_manage_lun_manage.osan.add_initiator(s_ip=node_ip1, h_id=h_id, iqn=cp("add_initiator", "iqn"),
+                                                      alias=cp("add_initiator", "alias"))
+    global lun_id
+    for i in range(3):
+        lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes='1073741824', lun_type="THIN",
+                                                       lun_name='LUN{}'.format(i),
+                                                       stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+
+    lun_ids = env_manage_lun_manage.osan.get_lun(s_ip=node_ip1)
+    for lun_id in lun_ids:
+        lun_map_id = env_manage_lun_manage.osan.map_lun(s_ip=node_ip1, lun_ids=lun_id, hg_id=hg_id)
+
+    login.login()
+    msg = env_manage_lun_manage.osan.ls_scsi_dev(client_ip=client_ip1)
+    env_manage_lun_manage.assert_ins.assertEqual(len(msg), 3, 'xstor device is  not found!')
+
+
+def main():
+    env_manage_lun_manage.revert_env()
+    env_manage_lun_manage.clean_for_storage_pool()
+    case()  # 用例步骤
+    common.ckeck_system()  # 检查系统状态
+
+
+if __name__ == '__main__':
+    main()

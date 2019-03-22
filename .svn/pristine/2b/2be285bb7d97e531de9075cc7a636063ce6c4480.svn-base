@@ -1,0 +1,159 @@
+# -*-coding:utf-8 -*
+from multiprocessing import Process
+import os
+import time
+
+import utils_path
+import common
+import snap_common
+import log
+import prepare_clean
+import make_fault
+import tool_use
+
+####################################################################################
+#
+# Author: liyao
+# date 2018-04-20
+# @summary：
+#    创建目录快照，一个客户端修改文件的过程中，断掉另一个客户端的数据网，恢复数据网后，观察快照数据
+# @steps:
+#    1、部署3节点集群，配比4 2 1，部署三个客户端；
+#    2、客户端1在目录/mnt/parastor/snap/下执行vdbench创建文件；
+#    3、对目录/mnt/parastor/snap/创建快照；
+#    4、断开客户端2的数据网，客户端1在目录/mnt/parastor/snap/下执行vdbench修改文件；
+#    5、修改完成后，恢复客户端2的数据网，客户端2在目录/mnt/parastor/.snapshot/下执行vdbench对数据进行校验；
+#    6、删除快照；
+#    7、检查是否有快照路径入口；
+#
+# @changelog：
+####################################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                  # 本脚本名字
+SNAP_TRUE_PATH = os.path.join(snap_common.SNAP_PATH, FILE_NAME)              # /mnt/liyao/snap/snap_13_1_3_12
+CREATE_SNAP_PATH = os.path.join(snap_common.SNAP_PATH_BASENAME, FILE_NAME)   # /snap/snap_13_1_3_12
+
+
+def vdbench_run(anchor_path, node1_ip, run_create=False, run_write=False, run_check=False):
+    obj_vdbench = tool_use.Vdbenchrun()
+    if run_create is True:
+        rc = obj_vdbench.run_create(anchor_path, '/tmp', node1_ip)
+        if rc != 0:
+            log.error('rc = %d' % rc)
+            raise Exception("vdbench create failed!!!!!!")
+    if run_write is True:
+        rc = obj_vdbench.run_write(anchor_path, node1_ip)
+        if rc != 0:
+            raise Exception("vdbench write failed!!!!!!")
+    if run_check is True:
+        rc = obj_vdbench.run_check(anchor_path, '/tmp', node1_ip)
+        if rc != 0:
+            raise Exception("vdbench check failed!!!!!!")
+
+
+def grab_client_global(client_ip):
+    '''获取私有客户端数据网'''
+    node_obj = common.Node()
+    sys_node_id_lst = node_obj.get_nodes_id()
+    eth_list, data_ip_list = node_obj.get_node_eth(sys_node_id_lst[0])
+    cmd = 'ssh %s ip addr | grep global | grep inet' % client_ip
+    rc, stdout = common.run_command(client_ip, cmd)
+    line_lst = stdout.splitlines()
+
+    data_ips_part = []
+    '''获取集群节点数据网IP的前两部分'''
+    for ip in data_ip_list:
+        ip_part_dist1 = ip.split('.')[0]
+        ip_part_dist2 = ip.split('.')[1]
+        ip_part = [ip_part_dist1, ip_part_dist2]
+        ip_specific = '.'.join(ip_part)
+        data_ips_part.append(ip_specific)
+
+    eth_name_lst = []
+    for line in line_lst:
+        external_client_ip = line.split()[1].split('/')[0]
+        eth_name = line.split()[-1]
+        ip_part_dist1 = external_client_ip.split('.')[0]
+        ip_part_dist2 = external_client_ip.split('.')[1]
+        ip_part = [ip_part_dist1, ip_part_dist2]
+        client_ip_part = '.'.join(ip_part)
+        if client_ip_part in data_ips_part:
+            eth_name_lst.append(eth_name)
+    return eth_name_lst
+
+
+def case():
+    '''2> 运行00vdbench脚本'''
+    vdbench_run(SNAP_TRUE_PATH, snap_common.CLIENT_IP_1, run_create=True)
+
+    cmd1 = 'scp -r /tmp/*fsd* root@%s:/tmp' % snap_common.CLIENT_IP_2
+    # cmd2 = 'scp -r /tmp/vdb_control.file root@%s:/tmp' % snap_common.CLIENT_IP_3
+    common.run_command(snap_common.CLIENT_IP_1, cmd1)
+    # common.run_command(snap_common.CLIENT_IP_1, cmd2)
+
+    '''3> 创建快照'''
+    snap_name = FILE_NAME + '_snapshot1'
+    path = snap_common.VOLUME_NAME + ':/' + CREATE_SNAP_PATH
+    rc, stdout = snap_common.create_snapshot(snap_name, path)
+    if 0 != rc:
+        log.error('create_snapshot %s failed!!!' % snap_name)
+        raise Exception('create_snapshot %s failed!!!' % snap_name)
+
+    '''4> 断开客户端2的数据网，客户端1执行vdbench修改文件'''
+    eth_name_list = grab_client_global(snap_common.CLIENT_IP_2)
+    p1 = Process(target=vdbench_run, args=(SNAP_TRUE_PATH, snap_common.CLIENT_IP_1), kwargs={'run_write': True})
+    p2 = Process(target=make_fault.down_eth, args=(snap_common.CLIENT_IP_2, eth_name_list,))
+
+    p1.start()
+    time.sleep(15)
+    p2.start()
+
+    p1.join()
+    p2.join()
+
+    if p1.exitcode != 0:
+        raise Exception("vdbench is failed!!!!!!")
+
+    '''5> 恢复客户端2的数据网，客户端2对数据进行校验'''
+
+    '''恢复网络'''
+    make_fault.up_eth(snap_common.CLIENT_IP_2, eth_name_list)
+
+    '''数据校验'''
+    snap_path = os.path.join(snap_common.SNAPSHOT_PAHT, snap_name)
+    vdbench_run(snap_path, snap_common.CLIENT_IP_2, run_check=True)
+
+    '''检查数据是否完全修复'''
+    log.info('waiting for 120s')
+    time.sleep(120)
+    count = 0
+    while True:
+        count += 1
+        log.info("the %d times check badjobnr" % count)
+        log.info("wait 60 seconds")
+        time.sleep(60)
+        if common.check_badjobnr():
+            break
+
+    '''6> 删除快照'''
+    rc, stdout = snap_common.delete_snapshot_by_name(FILE_NAME)
+    if 0 != rc:
+        log.error('%s delete snapshot failed!!!' % (FILE_NAME))
+        raise Exception('%s delete snapshot failed!!!' % (FILE_NAME))
+
+    time.sleep(15)
+
+    '''7>3个客户端检查快照路径入口是否存在'''
+    snap_common.check_snap_entry(snap_path)
+    return
+
+
+def main():
+    prepare_clean.snap_test_prepare(FILE_NAME)
+    case()
+    prepare_clean.snap_test_clean(FILE_NAME, fault=True)
+    log.info('%s succeed!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

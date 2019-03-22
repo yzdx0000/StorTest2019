@@ -1,0 +1,32 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于设置桶容量###########
+#需要执行set_bucket_quota_exc，参数包括：oOss节点ip，bucket名称，certificateid和quota
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+#定义“获取设置桶配额命令”函数，四个参数依次表示：节点IP、桶名称、所有者认证、配额 
+def set_bucket_quota_cmd(ip,bucket_name,certificate_id,quota):
+    cmd='curl -i http://'+str(ip)+':20480/'+str(bucket_name)+'?quota -XPUT -H '+' \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\" -d \'<?xml version=\"1.0\" encoding=\"UTF-8\"?><Quotaxmlns=\"http://pos.com/doc/2006-03-01\"><StorageQuota>'+str(quota)+'</StorageQuota></Quota>\''  #执创设置桶容量命令本身
+    return cmd
+
+#定义设置桶配额函数，四个参数依次表示：节点IP、桶名称、所有者认证、配额
+def set_bucket_quota_exc(ip,bucket_name,certificate_id,quota):
+    cmd=set_bucket_quota_cmd(ip,bucket_name,certificate_id,quota)   #获取设置桶配额命令
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    set_bucket_quota_exc(ds_ip,bucket_name,certificate_id,quota)
+    set_bucket_quota_exc(all_argvs['oOss_ip'],all_argvs['create_bucket_name'],all_argvs['certificate_id'],2000)   
+

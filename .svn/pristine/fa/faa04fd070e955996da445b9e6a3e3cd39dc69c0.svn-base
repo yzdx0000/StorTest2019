@@ -1,0 +1,31 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于获取所有账户信息###########
+#需要执行list_accounts_exc，参数包括：oOms节点ip
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+dir="/home/parastor/bin/sysctl/parastor_pos"  #管理节点执行命令路径
+def list_accounts_cmd(ip):
+    cmd='/home/parastor/bin/sysctl/parastor_pos'+' listaccounts'  #执行获取所有账户信息的命令
+    cmd='ssh '+str(ip)+' -C '+"'"+cmd+"'"   #到管理节点去执行获取所有账户信息的命令
+    return cmd
+
+def list_accounts_exc(ip):
+    cmd=list_accounts_cmd(ip)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+    list_accounts_exc(all_argvs['master_mgr_ip'])    
+

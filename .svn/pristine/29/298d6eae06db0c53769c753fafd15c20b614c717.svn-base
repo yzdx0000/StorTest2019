@@ -1,0 +1,32 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于下载对象###########
+#需要执行download_object_exc，参数包括：oOss节点ip，bucket名称，object名称，certificateid，下载位置和名称（默认为/tmp/test/obj_file，可以修改）
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands   #调用子进程执行shell命令
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+#定义获取下载对象命令的函数，第一个参数是对象所在数据节点的ip，第二个参数是对象所在的桶名称，第三个参数是对象名称，第四个参数是所有者的证书id，第五个参数是下载对象的目标位置，有默认值，可修改
+def download_object_cmd(ip,bucket_name,object_name,certificate_id,file_pwd='/tmp/test/obj_file'):
+    cmd='curl -s http://'+str(ip)+':20480/'+str(bucket_name)+'/'+str(object_name)+' -o '+str(file_pwd)+' -H \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\"'   #执行下载对象命令本身
+    return cmd
+
+#定义获取下载对象命令的函数，第一个参数是对象所在数据节点的ip，第二个参数是对象所在的桶名称，第三个参数是对象名称，第四个参数是所>有者的证书id，第五个参数是下载对象的目标位置，有默认值，可修改
+def download_object_exc(ip,bucket_name,object_name,certificate_id,file_pwd='/tmp/test/obj_file'):
+    cmd=download_object_cmd(ip,bucket_name,object_name,certificate_id,file_pwd)  
+    #第五个参数缺省，表示使用默认值'/tmp/test/obj_file'，如需更改，可添加第五个参数
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    download_object_exc(ds_ip,bucket_name,object_name,certificate_id,file_pwd)
+    download_object_exc(all_argvs['oossip'],'buc_testtesta','object_testtesta','00003PORB339O85S00003PORB2WBN58X',str(all_argvs['download_object_path'])+'obj1')

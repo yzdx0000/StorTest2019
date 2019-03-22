@@ -1,0 +1,90 @@
+#! /usr/bin/python
+# -*- coding:utf-8 -*- 
+
+import sys,os
+import commands
+import json
+import time
+import ConfigParser
+from multiprocessing import Process
+
+current_pyth = os.getcwd()
+pwd = os.path.dirname(current_pyth)
+sys.path.append(pwd+"/S3Lib")
+
+import _delete_bucket_http_wjl
+import _log_module_wjl
+import AuthSignature
+
+conf=ConfigParser.ConfigParser()
+with open('../conf/S3.conf') as confconf:
+        conf.readfp(confconf)
+        mgr_ip = conf.get('public','master_mgr_ip')
+	ostor_ip = conf.get('public','oossip')
+confconf.close()
+
+process={}
+
+#获取sig函数
+def create_sig(sk,bucketname,string):
+        sig = AuthSignature.mk_sig(sk,string)
+        sig = AuthSignature.mk_sig_code(sig)
+        return sig
+#算法
+def worker(buc_num,process_num):
+        global process
+        stage=int(buc_num)/int(process_num)#总任务数等分给每一个进程
+        n=0
+        for i in range(stage):
+                print "***************分层打印桶数量***********"
+                for ii in range(n,n+int(process_num)):
+#                        process["t"+str(ii)] = Process(target=bucket_del, args=(ostor_ip,acc_name+str(i)+"_"+bucketname,ak["ak"+str(i)],sk["sk"+str(i)],int(buc_num),))
+                        print ii
+                n=n+int(process_num)
+        print "************桶数量***********"
+        for j in range(int(buc_num)):
+                print j
+
+#多账户并发删除桶函数
+def mul_procs_del_bukt(ostor_ip,ak,sk,bucketname,buc_num,process_num):
+        global process
+	n=0
+        for i in range(process_num):
+	        process["t"+str(i)] = Process(target=bucket_del, args=(ostor_ip,bucketname,ak,sk,n,process_num,))
+		n=n+process_num
+        for j in range(process_num):
+                process["t"+str(j)].start()
+        for g in range(process_num):
+                process["t"+str(g)].join()
+
+#删除桶函数
+def bucket_del(ip,bucketname,AK,SK,start_num,process_num):    #输入参数为:"ostor_ip","桶名"，"证书id"
+	for i in range(start_num,start_num+int(process_num)):
+               	string = "DELETE" + "\n" + "" + "\n" + "" + "\n" + "" + "\n" + "" + "/"+bucketname+str(i)
+               	cmd = bucket_del_cmd(ip,bucketname+str(i),AK,SK,string)
+               	(return_code,output)=commands.getstatusoutput(cmd)
+
+#删除桶命令生成函数
+def bucket_del_cmd(ip,bucketname,AK,SK,string):
+        sig = create_sig(SK,bucketname,string)
+        part1 = "curl -i http://"       #拼串片段，无需关注。
+        part2 = ":20480/"                                                               #拼串片段，无需关注。
+        part3 = " -XDELETE -H \"Authorization: AWS "               #拼串片段，无需关注。
+        part4 = ":"
+        cmd = ''.join((part1,ip,part2,bucketname,part3,AK,part4,sig,"\""))#生成创建桶的指令
+        return cmd
+
+
+if __name__ == '__main__':
+	ak="00003PIA9941VSY900003PIA98W07976"
+	sk="ce8d7b9a5fc68f47e34a98095480be3863f34fe3"
+	stime=_log_module_wjl.get_current_time()
+	print "testcase start time:%s"%stime
+	print ostor_ip,mgr_ip
+	buc_num=10000
+	process_num=100
+
+	mul_procs_del_bukt(ostor_ip,ak,sk,"ubuck",buc_num,process_num)
+#	worker(100,10)
+	etime=_log_module_wjl.get_current_time()
+	print "testcase end time:%s"%etime

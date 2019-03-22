@@ -1,0 +1,15 @@
+# -*- coding: utf-8 -*
+#!/usr/bin/env python
+import getconfpath
+import ConfigParser
+"该函数用来读取配置文件中的参数，需要3个输入：配置文件名称、section的名字、参数的名字"
+def readconf(confname,sectionname,argvname):
+    confpath=getconfpath.getconfpath(confname)
+    conf=ConfigParser.ConfigParser()
+    with open(confpath) as confconf:
+        conf.readfp(confconf)
+	getconfargv=conf.get(sectionname,argvname)
+        return getconfargv
+if __name__=="__main__":
+    confargvmain=readconf('policy.conf','backup1','rulename')
+    print confargvmain

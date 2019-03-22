@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <!--预读功能在Auto_install中的开关，on为打开，off为关闭-->
+    <read_ahead>on</read_ahead>
+</testconfig>

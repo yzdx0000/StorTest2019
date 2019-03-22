@@ -1,0 +1,13 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   235    0   235    0     0  56247      0 --:--:-- --:--:-- --:--:-- 58750
+HTTP/1.1 200 OK
+Date: Tue, 24 Oct 2017 06:10:58 GMT
+Connection: keep-alive
+
+<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://pos.com/doc/2006-03-01">
+<Bucket>bucketname</Bucket>
+<Key>myobject102410</Key>
+<UploadId>28530394423156235</UploadId>
+</InitiateMultipartUploadResult>

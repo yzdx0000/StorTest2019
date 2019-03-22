@@ -1,0 +1,108 @@
+# -*- coding:utf-8 -*-
+
+##################################################
+# author 姜晓光
+# date 2018-08-01
+# @summary：
+#   类中实现功能函数，比如：挂载，去挂载，查询
+# @steps:
+#   1、
+# @changelog：
+##################################################
+
+import utils_path_win
+import common
+import os
+
+
+class Smb():
+    def smb_mount(self, disk_symbol, mount_path, password, user):
+        """smb挂载
+        :Author: jiangxiaoguang
+        :Date: 2018-08-06
+        :param disk_symbol: 盘符，类似:'x:'
+        :param mount_path: 挂载路径
+        :param password: 用户登录密码
+        :param user: 用户登录名称
+        :return: retcode:命令返回码， output:命令执行结果
+        """
+        print "\t[ smb_mount ]"
+
+        cmd = 'net use %s %s %s /user:%s' % (disk_symbol, mount_path, password, user)
+        print 'cmd = %s' % cmd
+        retcode, output = common.run_command_shot_time(cmd)
+
+        return retcode, output
+
+    def smb_umount(self, disk_symbol):
+        """smb去挂载
+        :param disk_symbol: 盘符，类似:'x:'
+        :return: retcode:命令返回码， output:命令执行结果
+        """
+        print "\t[ smb_umount ]"
+
+        cmd = 'net use %s /del /y' % disk_symbol
+        print 'cmd = %s' % cmd
+        retcode, output = common.run_command_shot_time(cmd)
+        print output
+
+        return retcode, output
+
+    def net_use(self):
+        """列出本机网络连接
+        :return: retcode:命令返回码， output:命令执行结果
+        """
+        print "\t[ net_use ]"
+
+        cmd = 'net use'
+        print 'cmd = %s' % cmd
+        retcode, output = common.run_command_shot_time(cmd)
+        print output
+
+        return retcode, output
+
+    def create_file(self, disk_symbol, filename):
+        """通过smb挂载写入数据
+        :param disk_symbol: 盘符，类似:'x:'
+        :param filename: 写入文件的名称
+        :return:
+        """
+        retval = os.getcwd()
+        print 'retval = ', retval
+
+        os.chdir('E:\\jiangxg')
+        retval = os.getcwd()
+        print 'retval = ', retval
+
+        path = 'E:\\jiangxg\\dir'
+        print 'path = ', path
+
+        if 'dir' not in os.listdir('.'):
+            print '##########'
+            os.mkdir(path)
+
+        filename1 = 'E:\\jiangxg\\filename1'
+        with open(filename1, 'w') as f:
+            pass
+
+
+        return
+
+
+class Ftp():
+    def test2_1(self):
+
+        return
+
+    def test2_2(self):
+
+        return
+
+    def test2_3(self):
+
+        return
+
+
+if __name__ == '__main__':
+    a = Smb()
+    a.smb_umount('X:')

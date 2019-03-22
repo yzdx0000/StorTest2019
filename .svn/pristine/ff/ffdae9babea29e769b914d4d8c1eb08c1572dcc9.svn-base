@@ -1,0 +1,144 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#本脚本使用前提，需确保待删除的account有至少一个certificate id
+#本脚本用于删除指定账户下的所有内容，包括object，bucket，certificate以及账户本身
+#需要执行del_all_of_the_account，参数包括：oOms节点ip，account名称，oOss节点ip，记录bucket信息的xml文件名称，记录每个bucket下object信息的xml文件名称
+
+import time
+import commands
+import _create_logfile_zh   #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+import _list_objects_zh,_list_buckets_zh,_list_certificates_zh,_list_accounts_zh,_get_account_zh,_delete_object_zh,_delete_bucket_zh,_del_certificate_zh,_del_account_zh
+import _get_information_zh
+
+def del_all_of_the_account(mgr_ip,account_name,oOss_ip,xml_file_buc,xml_file_obj,logfile='../S3output/logfile'):
+    ret_get_acc_id=_get_information_zh.get_account_id_from_accountname(mgr_ip ,account_name)
+    if ret_get_acc_id == -1:
+        cmd="get account id failed, please check!!!"
+        print cmd
+        _create_logfile_zh.add_content(cmd,logfile)
+        #Result.result(testcase,'-1')
+        exit (0)
+    else :
+        acc_id=ret_get_acc_id   
+    ret_get_cer_id=_get_information_zh.get_cer_id_from_account(mgr_ip,acc_id)
+    if ret_get_cer_id == -1:
+        cmd="get certificate id failed, please check!!!"
+        print cmd
+        _create_logfile_zh.add_content(cmd,logfile)
+        #Result.result(testcase,'-1')
+        exit (0)
+    else:
+        cer_id=ret_get_cer_id
+    #获取账户下bucket的信息
+    (cmd_list_buc,return_code,return_content) = _list_buckets_zh.list_buckets_exc(oOss_ip,cer_id)
+    _create_logfile_zh.create_logfile(cmd_list_buc,return_code,return_content,logfile)
+
+    cmd="list buckets"
+    issuc=_get_information_zh.if_succ(return_code,cmd)
+    if issuc == -1:
+        #Result.result(testcase,'-1')
+        exit(0)  #退出程序
+
+    is_suc=_get_information_zh.judge_http_res(return_content)
+#    print "is_suc=%s"%is_suc
+    if is_suc != '200':
+        print "list buckets failed."
+        #Result.result(testcase,'-1')
+        exit(0)  #退出程序
+
+    xml_file_buc = xml_file_buc + "_%s" % account_name
+    _get_information_zh.write_to_xml(return_content,xml_file_buc)
+    xml_file_buc_new=xml_file_buc+'_new'
+    _get_information_zh.get_xml_content(xml_file_buc,xml_file_buc_new)
+    bucket_list = _get_information_zh.analyze_all_xml(xml_file_buc,'Name')
+    #获取每一个bucket下object的信息
+    for bucket_name in bucket_list:
+        (cmd_list_obj,return_code_obj,return_content_obj) = _list_objects_zh.list_objects_exc(oOss_ip,bucket_name,cer_id)
+        _create_logfile_zh.create_logfile(cmd_list_obj,return_code_obj,return_content_obj,logfile)
+ 
+        cmd="list objects"
+        issuc=_get_information_zh.if_succ(return_code_obj,cmd)
+        if issuc == -1:
+            #Result.result(testcase,'-1')
+            exit(0)  #退出程序
+
+        is_suc=_get_information_zh.judge_http_res(return_content_obj)
+#        print "is_suc=%s"%is_suc
+        if is_suc != '200':
+            print "list objects failed."
+            #Result.result(testcase,'-1')
+            exit(0)  #退出程序
+
+        _get_information_zh.write_to_xml(return_content_obj,xml_file_obj+'_%s'%bucket_name)
+        _get_information_zh.get_xml_content(xml_file_obj+'_%s'%bucket_name,xml_file_obj+'_new')
+        object_list = _get_information_zh.analyze_all_xml(xml_file_obj+'_%s'%bucket_name,'Key')
+
+        for object_name in object_list:
+            #删除每个bucket下的所有object
+            (cmd_del_obj,code_del_obj,content_del_obj)=_delete_object_zh.delete_object_exc(oOss_ip,bucket_name,object_name,cer_id)
+            _create_logfile_zh.create_logfile(cmd_del_obj,code_del_obj,content_del_obj,logfile)
+
+            cmd="delete objects"
+            issuc=_get_information_zh.if_succ(return_code,cmd)
+            if issuc == -1:
+                #Result.result(testcase,'-1')
+                exit(0)  #退出程序
+
+            is_suc=_get_information_zh.judge_http_res(content_del_obj)
+            print "is_suc=%s"%is_suc
+            if is_suc != '200':
+                print "delete objects failed."
+                #Result.result(testcase,'-1')
+                exit(0)  #退出程序
+
+        #删除每个bucket
+        (cmd_del_buc,code_del_buc,content_del_buc)=_delete_bucket_zh.delete_bucket_exc(oOss_ip,bucket_name,cer_id)
+        _create_logfile_zh.create_logfile(cmd_del_buc,code_del_buc,content_del_buc,logfile)
+
+        cmd="delete buckets"
+        issuc=_get_information_zh.if_succ(return_code,cmd)
+        if issuc == -1:
+            #Result.result(testcase,'-1')
+            exit(0)  #退出程序
+   
+        is_suc=_get_information_zh.judge_http_res(content_del_buc)
+        print "is_suc=%s"%is_suc
+        if is_suc != '200':
+            print "delete buckets failed."
+            #Result.result(testcase,'-1')
+            exit(0)  #退出程序
+
+    #获取account下的认证并删除
+    cer_id_list=[]
+    ret_get_all_cer_id=_get_information_zh.get_all_cer_id_from_account(mgr_ip, acc_id)
+    if ret_get_all_cer_id == -1:
+        cmd="got certificate id failed, please check!!!"
+        print cmd
+        _create_logfile_zh.add_content(cmd,logfile)
+        exit (0)
+    else:
+        cer_id_list=ret_get_all_cer_id
+  
+    for j in range(len(cer_id_list)):
+        (cmd_del_cer,code_del_cer,content_del_cer)=_del_certificate_zh.del_certificate_exc(mgr_ip,cer_id_list[j])
+        _create_logfile_zh.create_logfile(cmd_del_cer,code_del_cer,content_del_cer,logfile)
+        cmd="del certificate"
+        issuc=_get_information_zh.if_succ(code_del_cer,cmd)
+        if issuc == -1:
+            #Result.result(testcase,'-1')
+            exit(0)  #退出程序
+    (cmd_del_acc,code_del_acc,content_del_acc)=_del_account_zh.del_account_exc(mgr_ip,acc_id)
+    _create_logfile_zh.create_logfile(cmd_del_acc,code_del_acc,content_del_acc,logfile)
+    cmd="del account"
+    issuc=_get_information_zh.if_succ(code_del_acc,cmd)
+    if issuc == -1:
+        #Result.result(testcase,'-1')
+        exit(0)  #退出程序
+
+if __name__=="__main__":
+#    for i in range(3,50):
+#        del_all_of_the_account('20.10.10.33', 'acc_tk'+str(i), '20.10.10.35', '../S3output/buc','../S3output/obj')
+#        del_all_of_the_account('20.10.10.33', 'acc_tj'+str(i), '20.10.10.36', '../S3output/buc','../S3output/obj')
+    del_all_of_the_account('20.10.10.24', 'ac_name10', '20.10.10.26', '../S3output/buc','../S3output/obj')

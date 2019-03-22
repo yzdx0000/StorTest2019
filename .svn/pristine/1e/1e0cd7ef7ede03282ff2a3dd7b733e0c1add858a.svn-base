@@ -1,0 +1,189 @@
+# -*- coding:utf-8 _*-
+# Author:wangxiang
+# Date  :2018-10-24
+"""
+测试内容:逻辑卷写满前扩容
+
+步骤:
+1）在访问区配置中，每个节点取1块磁盘创建副本模式存储池，创建存储池pool1；
+2）创建逻辑卷属性默认，选择pool1存储池，创建逻辑卷LUN1，设置容量为10GB；
+3）将逻辑卷映射至主机
+4）修改逻辑卷属性，将容量修改为100GB，提交，主机重新扫描逻辑卷容量有变化，并能写入100GB数据
+
+检查项:
+1）存储池创建成功
+2）逻辑卷创建成功
+3）修改成功，100GB数据写入成功
+"""
+import os, sys
+import commands
+import time
+import utils_path
+import Lun_managerTest
+import env_manage_repair_test
+import common
+import log
+import error
+import get_config
+import login
+import error
+
+import decorator_func
+from get_config import config_parser as cp
+import env_manage_lun_manage
+
+"""初始化日志和全局变量"""
+conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+log.init(log_file_path, True)  # 初始化日志文件
+
+log.info("---------------全局初始化操作-----------------")
+node_ip1 = env_manage_lun_manage.node_ip1
+node_ip2 = env_manage_lun_manage.deploy_ips[1]
+client_ip1 = env_manage_lun_manage.client_ips[0]
+client_ip2 = env_manage_lun_manage.client_ips[1]
+esxi_ip = env_manage_lun_manage.Esxi_ips
+osan = Lun_managerTest.oSan()
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+
+
+def iscsi_login():
+    global mix_R_Align, mix_R_Align2
+    global mix_R
+    login.login()
+
+    # 修改vdbench配置文件的参数值
+    seekpct = 0  # 随机
+    rdpct1 = 0  # 读写比例(0是全写)
+    rdpct2 = 50
+    xfersize1 = cp("vdbench", "mix_xfersize1")
+    lun1 = env_manage_repair_test.Lun_osan.ls_scsi_dev(client_ip1)
+    lun2 = env_manage_repair_test.Lun_osan.ls_scsi_dev(client_ip2)
+    mix_R_Align = env_manage_repair_test.co2_osan.gen_vdb_xml(
+        max_range=None,
+        maxdata="{}M".format(vdb_maxdata),
+        thread=cp("vdbench", "threads"), lun=lun1,
+        xfersize=xfersize1, seekpct=seekpct,
+        rdpct=rdpct2)
+    mix_R = env_manage_repair_test.co2_osan.gen_vdb_xml(
+        thread=cp("vdbench", "threads"), lun=lun1, xfersize=xfersize1,
+        seekpct=seekpct,
+        rdpct=rdpct2, offset=int(cp("vdbench", "offset")))
+    mix_R_Align2 = env_manage_repair_test.co2_osan.gen_vdb_xml(
+        thread=cp("vdbench", "threads"), lun=lun1, max_range="200M",
+        xfersize=xfersize1, seekpct=seekpct,
+        rdpct=rdpct2)
+
+
+def get_iscsi_size_form_host():
+    log.info("从主机端获取逻辑卷容量")
+    lun1 = env_manage_lun_manage.osan.ls_scsi_dev(client_ip=client_ip1)[0]
+    get_lun_total = env_manage_lun_manage.break_down.get_lun_size(client_ip1, lun1)
+    log.info(get_lun_total)
+    return get_lun_total
+
+
+def case():
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    data_unuse_disks = []
+
+    for i in node_ids_list:
+        j = env_manage_lun_manage.break_down.get_assign_data_disk_id(s_ip=deploy_ips[0], node_id=i)
+        data_unuse_disks.append(j)
+    lists = [[] for a in range(3)]
+    for m in range(3):
+        new_list = []
+        for list in data_unuse_disks:
+            new_list.append(list[m])
+        lists[m].append(new_list)
+
+    log.info("集群中的所有未使用数据盘:{}".format(lists))
+    global pool_id2
+    pool_id2 = ",".join('%s' % id for id in lists[2][0])
+    for i in range(1):
+        log.info("will create storage :%s" % i)
+        pool_id = ",".join('%s' % id for id in lists[i][0])
+        cmd = (
+                "ssh root@%s '/home/parastor/cli/pscli --command=create_storage_pool --name=stor%s --type=BLOCK --node_pool_ids=1 --disk_ids=%s '" % (
+            deploy_ips[0], i, pool_id))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+
+    global lun_size1
+    global lun_id
+    node_ids_list = osan.get_nodes(deploy_ips[0])
+    node_ids = ",".join('%s' % id for id in node_ids_list)
+    az_id = osan.create_access_zone(s_ip=node_ip1, node_id=node_ids, name='accesszone1')
+    sub_id = osan.create_subnet(s_ip=node_ip1, access_zone_id=az_id, name='subnet1',
+                                sv_ip=cp("create_subnet", "sv_ip"),
+                                mask=cp("create_subnet", "mask"), vv_ip=cp("create_subnet", "vv_ip"),
+                                gate_way=cp("create_subnet", "gate_way"),
+                                network_interface=cp("create_subnet", "network_interface"))
+    vip_id = osan.add_vip_address_pool(s_ip=node_ip1, subnet_id=sub_id,
+                                       domain_name=cp("add_vip_address_pool", "domain_name"),
+                                       vip=cp("add_vip_address_pool", "vips"))
+    osan.enable_san(s_ip=node_ip1, access_zone_id=az_id)
+    env_manage_lun_manage.osan.xstor_pre_config(node_ip1, 0, 1)
+    """读取存储池的容量"""
+    global storage_pool_id
+    storage_pool_id = env_manage_lun_manage.osan.get_storage__type_id(s_ip=node_ip1, type="BLOCK")
+    storage_pool_size = int(env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1,
+                                                                         command='get_storage_pools', ids="ids",
+                                                                         indexname="storage_pools",
+                                                                         argv2="total_bytes",
+                                                                         argv1=storage_pool_id) / int(
+        cp("reserve", "replica_num")))
+    storage_pool_size_M = int(storage_pool_size / 1024 / 1024)
+
+    thick_lun_size = int(
+        (storage_pool_size - int(cp("reserve", "thin_lun_reserve"))) / float(cp("reserve", "multiple")))
+    global vdb_maxdata
+    vdb_maxdata = int((storage_pool_size - thick_lun_size) * 2 / 1024 / 1024)
+
+    hg_id = env_manage_lun_manage.osan.create_host_group(s_ip=node_ip1, hg_name='myhostgroup1')
+    h_id = env_manage_lun_manage.osan.add_host(s_ip=node_ip1, h_name='host1', hg_id=hg_id)
+    ini_id = env_manage_lun_manage.osan.add_initiator(s_ip=node_ip1, h_id=h_id, iqn=cp("add_initiator", "iqn"),
+                                                      alias=cp("add_initiator", "alias"))
+    decorator_func.judge_target(
+        env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1, command="get_initiators", indexname="initiators",
+                                                     argv2="auth_type", ids="ids", argv1=ini_id), "NONE")
+    log.info("建逻辑卷属性默认，选择pool1存储池，创建逻辑卷LUN1")
+    env_manage_lun_manage.osan.update_iscsid_conf(cli_ip=client_ip1, CHAPTYPE='None', s_ip=client_ip1)
+
+    env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes=thick_lun_size, lun_type="THICK",
+                                          lun_name='LUN_thick', stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+    lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes=storage_pool_size * 5, lun_type="THIN",
+                                                   lun_name='LUN1', stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+    env_manage_lun_manage.osan.map_lun(s_ip=node_ip1, lun_ids=lun_id, hg_id=hg_id)
+
+
+def run_vdb1_thread(arg=0):
+    log.info('Run task %s (%s)...' % (sys._getframe().f_code.co_name, os.getpid()))
+    iscsi_login()
+    env_manage_repair_test.co2_osan.run_vdb(client_ip=client_ip1, vdb_xml=mix_R_Align, output=node_ip1,
+                                            whether_change_xml="N", need_judge=1, unmap="N")
+
+
+def main():
+    env_manage_lun_manage.revert_env()
+    # error.rel_check_before_run(file_name, jnl_rep=3, free_jnl_num=0, node_num=3)
+    # env_manage_lun_manage.clean(target="storage_pool")
+    env_manage_lun_manage.init_env(target="create_node_pool", reboot_node=1)
+    case()  # 用例步骤
+    run_vdb1_thread()
+    env_manage_lun_manage.osan.expand_storage_pool(node_ip1, storage_pool_id=storage_pool_id, disk_ids=pool_id2)
+    # iscsi_login()
+    env_manage_repair_test.co2_osan.run_vdb(client_ip=client_ip1, vdb_xml=mix_R_Align, output=node_ip1,
+                                            whether_change_xml="N")
+
+    env_manage_lun_manage.clean(target="lun")#针对存储池写满；删除lun会卡主的情况作下校验
+
+    env_manage_lun_manage.init_env(reboot_node=1)  # 还原环境(还原到创建vip、enable_san)；用于lun管理用例的测试
+    decorator_func.pass_flag()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <!-- S3 访问分区对外IP -->
+    <S3_access_ips>
+        <S3_access_ip>20.2.42.71</S3_access_ip>
+        <S3_access_ip>20.2.42.72</S3_access_ip>
+        <S3_access_ip>20.2.42.73</S3_access_ip>
+    </S3_access_ips>
+
+    <cosbench_param>
+        <cosbench_path>
+            /home/StorTest/test_cases/tools/Cosbench/0.4.2.c4
+        </cosbench_path>
+        <cosbench_client_ips>
+            10.2.42.74
+            10.2.42.75
+        </cosbench_client_ips>
+        <create_file_path>
+            /home/StorTest/test_cases/tools/Cosbench/0.4.2.c4/S3xml/create_s3_xml.py
+        </create_file_path>
+        <xml_paths>
+            /home/StorTest/test_cases/tools/Cosbench/0.4.2.c4/S3xml/lichx_xml_1
+            /home/StorTest/test_cases/tools/Cosbench/0.4.2.c4/S3xml/lichx_xml_2
+        </xml_paths>
+        <init_base_time>30000</init_base_time>
+        <prepare_base_time>30000</prepare_base_time>
+        <main_base_time>30000</main_base_time>
+    </cosbench_param>
+
+    <fault_param>
+        <fault_config_path>
+            /home/StorTest/test_cases/cases/test_case/P300/S3/FaultRun_0.2/config.conf
+        </fault_config_path>
+        <fault_num>10</fault_num>
+    </fault_param>
+
+    <data_consistency_param>
+        <src_parent_dir>/tmp</src_parent_dir>
+        <dst_parent_dir>/tmp</dst_parent_dir>
+        <vdb_thread_num>50</vdb_thread_num>
+        <loop_execute_num>5</loop_execute_num>
+    </data_consistency_param>
+
+    <nas_vdbench_param>
+        <vdbflagname>vdbenchnas</vdbflagname>
+        <vdb_flag>middle</vdb_flag>
+        <anchor_path>/opt/anchor</anchor_path>
+        <journal_path>/opt/journal</journal_path>
+        <ip>10.2.40.184</ip>
+        <elapsed>60</elapsed>
+        <output_path>/opt/outputnas</output_path>
+        <operations>(read,write)</operations>
+        <format>yes</format>
+        <threads>10</threads>
+        <depth>None</depth>
+        <width>None</width>
+        <files>None</files>
+        <size>None</size>
+        <xfersize>None</xfersize>
+    </nas_vdbench_param>
+
+    <posix_vdbench_param>
+        <vdbflagname>vdbenchposix</vdbflagname>
+        <vdb_flag>big</vdb_flag>
+        <anchor_path>/opt/anchorposix</anchor_path>
+        <journal_path>/opt/journalposix</journal_path>
+        <ip>10.2.40.34</ip>
+        <elapsed>60</elapsed>
+        <output_path>/opt/outputposix</output_path>
+        <operations>(read,write)</operations>
+        <format>yes</format>
+        <threads>10</threads>
+        <depth>None</depth>
+        <width>None</width>
+        <files>None</files>
+        <size>None</size>
+        <xfersize>None</xfersize>
+    </posix_vdbench_param>
+
+
+</testconfig>

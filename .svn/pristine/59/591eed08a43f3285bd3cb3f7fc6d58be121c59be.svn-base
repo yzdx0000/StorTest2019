@@ -1,0 +1,31 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：远程查询账户证书列表模块
+#使用方法：
+#1.指定pos主机ip，作为用户输入参数。
+#2.调用"query_cer_list()"函数，指定账户id和pos主机ip。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/11
+#**********************************************#
+import os,sys
+import commands
+
+#命令生成函数
+def cer_query_cmd(opara_ip,acc_id):
+	part1 = "ssh "
+	part2 = " /home/parastor/bin/sysctl/parastor_pos listcertificates accountid="	 	#拼串片段，无需关注。
+	cmd1 = ''.join((part1,opara_ip,part2,acc_id))#生成创建list文件的指令
+	return cmd1
+
+#查询账户函数
+def query_cer_list(opara_ip,acc_id):#输入参数为:“pos主机ip和账户id”
+	cmd1 = cer_query_cmd(opara_ip,acc_id)
+	(return_code,output)=commands.getstatusoutput(cmd1)
+	num = output.count("certificateid")
+	return output,num
+
+#调试代码
+(list,num)=query_cer_list(sys.argv[1],sys.argv[2])
+print list
+print ("\033[0;33mcertificate number is: %s\033[0m"%num)

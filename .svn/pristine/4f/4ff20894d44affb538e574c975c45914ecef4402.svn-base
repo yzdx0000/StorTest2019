@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="s3-sample" description="sample benchmark for s3">
+ 
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW1KM2V0O9NZAQRMMN2EL1TO9IPQEEFKML18N2ECRFNHL95M9P;secretkey=e928415c3c9b2d8dd30d91721507cae6a3defe17;endpoint=http://20.10.10.231:20480;path_style_access=true;timeout=1800000;" />
+ 
+  <workflow>
+ 
+    <workstage name="init">
+        <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW18N2ECRFNHL95M9A2EL1TO9IPQEEFKML0JV17HZ33OMUC1GH;secretkey=e928415c3c9b2d8dd30d91721507cae6a3defe17;endpoint=http://20.10.10.231:20480;path_style_access=true;timeout=1800000;" />
+      <work type="init" workers="100" config="cprefix=zhbug937_a;containers=r(1,100)" />
+    </workstage>
+ 
+    <workstage name="prepare">
+      <work type="prepare" workers="100" config="cprefix=zhbug937_a;oprefix=apple;containers=r(1,100);objects=r(1,800);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB" />
+    </workstage>
+ 
+    <workstage name="main">
+      <work name="main1" workers="200" runtime="300">
+        <operation type="write" ratio="70" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(1,100);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(101,200);hashCheck=False" />
+        </work>
+      <work name="main2" workers="200" runtime="300">
+        <operation type="write" ratio="60" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(201,300);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="40" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(301,400);hashCheck=False" />
+        </work>
+      <work name="main3" workers="200" runtime="300">
+        <operation type="write" ratio="30" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(401,500);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="70" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(501,600);hashCheck=False" />
+        </work>
+      <work name="main4" workers="200" runtime="300">
+        <operation type="write" ratio="40" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(601,700);sizes=h(1|64|30,20|50|10,10|30|10,7000|80000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="60" config="cprefix=zhbug937_a;oprefix=apple;containers=u(1,100);objects=u(701,800);hashCheck=False" />
+      </work>
+    </workstage>
+ 
+    <workstage name="cleanup">
+      <work type="cleanup" workers="64" config="cprefix=zhbug937_a;oprefix=apple;containers=r(1,100);objects=r(1,800)" />
+    </workstage>
+ 
+    <workstage name="dispose">
+      <work type="dispose" workers="64" config="cprefix=zhbug937_a;containers=r(1,100)" />
+    </workstage>
+ 
+  </workflow>
+ 
+</workload>
+

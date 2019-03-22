@@ -1,0 +1,19 @@
+1、配置gui环境，见confluence：界面自动化selenuim相关技术
+   (可联网时：yum -y install pip，yum -y install epel-release，yum -y install python-pip，pip install selenium)
+2、更改StorTest/conf/unistor_test_config.xml配置文件
+   修改<web>标签下相关参数为自己集群参数即可
+3、不上传testlink（外网），需将配置文件中<testlink>下置为false
+   示例：<testlink>false</testlink>
+
+执行脚本(选择一个)：
+1、从部署webui开始（包含约60个用例），会自动循环跑
+/home/StorTest/test_cases/cases/test_case/P300/WEB/web_testlink_run_loop_for_three_node.py
+
+2、从卸载webui、集群，再重新部署，循环跑
+/home/StorTest/test_cases/cases/test_case/P300/WEB/web_testlink_run_loop_for_three_node_continue.py
+
+3、只部署weui、集群再到创建卷为止
+/home/StorTest/test_cases/cases/test_case/P300/WEB/web_testlink_for_three_node_1.py
+
+4、只卸载webui和集群
+/home/StorTest/test_cases/cases/test_case/P300/WEB/web_testlink_cluster_together3.py

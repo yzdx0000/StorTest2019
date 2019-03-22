@@ -1,0 +1,17 @@
+[global]
+file_path = /mnt/volume1            #测试目录
+test_path_nums = 5                  #测试目录个数
+path_size = 20                      #在测试的挂载点写入的数据量，超过该数据量则切换测试目录，单位：G
+rm_file_threads = 3                 # 删除操作进程数
+timeout = 10                        # 超时时间，超过该时间则删除文件，单位：秒
+[bigfiles]
+b_file_nums = 10                   # 每个进程写的大文件数量
+b_file_size = [10M,10,20M,10]         # 每个大文件大小，单位：M或G，格式：[文件大小，进程数,...]；不测试该项的话，请设置为0,即: b_file_size = 0
+b_frame_size = 253                  # 帧，即每次io的大小，单位: KB
+b_iorate = 25                       # 大文件码率，即每秒以b_frame_size为大小的io次数
+[little files]
+l_file_nums = 1000                 # 每个进程写的小文件数量
+l_file_size = [8k,10,16k,10]        # 每个小文件大小，单位：M或K，格式：[文件大小，进程数,...]；不测试该项的话，请设置为0,即: l_file_size = 0
+l_frame_size = 4                    # 每次io大小，单位: KB
+l_iorate = 10                       # 小文件每秒写的个数
+

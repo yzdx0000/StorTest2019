@@ -1,0 +1,356 @@
+#!/usr/bin/python
+# -*- encoding=utf8 -*-
+
+import os
+import sys
+import commands
+import time
+from optparse import OptionParser
+sys.path.append('/home/StorTest/test_cases/libs')
+
+import log
+import common
+import tool_use
+import get_config
+
+
+"""初始化日志"""
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                # 本脚本名字
+log_file_path = log.get_log_path(FILE_NAME)
+log.init(log_file_path, True)
+
+global LOOPFLAG
+global CONTINUEFLAG
+global STOPCORE
+global UPGRADEFLAG
+global FAILEDFLAG
+
+# /home/StorTest/Scripts
+scripts_path = os.path.dirname(os.path.abspath(__file__))
+# /home/StorTest
+stortest_path = os.path.dirname(scripts_path)
+# /home/StorTest/test_cases/cases/test_case
+TEST_CASE_PATH = os.path.join(stortest_path, 'test_cases', 'cases', 'test_case')
+
+runtime_len = 25
+test_file_len = 70
+case_result_len = 20
+time_str_len = 20
+
+SET_TODAY = None
+##############################################################################
+# ##name  :      check_path_exist
+# ##parameter:   path:文件路径
+# ##author:      baoruobing
+# ##date  :      2017.07.12
+# ##Description: 检查文件路径是否存在
+##############################################################################
+
+
+def check_path_exist(path):
+    rc, msg = commands.getstatusoutput("ls %s" % (path))
+    if 0 == rc:
+        return True
+    else:
+        return False
+
+
+def result_to_file(resultfile_time, test_file, abs_result_file, case_result, run_time):
+    '''
+    name  :   result_to_file
+    :param    test_file: 脚本名字
+    :param    abs_result_file: 完整的result名字
+    :param    case_result: 脚本运行的结果，Failed or Success
+    author:   baoruobing
+    :return:  是否有core, True是有core，False是没有core
+    '''
+    print ("%s %s!!!" % (test_file, case_result))
+    core_flag = False
+    runtimestr = resultfile_time.ljust(runtime_len)
+    str1_tmp = test_file.ljust(test_file_len)
+    str2_tmp = case_result.ljust(case_result_len)
+
+    m, s = divmod(run_time, 60)
+    h, m = divmod(m, 60)
+    time_str = "%dh:%dm:%ds" % (h, m, s)
+
+    '''检查是否环境是否有core'''
+    core_file_dic = common.get_corefile_info()
+    if core_file_dic:
+        print 'core info: %s' % str(core_file_dic)
+        core_flag = True
+        str3_tmp = time_str.ljust(time_str_len)
+        str4_tmp = str(core_file_dic) + '\n'
+        input_str = [runtimestr, str1_tmp, str2_tmp, str3_tmp, str4_tmp]
+    else:
+        str3_tmp = time_str + '\n'
+        input_str = [runtimestr, str1_tmp, str2_tmp, str3_tmp]
+    with open(abs_result_file, 'a') as data:
+        data.writelines(input_str)
+
+    return core_flag
+
+
+def get_package_time():
+    rc, stdout = common.get_package_time()
+    if rc != 0:
+        return '30000101'
+    else:
+        json_info = common.json_loads(stdout)
+        return json_info['result']['package_time'].split('_')[0]
+
+
+def get_today():
+    now_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
+    day_lst = now_time.split('-')
+    if SET_TODAY is None:
+        day = ''.join(day_lst[0:3])
+    else:
+        day = SET_TODAY
+    return day
+
+
+def get_centos(ip):
+    cmd = 'cat  /etc/redhat-release'
+    rc, stdout = common.run_command(ip, cmd)
+    if rc != 0:
+        raise Exception('failed')
+    str_lst = stdout.split('.')
+    return str_lst[0][-1] + '.' + str_lst[1][0]
+
+
+def check_new_pkg():
+    rc, stdout = common.get_package_time()
+    cur_pkg_time_str = ''
+    if rc == 0:
+        json_info = common.json_loads(stdout)
+        cur_pkg_time_str = json_info['result']['package_time']
+    else:
+        log.error('get_package_time failed !!!')
+        return False
+
+    today_bag = get_today()
+    package_ip = get_config.get_new_pkg_position().split(':')[0]
+    newpackage_path = get_config.get_new_pkg_position().split(':')[1]
+    ex_day_path = os.path.join(newpackage_path, today_bag)
+    cmd = 'ls %s' % ex_day_path
+    rc, stdout = common.run_command(package_ip, cmd)
+    if rc != 0:
+        return False
+
+    newpackage_path = ex_day_path
+    cur_cmp_int_lst = []
+    cur_cmp_int_lst.append(int(cur_pkg_time_str.split('_')[0]))  # 20181120
+    cur_cmp_int_lst.append(int(cur_pkg_time_str.split('_')[1]))  # 200000
+
+    pkg_match_name = 'ParaStor-3.0.0-centos7.5-feature_ofs3.0_lastdebug_*_%s_*-2-1.tar' % today_bag.strip()
+    cmd = "ls %s" % os.path.join(newpackage_path, pkg_match_name)
+    rc, stdout = common.run_command(package_ip, cmd)
+    str_lst = stdout.split('\n')[:-1]
+    ext_cmp_int_lst = [0, 0]
+    for line in str_lst:
+        line_pkg_name = line.split('/')[-1].strip()
+        if len(line_pkg_name) == (len(pkg_match_name) + 19):
+            ext_cmp_int_lst[0] = int(line_pkg_name.split('_')[-2])
+            ext_cmp_int_lst[1] = int(line_pkg_name.split('_')[-1].split('-')[0])
+            if ext_cmp_int_lst[0] > cur_cmp_int_lst[0]:
+                return True
+            elif ext_cmp_int_lst[0] == cur_cmp_int_lst[0] and ext_cmp_int_lst[1] > cur_cmp_int_lst[1]:
+                return True
+    return False
+
+
+def arg_analysis():
+    global LOOPFLAG
+    global CONTINUEFLAG
+    global STOPCORE
+    global UPGRADEFLAG
+    global FAILEDFLAG
+
+    parser = OptionParser()
+    parser.add_option("-l", "--loop",
+                      type="int",
+                      dest="loop",
+                      default=1,
+                      help="When you want to loop run the case, configure this parameter. "
+                           "default: %default, rang is 1-1000")
+
+    parser.add_option("-c", "--continue",
+                      action="store_true",
+                      dest="con",
+                      help="If you want to continue to run test when the case failed, configure this parameter")
+
+    parser.add_option("-s", "--stop",
+                      action="store_true",
+                      dest="stop_core",
+                      help="If you want to stop to run test when the core exist, configure this parameter")
+
+    parser.add_option("-u", "--upgrade",
+                      action="store_true",
+                      dest="upgrade",
+                      help="If you want to automatically upgrade when testing, configure this parameter")
+
+    parser.add_option("-F", "--failed",
+                      action="store_true",
+                      dest="failed",
+                      help="If you only want to run the failed or never executed case, configure this parameter")
+
+    options, args = parser.parse_args()
+    if options.loop < 1 or options.loop > 1000:
+        parser.error("the range of -l or --loop is 1-1000")
+    LOOPFLAG = options.loop
+
+    if options.con is True:
+        CONTINUEFLAG = True
+    else:
+        CONTINUEFLAG = False
+
+    if options.stop_core is True:
+        STOPCORE = True
+    else:
+        STOPCORE = False
+
+    if options.upgrade is True:
+        UPGRADEFLAG = True
+    else:
+        UPGRADEFLAG = False
+
+    if options.failed:
+        FAILEDFLAG = True
+    else:
+        FAILEDFLAG = False
+
+    return
+
+
+def run_tests():
+    global LOOPFLAG
+    global CONTINUEFLAG
+    global STOPCORE
+    global UPGRADEFLAG
+    global FAILEDFLAG
+
+    pkg_flag = False
+    upgrade_dict = {}
+    insert_flag = False
+    index_copy = 0
+    today = get_today()
+    upgrade_dict[today] = False
+    # 获取脚本执行结果的存放路径
+    test_result_dir = get_config.get_testresult_path()
+
+    # 创建执行结果文件
+    '''获取当前时间'''
+    now_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
+    file_name = now_time + '_test_result.txt'
+    str0 = '执行时间'.ljust(runtime_len + 4)
+    str1 = '用例'.ljust(test_file_len+2)
+    str2 = '结果'.ljust(case_result_len+2)
+    str3 = '时间'.ljust(time_str_len+2)
+    str4 = 'core\n'
+    input_str = [str0, str1, str2, str3, str4]
+    abs_result_file = os.path.join(test_result_dir, file_name)
+    with open(abs_result_file, 'w') as data:
+        data.writelines(input_str)
+
+    # 获取用例列表文件
+    case_list_file = get_config.get_caselist_file()
+    test_files = get_config.get_case_list(case_list_file)
+    # print "---- start running start.py ----"
+    # os.system("python /root/baoruobing/test/script_true/start.py")
+    core_flag = False
+    core_stop_flag = False
+    success = 0
+    failed = 0
+    skip = 0
+    for i in range(LOOPFLAG):
+        '''检查是否触发了core退出的标志'''
+        if core_stop_flag is True:
+            break
+        for test_index, mem in enumerate(test_files):
+            '''检查有core是否退出'''
+            if STOPCORE is True and core_flag is True:
+                core_stop_flag = True
+                break
+            case_list_file = mem[0]
+            num = mem[1]
+            test_file = mem[2]
+            test_file_path = TEST_CASE_PATH + '/' + test_file
+            # 检查文件是否存在
+            result = check_path_exist(test_file_path)
+            if result is False:
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print ("The %s line:%s, %s is not exist!!!" % (case_list_file, num, test_file_path))
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                continue
+
+            '''获取脚本的模块名和文件名'''
+            print "\n------------ start running %s ------------" % test_file
+            start_time = time.time()
+            print "pkg_flag is %s " % pkg_flag
+            print "upgrade_dict[today]  is %s " % upgrade_dict[today]
+            resultfile_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
+            if (pkg_flag is True) and (upgrade_dict[today] is False):
+                test_files.insert(test_index, mem)
+                index_copy = test_index
+                test_file_path = os.path.join(scripts_path, 'P300_AutoUpgrade.py')
+                status = os.system('python -u ' + test_file_path)
+                test_file = 'P300_AutoUpgrade.py'
+                upgrade_dict[today] = True
+                insert_flag = True
+            elif FAILEDFLAG:
+                status = os.system("python -u %s -F" % test_file_path)
+            else:
+                status = os.system("python -u " + test_file_path)
+            status = status >> 8
+            end_time = time.time()
+            run_time = int(end_time - start_time)
+            if 0 != status and status != 255:
+                core_flag = result_to_file(resultfile_time, test_file, abs_result_file, 'Failed', run_time)
+                '''有用例失败停止运行'''
+                print "-------- %s failed!!! --------" % test_file
+                failed += 1
+                """判断是否上传结果到testlink"""
+                if get_config.get_tl():
+                    tool_use.report_tl_case_result(test_file_path, 'f', run_time)
+                if CONTINUEFLAG is False:
+                    break
+            elif 255 == status:
+                core_flag = result_to_file(resultfile_time, test_file, abs_result_file, 'Skipped', run_time)
+                skip += 1
+            else:
+                core_flag = result_to_file(resultfile_time, test_file, abs_result_file, 'Success', run_time)
+                success += 1
+                """判断是否上传结果到testlink"""
+                if get_config.get_tl():
+                    tool_use.report_tl_case_result(test_file_path, 'p', run_time)
+            if UPGRADEFLAG is True:
+                today = get_today()
+                if today not in upgrade_dict:
+                    upgrade_dict[today] = False
+                if upgrade_dict[today] is False:
+                    pkg_flag = check_new_pkg()
+        if insert_flag:
+            test_files.pop(index_copy)
+
+    with open(abs_result_file, "a+") as f:
+        f.write("############## 概览 #####################" + "\n")
+        f.write("total:{}".format(int((success + failed + skip) / LOOPFLAG)) + "\n")
+        f.write("pass:{}".format(int((success) / LOOPFLAG)) + "\n")
+        f.write("failed:{}".format(int((failed) / LOOPFLAG)) + "\n")
+        f.write("skipped:{}".format(int((skip) / LOOPFLAG)) + "\n")
+
+    with open(abs_result_file, 'r') as f:
+        print_str = f.read()
+    print "\n******************** 执行结果 ********************\n"
+    print print_str
+
+
+if __name__ == '__main__':
+    arg_analysis()
+    run_tests()
+    print "The test is finished!!!!!!!!!!!!!!!!!!"

@@ -1,0 +1,108 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：acl设置模块
+#使用方法：调用“”函数，指定主MGR的ip、账户名、email即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/19 增加错误日志功能
+#	   2017/10/23 增加远程操作功能
+#**********************************************#
+import os,sys
+import commands
+import _log_module
+import _accname_obtain_accid
+
+uid_suffix = '00001ZJXZXL623PS'
+
+#*******************************
+#数据初始化函数，为设置ACL生成必要的参数
+#*******************************
+def data_init(mgr_ip,acc_name):
+        acctid,accid,email = _accname_obtain_accid.query_database(mgr_ip,acc_name)
+	if accid == 0:
+		print "The account \"%s\" doesn't exist!"%acc_name
+		return 0,0,0
+	else:
+                obtain_ak_cmd = "ssh "+mgr_ip+" parastor_pos listcertificates accountid="+accid
+                (return_code,output)=commands.getstatusoutput(obtain_ak_cmd)
+                ak = output[output.find("certificateid:")+14:][:32]
+		return accid,email,ak
+	
+#*******************************
+#桶ACL命令生成函数
+#*******************************
+def buc_acl_set_cmd(ostor_ip,bucketname,ak,o_acct_uid,d_acct_uid,o_email,d_email,acl_type):
+	cmdpart1 = "curl -i http://"
+	cmdpart2 = ":20480/"
+	cmdpart3 = "?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential="
+	cmdpart4 = "\" -d '<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>"
+	cmdpart5 = "</ID><DisplayName>"
+	cmdpart6 = "</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"CanonicalUser\"><ID>"
+	cmdpart8 = "</DisplayName></Grantee><Permission>"
+	cmdpart9 = "</Permission></Grant></AccessControlList></AccessControlPolicy>'"
+	cmd=cmdpart1+ostor_ip+cmdpart2+bucketname+cmdpart3+ak+cmdpart4+o_acct_uid+cmdpart5+d_acct_uid+cmdpart6+o_email+cmdpart5+d_email+cmdpart8+acl_type+cmdpart9
+	return cmd
+
+#*******************************
+#对象ACL命令生成函数
+#*******************************
+def obj_acl_set_cmd(ostor_ip,bucketname,objectname,ak,o_acct_uid,d_acct_uid,o_email,d_email,acl_type):
+        cmdpart1 = "curl -i http://"
+        cmdpart2 = ":20480/"
+        cmdpart3 = "?acl -XPUT -H \"Authorization: AWS4-HMAC-SHA256 Credential="
+	cmdpart4 = "\" -d '<?xml version=\"1.0\" encoding=\"UTF-8\"?><AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Owner><ID>"
+        cmdpart5 = "</ID><DisplayName>"
+        cmdpart6 = "</DisplayName></Owner><AccessControlList><Grant><Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"xsi:type=\"CanonicalUser\"><ID>"
+        cmdpart8 = "</DisplayName></Grantee><Permission>"
+        cmdpart9 = "</Permission></Grant></AccessControlList></AccessControlPolicy>'"
+        cmd=cmdpart1+ostor_ip+cmdpart2+bucketname+"/"+objectname+cmdpart3+ak+cmdpart4+o_acct_uid+cmdpart5+d_acct_uid+cmdpart6+o_email+cmdpart5+d_email+cmdpart8+acl_type+cmdpart9
+        return cmd
+
+#*******************************
+#acl命令执行函数，执行成功返回1，执行失败返回0
+#*******************************
+def acl_run(acl_cmd):
+	(return_code,output)=commands.getstatusoutput(acl_cmd)
+	seg = output[output.find("1.1 ")+4:][:3]
+	if  seg == '200':
+		return 1,output
+	else:
+		return 0,output	
+
+#*******************************
+#ACL测试结果校验函数
+#*******************************
+def acl_test_check(ostor_ip,type,bucketname,objectname,ak):
+	cmdpart1 = "curl -i http://"
+	cmdpart2 = ":20480/"
+	cmdpart3 = "?acl -XGET -H \"Authorization: AWS4-HMAC-SHA256 Credential="
+	if type == 'bucket':
+		check_cmd = cmdpart1+ostor_ip+cmdpart2+bucketname+cmdpart3+ak+"\""
+	elif type == 'object':
+		check_cmd = cmdpart1+ostor_ip+cmdpart2+bucketname+"/"+objectname+cmdpart3+ak+"\""
+	else:
+		print "Type erroe!"
+	seg,result = acl_run(check_cmd)
+	print check_cmd
+	print result
+	if seg == 0:
+		print "ACL get faild!"
+	else:
+		acl_type = result[result.find("Permission>")+11:][:8]
+		print acl_type
+		return acl_type
+
+if __name__ == '__main__':
+	accid1,email1,ak1 = data_init('10.10.222.3','wjl')
+	accid2,email2,ak2 = data_init('10.10.222.3','wjl2')
+	o_acct_uid = accid1+uid_suffix
+	d_acct_uid = accid2+uid_suffix
+	cmd = buc_acl_set_cmd('10.10.222.9','upload',ak1,o_acct_uid,d_acct_uid,email1,email2,'READ_ACP')
+	seg,result = acl_run(cmd)
+	print seg
+	if seg == 1:
+		print "bucket acl set seccess!"
+		acl_type = acl_test_check('10.10.222.9','bucket','upload','',ak1)
+		print acl_type
+	else:
+		print "bucket acl set faild!"

@@ -1,0 +1,3 @@
+import _create_account
+acc_id=_create_account.acc_add('wjl','wjl@sugon.com')
+print acc_id

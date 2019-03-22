@@ -1,0 +1,27 @@
+#-*- coding:utf-8 -*
+import os,sys,commands
+import _checkresult_lyz
+def deleteCertificate(mgrip,certificateid):
+        cmd='ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos delcertificate certificateid='+certificateid+'"'
+        print cmd
+        (status,output)=commands.getstatusoutput(cmd)
+        print output
+        if output.find('ok')<0:
+            print '##############################################'
+            print '删除certificate %s失败'  %(certificateid)
+            return -1
+
+
+def deleteCertificateHaveLog(mgrip, certificateid,logger):
+    cmd = 'ssh ' + mgrip + ' "/home/parastor/bin/sysctl/parastor_pos delcertificate certificateid=' + certificateid + '"'
+    logger.info(cmd)
+    (status, output) = commands.getstatusoutput(cmd)
+    logger.info(output)
+    if output.find('ok') < 0:
+        logger.info('##############################################')
+        logger.info('删除certificate %s失败' % (certificateid))
+        return -1
+
+if __name__=="__main__":
+	deleteCertificate(sys.argv[1],sys.argv[2])
+

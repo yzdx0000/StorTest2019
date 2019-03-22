@@ -1,0 +1,11 @@
+import os,sys
+import commands
+
+cmd = "ps -A |grep curl"
+(return_code,output)=commands.getstatusoutput(cmd)
+if output == "":
+	print "no curl process now!"
+else:
+	print output
+        print output.count("curl")
+

@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<testconfig>
+    <subnet_info>
+        <ip_families>
+            <ip_family>IPv4</ip_family>
+            <ip_family>IPv6</ip_family>
+        </ip_families>
+        <svips>
+            <svip>20.2.42.231</svip>
+        </svips>
+        <svips>
+            <svip>20.2.40.101</svip>
+        </svips>
+
+        <subnet_masks>
+            <subnet_mask>22</subnet_mask>
+        </subnet_masks>
+
+        <subnet_gateways>
+            <subnet_gateway>10.2.43.254</subnet_gateway>
+        </subnet_gateways>
+
+        <network_interfaces>
+            <network_interface>ens192</network_interface>         # 一张网卡名
+        </network_interfaces>
+        <network_interfaces>
+            <network_interface>ens192,ens224</network_interface>  # 多张网卡名
+        </network_interfaces>
+
+        <mtus>
+            <mtu>1500</mtu>
+        </mtus>
+    </subnet_info>
+
+    <vip_address_pool_info>
+        <domain_names>
+            <domain_name>www.sugon.com</domain_name>
+        </domain_names>
+        <domain_names>
+            <domain_name>www.nastest2.com</domain_name>
+        </domain_names>
+
+        <vip_addresses>
+            <vip_addresse>70.2.42.232-235</vip_addresse>                           # 连续型vip池地址
+        </vip_addresses>
+        <vip_addresses>
+            <vip_addresse>20.2.40.11-20</vip_addresse>                          # 连续型vip池地址，需要跟上一个有冲突
+        </vip_addresses>
+        <vip_addresses>
+            <vip_addresse>70.2.42.232,70.2.42.233,70.2.42.234,70.2.42.235</vip_addresse> # 离散型vip池地址
+        </vip_addresses>
+
+        <supported_protocols>
+            <supported_protocol>NAS</supported_protocol>
+            <supported_protocol>ISCSI</supported_protocol>
+        </supported_protocols>
+
+        <allocation_methods>
+            <allocation_method>STATIC</allocation_method>
+            <allocation_method>DYNAMIC</allocation_method>
+        </allocation_methods>
+
+        <load_balance_policies>
+            <load_balance_policy>LB_ROUND_ROBIN</load_balance_policy>
+            <load_balance_policy>LB_CONNECTION_COUNT</load_balance_policy>
+            <load_balance_policy>LB_THROUGHPUT</load_balance_policy>
+            <load_balance_policy>LB_CPU_USAGE</load_balance_policy>
+        </load_balance_policies>
+
+        <ip_failover_policies>
+            <ip_failover_policy>IF_ROUND_ROBIN</ip_failover_policy>
+            <ip_failover_policy>IF_CONNECTION_COUNT</ip_failover_policy>
+            <ip_failover_policy>IF_THROUGHPUT</ip_failover_policy>
+            <ip_failover_policy>IF_CPU_USAGE</ip_failover_policy>
+        </ip_failover_policies>
+
+        <rebalance_policies>
+            <rebalance_policy>RB_DISABLED</rebalance_policy>
+            <rebalance_policy>RB_AUTOMATIC</rebalance_policy>
+        </rebalance_policies>
+    </vip_address_pool_info>
+
+    <nfs_client_info>
+        <nfs_client_ip>
+            <nfs_client_ip>10.2.42.135</nfs_client_ip>
+            <nfs_client_ip>10.2.40.78</nfs_client_ip>
+            <nfs_client_ip>10.2.40.79</nfs_client_ip>
+            <nfs_client_ip>10.2.42.139</nfs_client_ip>
+        </nfs_client_ip>
+        # the next path is added by zhanghan
+        <nfs_mount_path>
+            <nfs_mount_path>/mnt/nfszh</nfs_mount_path>
+            <nfs_mount_path>/mnt/parastor</nfs_mount_path>
+            <nfs_mount_path>/mnt/parastor</nfs_mount_path>
+        </nfs_mount_path>
+    </nfs_client_info>
+
+    <ftp_client_info>
+        <ftp_client_ip>
+            <ftp_client_ip>10.2.42.135</ftp_client_ip>
+            <ftp_client_ip>10.2.42.131</ftp_client_ip>
+        </ftp_client_ip>
+    </ftp_client_info>
+
+    <ldap_server_info>
+        <ldap_ip_addresses>
+            <ldap_ip_addresses>10.2.41.181</ldap_ip_addresses>
+            <ldap_ip_addresses>10.2.41.239</ldap_ip_addresses>
+            <ldap_ip_addresses>10.2.41.212</ldap_ip_addresses>
+        </ldap_ip_addresses>
+        <ldap_base_dn>
+            <ldap_base_dn>dc=test,dc=com</ldap_base_dn>
+            <ldap_base_dn>dc=ldap-pdc,dc=com</ldap_base_dn>
+            <ldap_base_dn>dc=ldap-samba,dc=com</ldap_base_dn>
+        </ldap_base_dn>
+        <ldap_bind_dn>
+            <ldap_bind_dn>cn=root,dc=test,dc=com</ldap_bind_dn>
+            <ldap_bind_dn>cn=manager,dc=ldap-pdc,dc=com</ldap_bind_dn>
+            <ldap_bind_dn>cn=manager,dc=ldap-samba,dc=com</ldap_bind_dn>
+        </ldap_bind_dn>
+        <ldap_bind_passwd>
+            <ldap_bind_passwd>111111</ldap_bind_passwd>
+            <ldap_bind_passwd>111111</ldap_bind_passwd>
+            <ldap_bind_passwd>111111</ldap_bind_passwd>
+        </ldap_bind_passwd>
+        <ldap_domain_passwd>
+            <ldap_domain_passwd>111111</ldap_domain_passwd>
+            <ldap_domain_passwd>111111</ldap_domain_passwd>
+            <ldap_domain_passwd>111111</ldap_domain_passwd>
+        </ldap_domain_passwd>
+        <ldap_user_search_path>
+            <ldap_user_search_path>ou=People,dc=test,dc=com</ldap_user_search_path>
+            <ldap_user_search_path>ou=Users,dc=ldap-pdc,dc=com</ldap_user_search_path>
+            <ldap_user_search_path>ou=Users,dc=ldap-samba,dc=com</ldap_user_search_path>
+        </ldap_user_search_path>
+        <ldap_group_search_path>
+            <ldap_group_search_path>ou=Group,dc=test,dc=com</ldap_group_search_path>
+            <ldap_group_search_path>ou=Groups,dc=ldap-pdc,dc=com</ldap_group_search_path>
+            <ldap_group_search_path>ou=Groups,dc=ldap-samba,dc=com</ldap_group_search_path>
+        </ldap_group_search_path>
+        <ldap_user_name>
+            <ldap_user_name>ldapuser1</ldap_user_name>   # 可使用su登录的用户
+            <ldap_user_name>ldapuser2</ldap_user_name>   # 有附属组的用户
+            <ldap_user_name>用户@a</ldap_user_name>      # 有特殊字符与中文的用户
+            <ldap_user_name>user A</ldap_user_name>      # ldappdc的用户
+        </ldap_user_name>
+        <ldap_user_passwd>
+            <ldap_user_passwd>111111</ldap_user_passwd>    # ldap第一个用户的密码
+            <ldap_user_passwd>111111</ldap_user_passwd>
+            <ldap_user_passwd>111111</ldap_user_passwd>
+        </ldap_user_passwd>
+        <ldap_group_name>
+            <ldap_group_name>ldapgroup1</ldap_group_name>   # ldap_user_name第一个用户的用户组
+            <ldap_group_name>用户组1</ldap_group_name>      # 有中文的用户组
+            <ldap_group_name>group@a1</ldap_group_name>     # 有特殊字符的用户组
+            <ldap_group_name>Domain Users</ldap_group_name>     # 有特殊字符的用户组
+        </ldap_group_name>
+    </ldap_server_info>
+
+    <ad_server_info>
+        <ad_domain_names>
+            <ad_domain_name>adtest.com</ad_domain_name>
+        </ad_domain_names>
+        <ad_dns_addresses>
+            <ad_dns_address>10.2.41.251</ad_dns_address>
+        </ad_dns_addresses>
+        <ad_user_names>
+            <ad_user_name>administrator</ad_user_name>
+            <ad_user_name>autoadminuser1</ad_user_name>
+            <ad_user_name>autoadminuser2</ad_user_name>
+        </ad_user_names>
+        <ad_passwords>
+            <ad_password>111111</ad_password>
+        </ad_passwords>
+        <ad_users>
+            <ad_user>autouser1</ad_user>
+            <ad_user>autouser2</ad_user>
+            <ad_user>autouser3</ad_user>
+            <ad_user>autouser4</ad_user>
+        </ad_users>
+        <ad_groups>
+            <ad_group>autogroup</ad_group>
+            <ad_group>AD_USER_1st_GROUP</ad_group>
+            <ad_group>AD_USER_2nd_GROUP</ad_group>
+        </ad_groups>
+        <ad_user_pws>
+            <ad_user_pw>111111</ad_user_pw>
+        </ad_user_pws>
+    </ad_server_info>
+
+    #the next part is added by zhanghan, used for dac test
+    <dac_ad_server_info>
+        <ad_domain_names>
+            <ad_domain_name>dwsad.com</ad_domain_name>
+        </ad_domain_names>
+        <ad_dns_addresses>
+            <ad_dns_address>10.2.43.254</ad_dns_address>
+        </ad_dns_addresses>
+        <ad_user_names>
+            <ad_user_name>administrator</ad_user_name>
+            <ad_user_name>autoadminuser1</ad_user_name>
+            <ad_user_name>autoadminuser2</ad_user_name>
+        </ad_user_names>
+        <ad_passwords>
+            <ad_password>parastor;123</ad_password>
+        </ad_passwords>
+        <ad_users>
+            <ad_user>administrator</ad_user>
+            <ad_user>du1</ad_user>
+            <ad_user>du2</ad_user>
+            <ad_user>du3</ad_user>
+            <ad_user>du4</ad_user>
+            <ad_user>du5</ad_user>
+            <ad_user>u1</ad_user>
+            <ad_user>u2</ad_user>
+            <ad_user>u3</ad_user>
+            <ad_user>u4</ad_user>
+        </ad_users>
+        <ad_groups>
+            <ad_group>autogroup</ad_group>
+            <ad_group>AD_USER_1st_GROUP</ad_group>
+            <ad_group>AD_USER_2nd_GROUP</ad_group>
+        </ad_groups>
+        <ad_user_pws>
+            <ad_user_pw>parastor;123</ad_user_pw>
+        </ad_user_pws>
+    </dac_ad_server_info>
+
+    <dac_smb_info>
+        <smb_client_ip>10.2.41.250</smb_client_ip>
+        <smb_client_port>8270</smb_client_port>
+        <smb_disk_symbol_list>h:,i:,j:,k:</smb_disk_symbol_list>
+        <smb_scripts_location>Z:\StorTest\test_cases\cases\test_case\P300\DAC\dac_multi_client</smb_scripts_location>
+    </dac_smb_info>
+
+    <nis_server_info>
+        <nis_domain_names>
+            <nis_domain_name>nistest</nis_domain_name>
+        </nis_domain_names>
+        <nis_ip_addresses>
+            <nis_ip_address>10.2.41.247</nis_ip_address>
+        </nis_ip_addresses>
+        <nis_users>
+            <nis_user>nisuser1</nis_user>
+            <nis_user>nisuser2</nis_user>
+        </nis_users>
+        <nis_groups>
+            <nis_group>nisuser1</nis_group>
+            <nis_group>nisuser2</nis_group>
+        </nis_groups>
+        <nis_user_pws>
+            <nis_user_pw>111111</nis_user_pw>
+            <nis_user_pw>111111</nis_user_pw>
+        </nis_user_pws>
+    </nis_server_info>
+
+    # add by zhanghan 20181206
+    <access_zone_info>
+        <access_zone_names>
+                <access_zone_name>sugonnas</access_zone_name>
+        </access_zone_names>
+    </access_zone_info>
+
+    <remote_win_client_info>
+        <win_client_ips>
+            <win_client_ip>
+                <win_ip>10.2.42.243</win_ip>
+            </win_client_ip>
+            <win_client_ip>
+                <win_ip>50.2.42.243</win_ip>  # Windows客户端授权网卡对应的IP
+            </win_client_ip>
+        </win_client_ips>
+        <win_disk_symbols>
+            <win_disk_symbol>
+                <symbol>v:</symbol>
+            </win_disk_symbol>
+            <win_disk_symbol>
+                <symbol>u:</symbol>
+            </win_disk_symbol>
+        </win_disk_symbols>
+    </remote_win_client_info>
+</testconfig>

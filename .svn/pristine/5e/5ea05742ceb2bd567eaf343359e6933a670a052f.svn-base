@@ -1,0 +1,48 @@
+#! /usr/bin/python
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：认证模式下，测试用例集，集成测试。
+#使用方法：python Auth_all_function_wjl.py
+#作者：王建磊
+#创建时间：2018/04/12
+#**********************************************#
+import sys,os
+import commands
+import json
+import time
+import ConfigParser
+
+current_pyth = os.getcwd()
+pwd = os.path.dirname(current_pyth)
+sys.path.append(pwd+"/S3Lib")
+
+import AuthSignature
+import _create_bucket_http_wjl
+import _log_module_wjl
+import result #返回值打印模块
+import _log_module_wjl
+
+if __name__ == '__main__':
+	stime=_log_module_wjl.get_current_time()
+	print "testcase start time:%s"%stime
+	
+	for i in range(24):
+		(return_code,output)=commands.getstatusoutput("python 29-0-17-"+str(i+1)+"_wjl.py >> ../S3output/Auth_function.log")
+		print output
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-25-26-27-28_wjl.py >> ../S3output/Auth_function.log")
+	for i in range(29,43):
+		(return_code,output)=commands.getstatusoutput("python 29-0-17-"+str(i)+"_wjl.py >> ../S3output/Auth_function.log")
+		print output
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-43_44_45_46_47_48_wjl.py >> ../S3output/Auth_function.log")
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-49_51_53_wjl.py >> ../S3output/Auth_function.log")
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-50_wjl.py >> ../S3output/Auth_function.log")
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-52_wjl.py >> ../S3output/Auth_function.log")
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-54_55_wjl.py >> ../S3output/Auth_function.log")
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-56_57_58_59_wjl.py >> ../S3output/Auth_function.log")
+	(return_code,output)=commands.getstatusoutput("python 29-0-17-60_61_wjl.py >> ../S3output/Auth_function.log")
+	for i in range(62,68):
+		(return_code,output)=commands.getstatusoutput("python 29-0-17-"+str(i)+"_wjl.py >> ../S3output/Auth_function.log")
+		print output
+
+	etime=_log_module_wjl.get_current_time()
+	print "testcase end time:%s"%etime

@@ -1,0 +1,103 @@
+#!usr/bin/env python  
+# -*- coding:utf-8 _*-
+""" 
+@author: Liu he
+@file: test.py 
+@time: 2018/10/31 
+"""
+
+import os
+import re
+import sys
+import time
+import inspect
+import random
+import utils_path
+import Lun_managerTest
+import common
+import common2
+import commands
+import breakdown
+import env_manage
+import log
+import json
+import prepare_x1000
+# import prepare_x1000
+import get_config
+from get_config import config_parser as cp
+import decorator_func
+import ReliableTest
+import access_env
+
+# 初始化配置文件
+conf_file = Lun_managerTest.CONF_FILE  # 配置文件路径
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+
+'''日志初始化'''
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+
+log.init(log_file_path, True)
+
+# 类实例化
+osan = Lun_managerTest.oSan()
+com_lh = breakdown.Os_Reliable()
+com_disk = common.Disk()
+node = common.Node()
+com2_osan = common2.oSan()
+com_bd_disk = breakdown.disk()
+
+node_ip1 = env_manage.deploy_ips[0]
+node_ip2 = env_manage.deploy_ips[1]
+node_ip3 = env_manage.deploy_ips[2]
+
+
+def kill_thread(s_ip=None, p_name=None, t_name=None):
+    """
+    :Author: Liu he
+    :Date: 2018-8-13
+    :Description: 查杀线程
+    :param s_ip: 节点IP
+    :param p_name: process name
+    :param t_name: thread name
+    :return:
+    """
+    cmd = (" ssh %s \" pgrep %s\"" % (s_ip, p_name))
+    log.info(cmd)
+    rc, stdout = commands.getstatusoutput(cmd)
+    if rc != 0:
+        log.error("the node have not %s" % p_name)
+        os._exit(1)
+    else:
+        cmd = ("ssh %s \" ps -T -p %s | grep pmgr | tail -n 1| awk '{print \$2}'\"" % (s_ip, stdout))
+        log.info(cmd)
+        rc, final = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("%s have node find" % t_name)
+            os._exit(1)
+        else:
+            i = 0
+            while final.strip() == '':
+                time.sleep(30)
+                rc, final = commands.getstatusoutput(cmd)
+                i += 1
+                if i == 3:
+                    log.info("get pmgr failed")
+                    os._exit(1)
+            else:
+                cmd = ("ssh %s \" kill -9 %s\"" % (s_ip, final))
+                log.info(cmd)
+                rc, finals = commands.getstatusoutput(cmd)
+                if rc != 0:
+                    log.error("kill %s fail. error info:\n %s" % (t_name, finals))
+                    os._exit(1)
+                else:
+                    log.info("kill success %s" % (t_name))
+                    time.sleep(10)
+
+    return
+
+
+kill_thread(s_ip=node_ip1, p_name="oRole", t_name="pmgr")

@@ -1,0 +1,74 @@
+#!/usr/bin/python
+# -*-coding:utf-8 -*
+#***************************************************************
+#实现功能：kill_oOms_logger不断杀oOms进程，kill_oOss_logger不断杀oOss进程，kill_postgres_logger不断杀postgres进程
+#所需参数：kill_oOms_logger需要oomsip,kill_oOss_logger需要参数oossip,kill_postgres_logger需要修改配置文件参数oomsip
+#作者：刘萍
+#更改日期：2018/01/12
+#****************************************************************
+import os
+import sys
+import time
+import commands
+import _readconffile_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+def kill_oOms_logger(oomsip,logger):
+    time.sleep(2)
+    i=1
+    while 1:
+        cmd1='ssh '+oomsip+' ps aux |grep /cliparastor/oms/oOms |grep -v grep'+'| wc -l'
+        logger.info(cmd1)
+        status1,result1=commands.getstatusoutput(cmd1)
+        if(result1=='1'):
+            out=commands.getstatusoutput('ssh '+oomsip+' killall -9 oOms')
+            logger.info('ssh '+oomsip+' killall -9 oOms')
+            logger.info("the counts of kill oOms are %d" % i)
+            i+=1
+	else:
+	    time.sleep(2)
+	
+def kill_oOss_logger(oossip,logger):
+    i=1
+    while 1:
+        cmd2='ssh '+oossip+' ps -ef |grep oOss |grep -v grep'+'| wc -l'
+	status2,result2=commands.getstatusoutput(cmd2)
+	if(result2=='1'):
+	    out=commands.getstatusoutput('ssh '+oossip+' killall -9 oOss')
+            logger.info("the counts of kill oOss are %d" % i)
+	    i+=1
+	else:
+	    time.sleep(10)			
+
+def kill_postgres_logger(oomsip,logger):
+    time.sleep(2)
+    i=1            
+    while 1:
+	cmd='ssh '+oomsip+' ps -ef |grep /mnt/parastor/.ps_hidden/pos/postgres/bin/postgres|grep -v grep|wc -l'
+	(status,results)=commands.getstatusoutput(cmd)
+	if(results=='1'):
+	    out=commands.getstatusoutput('ssh '+oomsip+' killall -9 postgres')
+            logger.info('ssh '+oomsip+' killall -9 postgres')
+            logger.info("the counts of kill postgres are %d" % i)
+	    i+=1
+	else:
+	    time.sleep(10)		#	
+if __name__=="__main__":
+    args=_readconffile_lp.readconf()
+#    print args
+    # 第二个步骤：创建logger
+    logfilename='test'
+    # 创建日志输出文件
+    output = getoutputpath_lp.getoutputpath()
+    logfilepath = os.path.join(output, logfilename)
+    ifmkdir = commonfunction_lp.touchfile(logfilepath)
+    logger = _log_lp.log(logfilename)
+    if ifmkdir:
+        logger.info('%s is alreay exists and we delete it and create a new one' % logfilepath)
+    else:
+        logger.info('%s is created ok' % logfilepath)
+    kill_oOms_logger(args['master_mgr_ip'],logger)
+
+		

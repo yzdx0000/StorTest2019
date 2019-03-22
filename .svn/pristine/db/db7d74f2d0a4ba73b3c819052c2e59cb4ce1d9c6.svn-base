@@ -1,0 +1,788 @@
+#!usr/bin/env python  
+# -*- coding:utf-8 -*-  
+""" 
+:author: Liu he
+:Description:
+@file: test.py 
+@time: 2018/12/21 
+"""
+import os
+import sys
+import json
+import commands
+import datetime
+import utils_path
+import log
+import get_config
+
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+current_path = os.path.dirname(os.path.abspath(__file__))
+conf_file = current_path + "/x1000_test_config.xml"
+
+deploy_ips = get_config.get_env_ip_info(conf_file)  # 获取集群IP列表
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+
+
+def check_ping(ip):
+    cmd = 'ping -c 3 %s | grep "0 received" | wc -l' % ip
+    rc, stdout = commands.getstatusoutput(cmd)
+    if '0' != stdout.strip():
+        return False
+    else:
+        return True
+
+
+def get_os_type(s_ip=deploy_ips[0]):
+    """
+    :Auther: Liu he
+    :Description: 读取机器类型
+    :param s_ip: 测试节点IP地址
+    :return: VM虚拟机将返回字符VM，其他类型机器返回"phy"
+    ====================================================================================
+    :注：该方法适用于多种虚拟机，stdout返回值在其他类型虚拟机上需要验证，物理机返回机器型号（若有）
+    ====================================================================================
+    """
+    if "True" == check_ping(s_ip):
+        log.error("Node %s do not get info,Please check IP or the machine status" % (s_ip))
+        os._exit(1)
+    else:
+        cmd = ("ssh %s \" dmidecode -s system-product-name\"" % (s_ip))
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.info("get  %s system type failed.\n Error Info : \n %s" % (s_ip, stdout))
+            os._exit(1)
+        else:
+            if "VMware" in stdout:
+                log.info("check %s the system is %s " % (s_ip, stdout))
+                return "VM"
+            else:
+                log.info("Get The test %s machine is %s ,will return\"phy\"" % (s_ip, stdout))
+                return "phy"
+
+
+def get_nodes(s_ip=None):
+    '''
+    date    :   2018-06-05
+    Description :   获取节点ID
+    param   :   s_ip : 服务节点IP
+    return  :   节点ID
+    '''
+    nodeids = []
+    # if None == s_ip:
+    #     pass
+    #     # log.error("Please input the corrent ip.")
+    # else:
+    # s_ip = s_ip.split()
+    cmd = ("ssh %s \"pscli --command=get_nodes\"" % (s_ip))
+    (res, final) = commands.getstatusoutput(cmd)
+    log.info(cmd)
+    if res != 0:
+        log.error("Get nodes error.")
+        exit(1)
+    else:
+        log.info("Get nodes success.")
+        final = json.loads(final)
+        for i in range(0, len(final['result']['nodes'])):
+            nodeids.append(final['result']['nodes'][i]['data_disks'][0]['nodeId'])
+    return nodeids
+
+
+def ls_scsi_dev(client_ip):
+    '''
+    date    :   2018-05-16
+    Description :  获取scsi设备名
+    param   :   client_ip   :   iscsi客户端IP;
+    return  :   scsi 设备名列表
+    change_log
+    Author:wangxiang
+    Des:更改了关于iscsi设备的判断
+    '''
+    cmd = ("ssh %s \"lsscsi | grep Xstor\" | awk '{print $NF}'" % (client_ip))
+    (res, final) = commands.getstatusoutput(cmd)
+    if res != 0:
+        log.error(final)
+        log.error("Get scsi devices on %s failed.Error info: \n%s" % (client_ip, final))
+        exit(1)
+    else:
+        log.info("Get scsi devices on %s success. Get Xstor disk : \n%s " % (client_ip, final))
+    scsis = []
+    scsis = final.split('\n')
+    if scsis == ['']:
+        scsis = []
+    if len(scsis) == 0:
+        log.error("There is no scsi devices on %s." % (client_ip))
+    log.info("From %s host get iscsi device list : %s" % (client_ip, scsis))
+    return scsis
+
+
+def gen_vdb_xml(max_range='100M', maxdata='1G', thread=32, offset=None, align=None, lun=None, xfersize=None, rdpct=None,
+                seekpct=None, interval=1):
+    '''
+    date    :   2018-05-17
+    Description :   生成vdbench配置文件
+    param   :  vdbench标准配置参数
+    return  :   vdbench xml file path
+    '''
+    t1 = datetime.datetime.now()
+    template_file = get_config.get_tools_path() + "/osan/template"  # 获取配置文件模板路径
+    vdb_xml = get_config.get_tools_path() + "/osan/vdb_xml." + str(t1.microsecond)  # vdbench测试所用的文件
+    sd_num = 1  # 初始化sd数量
+    threads = []
+    # vdb_path = get_config.get_vdbench_path()        #获取vdbench路径
+    if True == os.path.exists(vdb_xml):
+        cmd = ("rm -rf %s" % (vdb_xml))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    cmd = ("cp %s %s" % (template_file, vdb_xml))
+    log.info(cmd)
+    commands.getstatusoutput(cmd)
+    if None == lun or len(lun) == 0:
+        log.error("Found no scsi devices.")
+        os._exit(1)
+    if None != offset:
+        cmd = ("sed -i '1s/$/,offset=%s/g' %s" % (str(offset), vdb_xml))  # 修改前偏移量
+        #            log.info("Modify vdb_xml cmd %s" % (cmd))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    if None != align:
+        cmd = ("sed -i '1s/$/,align=%s/g' %s" % (str(align), vdb_xml))  # 修改后偏移量
+        #            log.info("Modify vdb_xml cmd %s" % (cmd))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    if None != rdpct:
+        cmd = ("sed -i '2s/$/,rdpct=%s/g' %s" % (str(rdpct), vdb_xml))  # 修改读写占比
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    if None != seekpct:
+        cmd = ("sed -i '2s/$/,seekpct=%s/g' %s" % (str(seekpct), vdb_xml))  # 修改读写占比
+        #            log.info("Modify vdb_xml cmd %s" % (cmd))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    if None != xfersize:
+        cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=%s/g' %s" % (xfersize, vdb_xml))  # 修改xferrsize
+        #            log.info("Modify vdb_xml cmd %s" % (cmd))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+    for dev_name in lun:
+        if max_range:
+            sd_xml = ("sd=sd%d,lun=%s,range=(0,%s)" % (sd_num, dev_name, max_range))
+        else:
+            sd_xml = ("sd=sd%d,lun=%s" % (sd_num, dev_name))
+        wd_xml = ("wd=wd%d,sd=sd%d" % (sd_num, sd_num))
+        cmd = ("sed -i '%da\%s' %s" % (sd_num, sd_xml, vdb_xml))  # 插入rd
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+        cmd = ("sed -i '$i\%s' %s" % (wd_xml, vdb_xml))  # 插入wd
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+        sd_num = sd_num + 1
+        # threads.append("10")
+    # threads = "3"
+    if max_range:
+        max = len(lun) * int(max_range[:-1]) * 2
+        if max_range[-1] == 'G':
+            maxdata = str(max) + 'G'
+        elif max_range[-1] == 'M':
+            maxdata = str(max / 1000 + 1) + 'G'
+    cmd = ("sed -i -r 's/thread.*?\)/threads=%s/g' %s" % (thread, vdb_xml))  # 修改每个wd的进程数
+    log.info(cmd)
+    commands.getstatusoutput(cmd)
+    cmd = ("sed -i -r 's/interval.*?/interval=%s/g' %s" % (interval, vdb_xml))  # 修改每个wd的interval
+    log.info(cmd)
+    commands.getstatusoutput(cmd)
+    cmd = ("sed -r -i 's/maxdata=[0-9]+[a-zA-Z]+,/maxdata=%s,/g' %s" % (str(maxdata), vdb_xml))  # 修改每个wd的maxdata
+    log.info(cmd)
+    commands.getstatusoutput(cmd)
+    cmd = ("sed -r -i '1idata_errors=3' %s" % (vdb_xml))
+    log.info(cmd)
+    commands.getstatusoutput(cmd)
+    log.info(vdb_xml)
+    return vdb_xml
+
+
+def change_xml(s_ip=deploy_ips[0], jn_on=None, vdb_xml=None, whether_change="Y"):
+    if whether_change == "Y":
+        type_info = get_os_type()
+        node_num = len(get_nodes(s_ip))
+        if node_num == 5:
+            if type_info == "phy":
+                if jn_on != None:
+                    # 修改xfersize
+                    # cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(1k,10,4k,25,15k,20,128k,20,213k,25)/g' %s"
+                    #        % (vdb_xml))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改range
+                    # cmd = ("sed -r -i 's/range=.*\)/range=(0,3G)/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改iorate
+                    # cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=1000/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+
+                    cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(3k)/g' %s" % (vdb_xml))
+                    commands.getstatusoutput(cmd)
+                    # 修改range
+                    cmd = ("sed -r -i 's/range=.*\)/range=(0,100M)/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改iorate
+                    cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=400/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改threads
+                    cmd = ("sed -r -i 's/threads=[0-9]+/threads=8/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改maxdata
+                    cmd = ('grep -c lun %s' % (vdb_xml,))
+                    res, lun_num = commands.getstatusoutput(cmd)
+                    maxdata = int(lun_num) * 3 + 4
+                    cmd = ("sed -r -i 's/maxdata=[0-9]+[a-zA-Z]+,/maxdata=%sG,/g' %s" % (str(maxdata), vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                else:
+                    # # 修改xfersize
+                    # cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(4k,30,15k,20,127k,20,213k,30)/g' %s"
+                    #        % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改range
+                    # cmd = ("sed -r -i 's/range=.*\)/range=(0,5G)/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改iorate
+                    # cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=1000/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+
+                    # 修改xfersize
+                    cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(3k)/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改range
+                    cmd = ("sed -r -i 's/range=.*\)/range=(0,100M)/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改iorate
+                    cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=400/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改threads
+                    cmd = ("sed -r -i 's/threads=[0-9]+/threads=8/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改maxdata
+                    cmd = ('grep -c lun %s' % (vdb_xml,))
+                    res, lun_num = commands.getstatusoutput(cmd)
+                    maxdata = int(lun_num) * 5 + 4
+                    cmd = ("sed -r -i 's/maxdata=[0-9]+[a-zA-Z]+,/maxdata=%sG,/g' %s" % (str(maxdata), vdb_xml))
+                    commands.getstatusoutput(cmd)
+        elif node_num == 3:
+            if type_info == "phy":
+                if jn_on != None:
+                    # # 修改xfersize
+                    # cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(1k,20,3k,35,16k,20,127k,10,212k,15)/g' %s"
+                    #        % (vdb_xml))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改range
+                    # cmd = ("sed -r -i 's/range=.*\)/range=(0,2G)/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改iorate
+                    # cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=1000/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+
+                    # 修改xfersize
+                    cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(3k)/g' %s" % (vdb_xml))
+                    commands.getstatusoutput(cmd)
+                    # 修改range
+                    cmd = ("sed -r -i 's/range=.*\)/range=(0,100M)/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改iorate
+                    cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=400/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+
+                    # 修改threads
+                    cmd = ("sed -r -i 's/threads=[0-9]+/threads=8/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改maxdata
+                    cmd = ('grep -c lun %s' % (vdb_xml,))
+                    res, lun_num = commands.getstatusoutput(cmd)
+                    maxdata = int(lun_num) * 3 + 4
+                    cmd = ("sed -r -i 's/maxdata=[0-9]+[a-zA-Z]+,/maxdata=%sG,/g' %s" % (str(maxdata), vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                else:
+                    # # 修改xfersize
+                    # cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(1k,20,4k,30,15k,20,127k,10,213k,20)/g' %s"
+                    #        % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改range
+                    # cmd = ("sed -r -i 's/range=.*\)/range=(0,4G)/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+                    # # 修改iorate
+                    # cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=1000/g' %s" % (vdb_xml,))
+                    # commands.getstatusoutput(cmd)
+
+                    # 修改xfersize
+                    cmd = ("sed -i -r 's/xfersize.*?\)/xfersize=(3k)/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改range
+                    cmd = ("sed -r -i 's/range=.*\)/range=(0,100M)/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改iorate
+                    cmd = ("sed -r -i 's/iorate=[0-9]+/iorate=400/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+
+                    # 修改threads
+                    cmd = ("sed -r -i 's/threads=[0-9]+/threads=8/g' %s" % (vdb_xml,))
+                    commands.getstatusoutput(cmd)
+                    # 修改maxdata
+                    cmd = ('grep -c lun %s' % (vdb_xml,))
+                    res, lun_num = commands.getstatusoutput(cmd)
+                    maxdata = int(lun_num) * 5 + 4
+                    cmd = ("sed -r -i 's/maxdata=[0-9]+[a-zA-Z]+,/maxdata=%sG,/g' %s" % (str(maxdata), vdb_xml))
+                    commands.getstatusoutput(cmd)
+
+
+def run_vdb(client_ip, vdb_xml, jn_jro=None, output=None, time=1200, execute="Y", whether_change_xml="Y",
+            need_judge=None):
+    """
+    执行vdbench
+    :param client_ip:主机端IP
+    :param vdb_xml:
+    :param jn_jro:
+    :param output:
+    :param time:   执行时间
+    :param execute: 是否执行vdbench，N 为不执行，非N就会执行
+    :param whether_change_xml：是否执行change_xml，默认执行
+    :return:
+    """
+    print output
+    if execute == "N":
+        log.info("Will not run  vdbench 。。。")
+    else:
+        if vdb_xml == None:
+            log.error("Please input vdb xml.")
+            os._exit(1)
+        vdb_xml1 = "/home/vdbench/vdb_xml"
+        vdb_path = get_config.get_vdbench_path()  # vdbench工具所在路径
+        cmd = ("ssh %s 'mkdir -p /root/output/;mkdir -p /root/vdbench/journal/%s'" % (client_ip, str(output)))
+        log.info(cmd)
+        commands.getstatusoutput(cmd)
+        if time != None:
+            cmd1 = ("ssh %s '%s/vdbench -f %s -jn -e %s -o /root/output/%s_jn'" % (
+                client_ip, vdb_path, vdb_xml1, str(time), str(output)))
+            cmd2 = ("ssh %s '%s/vdbench -f %s -jro -e %s -o /root/output/%s_jro'" % (
+                client_ip, vdb_path, vdb_xml1, str(time), str(output)))
+        else:
+            cmd1 = (
+                "ssh %s '%s/vdbench -f %s -jn  -o /root/output/%s_jn'" % (client_ip, vdb_path, vdb_xml1, str(output)))
+            cmd2 = (
+                "ssh %s '%s/vdbench -f %s -jro -o /root/output/%s_jro'" % (client_ip, vdb_path, vdb_xml1, str(output)))
+        if None == jn_jro or jn_jro == "no":
+            change_xml(vdb_xml=vdb_xml, whether_change=whether_change_xml)
+            cmd = ("scp %s root@%s:/home/vdbench/vdb_xml" % (vdb_xml, client_ip,))
+            log.info(cmd)
+            res, final = commands.getstatusoutput(cmd)
+            if res != 0:
+                print final
+                os._exit(1)
+            cmd = ("ssh %s '%s/vdbench -f %s -e %s -o /root/output/%s_nor'" % (
+                client_ip, vdb_path, vdb_xml1, str(time), str(output)))
+            log.info(cmd)
+            res, out = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.error("Error! Run vdbench without data check error.")
+                os._exit(1)
+            else:
+                pass
+        elif jn_jro == "jn":
+            change_xml(jn_on="yes", vdb_xml=vdb_xml, whether_change=whether_change_xml)
+            ch_cmd = ("sed -r -i 's/,offset=[0-9]+//g' %s" % (vdb_xml))
+            commands.getstatusoutput(ch_cmd)
+            ch_cmd = ("sed -r -i 's/,align=[0-9]+//g' %s" % (vdb_xml))
+            commands.getstatusoutput(ch_cmd)
+            cmd = ("scp %s root@%s:/home/vdbench/vdb_xml" % (vdb_xml, client_ip,))
+            log.info(cmd)
+            res, final = commands.getstatusoutput(cmd)
+            if res != 0:
+                print final
+                os._exit(1)
+            log.info(cmd1)
+            res, out = commands.getstatusoutput(cmd1)
+            if res != 0:
+                if need_judge:
+                    pass
+                else:
+                    log.error("Error! Run vdbench with 'jn' error.Vdbench log path is /root/output/%s." % (str(output)))
+                    os._exit(1)
+            else:
+                log.info("Vdbench jn log path is /root/output.")
+        elif jn_jro == "jro":
+            log.info(cmd2)
+            res, out = commands.getstatusoutput(cmd2)
+            if res != 0:
+                log.error("Error! Run vdbench with 'jro' error.Vdbench log path is /root/output/%s." % (str(output)))
+                os._exit(1)
+            else:
+                log.info("Vdbench jro log path is /root/output.")
+        else:
+            ch_cmd = ("sed -r -i 's/,offset=[0-9]+//g' %s" % (vdb_xml))
+            commands.getstatusoutput(ch_cmd)
+            ch_cmd = ("sed -r -i 's/,align=[0-9]+//g' %s" % (vdb_xml))
+            commands.getstatusoutput(ch_cmd)
+            change_xml(jn_on="yes", vdb_xml=vdb_xml, whether_change=whether_change_xml)
+            cmd = ("scp %s root@%s:/home/vdbench/vdb_xml" % (vdb_xml, client_ip,))
+            log.info(cmd)
+            res, final = commands.getstatusoutput(cmd)
+            if res != 0:
+                print final
+                os._exit(1)
+            res, out = commands.getstatusoutput(cmd1)
+            log.info(cmd1)
+            if res != 0:
+                log.error(
+                    "Error! Run vdbench with journal verify error.Vdbench log path is /root/output/%s." % (str(output)))
+                os._exit(1)
+            else:
+                log.info("Vdbench log path is /root/output.")
+                log.info(cmd2)
+                res, out = commands.getstatusoutput(cmd2)
+                if res != 0:
+                    log.error("Error! Vdbench check data error,journal path is /root/vdbench/journal.")
+                    os._exit(1)
+                else:
+                    pass
+
+
+def get_storage_id(s_ip=None):
+    '''
+    date    :   2018-06-05
+    Description :   获取存储池ID
+    param   :   s_ip : 服务节点IP
+    return  :   存储池ID
+    '''
+    storids = []
+    if None == s_ip:
+        log.error("Please input the corrent ip.")
+        exit(1)
+    else:
+        cmd = ("ssh %s \"pscli --command=get_storage_pools\"" % (s_ip))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        if res != 0:
+            log.error(final)
+            log.error("Get storage error.")
+            exit(1)
+        else:
+            log.info("Get storage success.")
+            final = json.loads(final)
+            for i in range(0, final['result']['total']):
+                storids.append(final['result']['storage_pools'][i]['id'])
+    return storids
+
+
+def get_access_zone_id(s_ip=None):
+    '''
+    date    :   20.18-06-05
+    Description :   获取访问区 ID
+    param   :
+    return  :   access_zone ID
+    '''
+    access_zone_ids = []
+    if None == s_ip:
+        log.error("Please input the corrent ip.")
+        os._exit(1)
+    else:
+        cmd = ("ssh %s \"pscli --command=get_access_zones\"" % (s_ip))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        if res != 0:
+            log.error(final)
+            log.error("Get access zone error.")
+            os._exit(1)
+        else:
+            log.info("Get access zone success.")
+            final = json.loads(final)
+            for i in range(0, final['result']['total']):
+                access_zone_ids.append(final['result']['access_zones'][i]['id'])
+    return access_zone_ids
+
+
+def create_lun(self, s_ip=None, lun_name=None, lun_type="THIN", stor_pool_id=None, acc_zone_id=None,
+               total_bytes="1073741824", max_throughput="9000", max_iops="2000", stripe_width="3", disk_parity_num="0",
+               node_parity_num="2", replica_num="3", need_judge=None):
+    """
+    创建lun
+    :param s_ip(str): 服务节点ip
+    :param lun_name(str): The name of the lun, e.g. lun_ex
+    :param lun_type(int): Type of lun. Available type: ['THIN', 'THICK'] e.g. THIN
+    :param stor_pool_id(int): Storage pool ID.
+    :param acc_zone_id(int): access zone ID.
+    :param total_bytes(int): max size of this lun
+    :param max_throughput(str): Maximum throughput for QoS.
+    :param max_iops(str): Maximum IOPS for QoS
+    :param stripe_width(int): The stripe width.
+    :param disk_parity_num(int): The disk parity number.
+    :param node_parity_num(int): The node parity number.
+    :param replica_num(int): The replica number.
+    :return:
+    """
+    if None == s_ip or None == lun_name or None == stor_pool_id or None == acc_zone_id:
+        log.error("Create lun:got wrong parameters.")
+        os._exit(1)
+    elif str(stor_pool_id) == "1":
+        log.error("stor_pool_id can not set 1.")
+        os._exit(1)
+    else:
+        cmd = (
+            "ssh %s \"pscli --command=create_lun --name=%s --type=%s --storage_pool_id=%s --access_zone_id=%s --total_bytes=%s --max_throughput=%s --max_iops=%s --stripe_width=%s --disk_parity_num=%s --node_parity_num=%s --replica_num=%s\"" % (
+                s_ip, lun_name, lun_type, str(stor_pool_id), str(acc_zone_id), str(total_bytes), str(max_throughput),
+                str(max_iops), str(stripe_width), str(disk_parity_num), str(node_parity_num), str(replica_num)))
+
+        res, final = commands.getstatusoutput(cmd)
+        # (res, final) = commands.getstatusoutput(cmd)
+        if res != 0:
+            log.error("Create lun error.\ncmd:%s\nError infor:%s " % (cmd, final))
+            if need_judge:
+                result = json.loads(final)
+                return (result['err_msg'])
+            else:
+                os._exit(1)
+        else:
+            log.info("Create lun success.")
+            final = json.loads(final)
+            return final['result'][-1]
+
+
+def get_option_single(*args, **kwargs):
+    """
+     Xstor的查询操作(主要是对pscli查询的返回值进行取值操作)
+    :param  kwargs['s_ip']: 服务器节点ip
+    :param kwargs['command']:   要查询的命令
+    :param kwargs ['indexname'] :json文件的节点
+    :param kwargs['argv']:要查询的属性
+    :return:
+    """
+
+    result = []
+    if None == kwargs['s_ip']:
+        pass
+        exit(1)
+    else:
+        cmd = ("ssh {} \"pscli --command={} --{}={}\"".format(kwargs['s_ip'], kwargs['command'], kwargs["ids"],
+                                                              kwargs["argv1"]))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        if (res != 0):
+            pass
+            exit(1)
+        else:
+            final = json.loads(final)
+            final = final['result']
+            result = (final['%s' % kwargs['indexname']][-1]['%s' % (kwargs['argv2'])])
+        # log.info(result)
+        return result
+
+
+def get_lun(s_ip=None):
+    '''
+    date    :   2018-06-09
+    Description :   获取lun ID
+    param   ：
+    return  :   lun ID
+    '''
+    lunids = []
+    if None == s_ip:
+        log.error("Please input the correct ip.")
+        os._exit(1)
+    else:
+        cmd = ("ssh %s \"pscli --command=get_luns\"" % (s_ip))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        if (res != 0):
+            log.error(final)
+            log.error("Get luns error.")
+            os._exit(1)
+        else:
+            log.info("Get luns success.")
+            final = json.loads(final)
+            final = final['result']
+            for i in range(0, final['total']):
+                lunids.append(final['luns'][i]['id'])
+        return lunids
+
+
+def get_unmap_lun(s_ip=None):
+    '''
+    date    :   2018-11-20
+    Description :   获取没有进行lun 映射的lun ID
+    return  :   lun ID
+    '''
+    if None == s_ip:
+        log.error("Please input the correct ip.")
+        os._exit(1)
+    else:
+        lun_ids = get_lun(s_ip)
+        cmd = ("ssh %s \"pscli --command=get_lun_maps\"" % (s_ip))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        if (res != 0):
+            log.error(final)
+            log.error("Get lun maps error.")
+            os._exit(1)
+        else:
+            log.info("Get lun maps success.")
+            final = json.loads(final)
+            final = final['result']
+            for i in range(0, final['total']):
+                lun_id = final['lun_maps'][i]['lun_id']
+                if lun_id in lun_ids:
+                    lun_ids.remove(lun_id)
+        return lun_ids
+
+
+def get_host_groups(s_ip=None):
+    '''
+    date    :   2018-06-09
+    Description :   获取host ID
+    param   ：
+    return  :   host_group ID
+    '''
+    hostgroupids = []
+    if None == s_ip:
+        log.error("Please input the correct ip.")
+        exit(1)
+    else:
+        cmd = ("ssh %s \" pscli --command=get_host_groups\"" % (s_ip))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        if (res != 0):
+            log.error(final)
+            log.error("Get host group error.")
+            exit(1)
+        else:
+            log.info("Get host group success.")
+            final = json.loads(final)
+            final = final['result']
+            for i in range(0, final['total']):
+                hostgroupids.append(final['host_groups'][i]['id'])
+        return hostgroupids
+
+
+def map_lun(s_ip=None, lun_ids=None, hg_id=None):
+    '''
+    date    :   2018-06-09
+    Description ： map lun
+    param   :   lun_ids : 卷ID  hg_id : 主机组ID
+    return  :
+    '''
+    if None == s_ip or None == lun_ids or None == hg_id:
+        log.error("Map lun:got wrong parameters.")
+        exit(1)
+    else:
+        cmd = ("ssh %s \"pscli --command=map_luns_to_host_group --lun_ids=%s --host_group_id=%s\"" % (
+            s_ip, str(lun_ids), str(hg_id)))
+        log.info(cmd)
+        # res, final = com2.run_pscli_cmd(pscli_cmd=cmd, time_out=300, s_ip=s_ip, times=1)
+        (res, final) = commands.getstatusoutput(cmd)
+        if res != 0:
+            log.error(final)
+            log.error("Map lun error.")
+            os._exit(1)
+        else:
+            final = json.loads(final)
+            log.info("Map lun success. \n%s" % (final))
+            return final['result'][-1]
+
+
+def create_lun_map(ips=deploy_ips[0]):
+    map_ids = []
+    # lun_ids = osan.get_lun(s_ip=ips)
+    lun_ids = get_unmap_lun(s_ip=ips)
+    host_group_id = get_host_groups(s_ip=ips)
+    log.info("Get Info:\nGet unmap lun ids:%s \nGet host_group_id:%s" % (lun_ids, host_group_id))
+    if lun_ids:
+        for id in lun_ids:
+            log.info("in the node %s make the lun ID %s be aassigned to %s" % (ips, id, host_group_id[0]))
+            map_id = map_lun(s_ip=ips, lun_ids=id, hg_id=host_group_id[0])
+            map_ids.append(map_id)
+        return map_ids
+    else:
+        log.info("get lun list is None")
+
+
+def get_svip(s_ip=None, ids=1):
+    '''
+    date    :   2018-07-06
+    Description :   获取SVIP
+    param   :   s_ip : iscsi服务端IP;
+    return  :   SVIP
+    '''
+    vip_list = []
+    if None == s_ip:
+        log.error("Got wrong server_ip: %s" % (s_ip))
+        os._exit(1)
+    else:
+        cmd = ("ssh %s \" pscli --command=get_subnets --ids=%s\"" % (s_ip, str(ids)))
+    (res, final) = commands.getstatusoutput(cmd)
+    log.info(cmd)
+    if res != 0:
+        log.error(final)
+        log.error("Get_subnets error.")
+        os._exit(1)
+    else:
+        log.info("Get_subnets success.")
+    final = json.loads(final)
+    if final['result']['total'] == 0:
+        os._exit(1)
+    else:
+        finals = final['result']['subnets']
+        for vip in finals:
+            vip_list.append(vip['svip'])
+    log.info("Get SVIP list: %s" % (vip_list))
+    return vip_list
+
+
+def discover_scsi_list(client_ip, svip):
+    """
+    :Auther: Liu he
+    :Description: 获取SVIP下所有的target信息
+    :param client_ip: 客户端IP
+    :param svip: 存储SVIP地址
+    :return: target列表
+    """
+    iqn_infos = []
+    cmd = ("ssh %s \"iscsiadm -m discovery -t st -p %s 2>&1\"" % (client_ip, svip))
+    log.info(cmd)
+    (res, target) = commands.getstatusoutput(cmd)
+    if res != 0:
+        log.error(target)
+        log.error("Get target on %s error.Error Infor:\n" % (svip))
+        os._exit(1)
+    else:
+        log.info("Get target on %s success." % (svip))
+        target = target.split("\n")
+        for iqn in target:
+            iqn_info = iqn.split(" ")[1]
+            iqn_infos.append(iqn_info)
+        return iqn_infos
+
+
+def iscsi_login(client_ip, iqn):
+    '''
+    date    :   2018-05-14
+    Description :   登录
+    param   :   client_ip : iscsi客户端IP;  iqn :   discover_scsi的返回值
+    return  :   null
+    '''
+    cmd = ("ssh %s \"iscsiadm -m node -T %s -l\"" % (client_ip, iqn))
+    (res, final) = commands.getstatusoutput(cmd)
+    log.info(cmd)
+    if res != 0:
+        log.error(final)
+        log.error("Login on %s error." % (client_ip))
+        exit(1)
+    else:
+        log.info("Login success on node %s." % (client_ip))
+
+
+def create_iscsi_login(ips=deploy_ips[0], cli_ips=client_ips[0]):
+    # node_id = com_lh.get_node_id_by_ip(ips)
+    svip = get_svip(ips)
+    # osan.discover_scsi_list(client_ip=cli_ips, svip=svip[0])  # 进行一下discovery，真正的tag从xstor中拿
+    target_list = discover_scsi_list(client_ip=cli_ips, svip=svip[0])  # 从主机端拿到iqn
+    # target_list = osan.get_map_target(ips)
+    log.info("Get Info:\nSvip list:%s \nTarget list:%s" % (svip, target_list))
+    for tag in target_list:
+        log.info("主机发现存储target：%s,主机 %s 将进行SCSI登录" % (tag, cli_ips))
+        iscsi_login(client_ip=cli_ips, iqn=tag)

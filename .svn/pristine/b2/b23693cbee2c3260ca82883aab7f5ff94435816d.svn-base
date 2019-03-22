@@ -1,0 +1,30 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于复制对象###########
+#需要执行copy_object_exc，参数包括：oOss节点ip，源bucket名称，源object名称，源certificateid，目标bucket名称、目标object名称
+#函数返回一个元组(return_code,output)。第一个元素为0表示成功，为256表示失败；第二个元素返回命令执行打印信息
+
+import subprocess,commands
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+def copy_object_cmd(ip,source_bucket,source_object,source_certificate_id,des_bucket,des_object):
+    cmd='curl -i http://'+str(ip)+':20480/'+str(des_bucket)+'/'+str(des_object)+' -X PUT -H \"Authorization: AWS4-HMAC-SHA256 Credential='+str(source_certificate_id)+'\"'+' -H \"x-amz-copy-source: '+'/'+str(source_bucket)+'/'+str(source_object)+'\"'   #执行复制对象命令本身
+    return cmd
+
+def copy_object_exc(ip,source_bucket,source_object,source_certificate_id,des_bucket,des_object):
+    cmd=copy_object_cmd(ip,source_bucket,source_object,source_certificate_id,des_bucket,des_object)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+
+#函数自验*****
+if __name__=="__main__":
+    all_argvs=read_conf_zh.get_argvs()
+#    copy_object_exc(ds_ip,source_bucket,source_object,source_certificate_id,des_bucket,des_object) 
+    copy_object_exc(all_argvs['oOss_ip'],all_argvs['src_bucket_name'],all_argvs['src_object_name'],all_argvs['certificate_id'],all_argvs['des_bucket_name'],all_argvs['des_object_name'])

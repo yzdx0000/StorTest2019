@@ -1,0 +1,50 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+#本脚本用于从指定conf文件中读取信息
+
+
+import ConfigParser
+
+def read_conf(conf_name,section_name,params_names):
+    conf=ConfigParser.ConfigParser()
+    get_conf_argvs=[]
+    with open(conf_name) as confconf:
+        conf.readfp(confconf)
+        for params_name in params_names:
+            get_conf_argv=conf.get(section_name,params_name)
+            get_conf_argvs.append(get_conf_argv)
+        return get_conf_argvs
+
+def get_argvs():
+    argvs1=['master_mgr_ip','mastermgripmiip','slave_mgr_ip','slavemgripmiip','master_mos_ip','slave_mos_ip','oossip','domain','dsips','dsipmiips']
+    read_conf_res=read_conf('../conf/S3.conf','public',argvs1)
+#    print read_conf_res
+    dict1={'master_mgr_ip':read_conf_res[0],'mastermgripmiip':read_conf_res[1],'slave_mgr_ip':read_conf_res[2],'slavemgripmiip':read_conf_res[3],'master_mos_ip':read_conf_res[4],'slave_mos_ip':read_conf_res[5],'oossip':read_conf_res[6],'domain':read_conf_res[7],'dsips':read_conf_res[8],'dsipmiips':read_conf_res[9]}
+    argvs2=['account_name','account_id','account_uid','certificate_id','account_sk','account_email','target_account_name','target_account_id','target_account_uid','target_certificate_id','target_account_sk','target_account_email','create_bucket_name','delete_bucket_name','put_object_name','delete_object_name','object_path','download_object_path','quota','acl','src_bucket_name','src_object_name','des_bucket_name','des_object_name','multi_seg_num','multi_seg_size']
+    read_conf_res2=read_conf('../conf/S3.conf','S3_zh',argvs2)
+#    print read_conf_res2
+    dict2={'account_name':read_conf_res2[0],'account_id':read_conf_res2[1],'account_uid':read_conf_res2[2],'certificate_id':read_conf_res2[3],'account_sk':read_conf_res2[4],'account_email':read_conf_res2[5],'target_account_name':read_conf_res2[6],'target_account_id':read_conf_res2[7],'target_account_uid':read_conf_res2[8],'target_certificate_id':read_conf_res2[9],'target_account_sk':read_conf_res2[10],'target_account_email':read_conf_res2[11],'create_bucket_name':read_conf_res2[12],'delete_bucket_name':read_conf_res2[13],'put_object_name':read_conf_res2[14],'delete_object_name':read_conf_res2[15],'object_path':read_conf_res2[16],'download_object_path':read_conf_res2[17],'quota':read_conf_res2[18],'acl':read_conf_res2[19],'src_bucket_name':read_conf_res2[20],'src_object_name':read_conf_res2[21],'des_bucket_name':read_conf_res2[22],'des_object_name':read_conf_res2[23],'multi_seg_num':read_conf_res2[24],'multi_seg_size':read_conf_res2[25]}
+
+    all_argvs={}
+    all_argvs.update(dict1)
+    all_argvs.update(dict2)
+#    print all_argvs
+    return all_argvs
+
+
+if __name__=="__main__":
+    argvs1=['master_mgr_ip','mastermgripmiip','slave_mgr_ip','slavemgripmiip','master_mos_ip','slave_mos_ip','oossip','domain','dsips','dsipmiips']
+    read_conf_res=read_conf('../conf/S3.conf','public',argvs1)
+    print read_conf_res
+    dict1={'master_mgr_ip':read_conf_res[0],'mastermgripmiip':read_conf_res[1],'slave_mgr_ip':read_conf_res[2],'slavemgripmiip':read_conf_res[3],'master_mos_ip':read_conf_res[4],'slave_mos_ip':read_conf_res[5],'oossip':read_conf_res[6],'domain':read_conf_res[7],'dsips':read_conf_res[8],'dsipmiips':read_conf_res[9]}
+
+    argvs2=['account_name','account_id','account_uid','certificate_id','account_sk','account_email','target_account_name','target_account_id','target_account_uid','target_certificate_id','target_account_sk','target_account_email','create_bucket_name','delete_bucket_name','put_object_name','delete_object_name','object_path','download_object_path','quota','acl','src_bucket_name','src_object_name','des_bucket_name','des_object_name','multi_seg_num','multi_seg_size']
+    read_conf_res2=read_conf('S3_params_zh.conf','S3_zh',argvs2)
+    print read_conf_res2
+    dict2={'account_name':read_conf_res2[0],'account_id':read_conf_res2[1],'account_uid':read_conf_res2[2],'certificate_id':read_conf_res2[3],'account_sk':read_conf_res2[4],'account_email':read_conf_res2[5],'target_account_name':read_conf_res2[6],'target_account_id':read_conf_res2[7],'target_account_uid':read_conf_res2[8],'target_certificate_id':read_conf_res2[9],'target_account_sk':read_conf_res2[10],'target_account_email':read_conf_res2[11],'create_bucket_name':read_conf_res2[12],'delete_bucket_name':read_conf_res2[13],'put_object_name':read_conf_res2[14],'delete_object_name':read_conf_res2[15],'object_path':read_conf_res2[16],'download_object_path':read_conf_res2[17],'quota':read_conf_res2[18],'acl':read_conf_res2[19],'src_bucket_name':read_conf_res2[20],'src_object_name':read_conf_res2[21],'des_bucket_name':read_conf_res2[22],'des_object_name':read_conf_res2[23],'multi_seg_num':read_conf_res2[24],'multi_seg_size':read_conf_res2[25]}
+
+    all_argvs={}
+    all_argvs.update(dict1)
+    all_argvs.update(dict2)
+    print all_argvs

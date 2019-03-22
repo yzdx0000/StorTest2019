@@ -1,0 +1,29 @@
+#!/usr/bin/python
+#_*_ coding:utf-8 _*_
+#**************************************************************
+#功能：读取配置文件conflp中的参数，将所有参数都存放于一个字典中
+#注：使用前，需根据环境修改配置文件信息
+#作者：刘萍
+#修改日期：2018/01/12
+#*************************************************************
+import ConfigParser
+import os
+def readconf():
+    current_path = os.path.abspath('')
+    autoscroptspath = os.path.dirname(current_path)
+    confpath = os.path.join(autoscroptspath, 'conf')
+#    print "confpath is %s" % confpath
+    conffile = confpath+'/S3.conf'
+    conf = ConfigParser.ConfigParser()
+    with open(conffile) as file:
+        conf.readfp(file)
+    arg1 = conf.items('public')
+    arg2 = conf.items('accountlp')
+    arg3 = conf.items('bucketlp')
+    arg4 = conf.items('putobjectlp')
+    arg5 = conf.items('buckacllp')
+    dictargs = dict(arg1+arg2+arg3+arg4+arg5)
+    return dictargs             
+
+if __name__=="__main__":
+    print readconf()

@@ -1,0 +1,22 @@
+1、准备工作：
+    (1).配置访问管理，包括AD认证服务器(管理员账户administrator,du1属于dg1,du2属于dg1,du3属于dg3,du4属于sugon,du5属于dg5)、访问区、业务子网
+    (2).修改配置文件p300_test_config.xml标签<nodes>、<mount_paths>
+    (3).修改配置文件p300_nas_config.xml标签<vip_address_pool_info>下的<domain_names>、离散型vip地址<vip_addresses>
+                                       标签<ad_server_info>下的<ad_domain_names>、<ad_users>、<ad_user_pws>
+                                       标签<access_zone_info>下的<access_zone_name>
+    (4).修改全局变量smb_client_ip、scripts_location_win、current_ip
+    (5).修改./smbd_ps/pathinfo.xml配置文件中相应内容
+2. 运行dac_smb_acl_all.py，即可执行smb客户端Dac自动化脚本集合，脚本执行的操作如下：
+    (1).获取节点信息:集群节点ip、集群节点客户端挂载路径、ip池的域名
+    (2).测试前准备，创建smb共享，并添加用户/用户组列表
+    (3).smb客户端自动化脚本集合测试主体部分:
+        3-1.挂载smb客户端
+        3-2.将测试脚本拷贝到本地C盘
+        3-3.smb客户端权限验证
+        3-4.将生成的日志拷贝到linux节点记录日志位置并判断脚本执行成功与否
+        3-5.删除创建到环境中的测试目录
+        3-6.C盘中删除测试脚本
+    (4).权限验证成功，卸载smb客户端挂载目录，并删除授权
+3. 若脚本执行成功，会自动清理环境，无需人为操作
+4. 若脚本执行失败，则脚本会记录错误信息，然后退出执行
+5. 若脚本执行失败，需要手动清理环境，可根据执行失败的位置，参照步骤2的说明操作

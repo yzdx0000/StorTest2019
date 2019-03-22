@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="s3-sample" description="sample benchmark for s3">
+ 
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW1U801ZJXZXL6T7K92EL1TO9IPQEEFKML31W1ZLS4U5AIOT66;secretkey=d81894457437c6d57ccd01eaa43b6bb6e9bc7eea;endpoint=http://20.10.10.26:20480;path_style_access=true;timeout=1800000;" />
+  <workflow>
+ 
+    <workstage name="init">
+      <work type="init" workers="100" config="cprefix=zhtest92;containers=r(1,500)" />
+    </workstage>
+ 
+    <workstage name="prepare">
+      <work type="prepare" workers="500" config="cprefix=zhtest92;containers=r(1,500);objects=r(1,800);sizes=h(100|200|50,500|1000|50)KB" />    
+    </workstage>
+ 
+    <workstage name="main">
+      <work name="main1" workers="200" runtime="900">
+        <operation type="write" ratio="70" config="cprefix=zhtest92;containers=u(1,500);objects=u(1,100);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />
+        <operation type="read" ratio="30" config="cprefix=zhtest92;containers=u(1,500);objects=u(101,200);hashCheck=False" />
+      </work>
+      <work name="main2" workers="200" runtime="900">
+        <operation type="write" ratio="90" config="cprefix=zhtest92;containers=u(1,500);objects=u(201,300);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />       
+        <operation type="read" ratio="10" config="cprefix=zhtest92;containers=u(1,500);objects=u(301,400);hashCheck=False" />
+      </work>
+      <work name="main3" workers="200" runtime="900">
+        <operation type="write" ratio="30" config="cprefix=zhtest92;containers=u(1,500);objects=u(401,500);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />       
+        <operation type="read" ratio="70" config="cprefix=zhtest92;containers=u(1,500);objects=u(501,600);hashCheck=False" />
+     </work>
+      <work name="main4" workers="200" runtime="900">
+        <operation type="write" ratio="10" config="cprefix=zhtest92;containers=u(1,500);objects=u(601,700);sizes=h(100|200|50,500|1000|50)KB;hashCheck=False" />        
+        <operation type="read" ratio="90" config="cprefix=zhtest92;containers=u(1,500);objects=u(701,800);hashCheck=False" />
+      </work>
+    </workstage>
+
+    <workstage name="cleanup">
+      <work type="cleanup" workers="200" config="cprefix=zhtest92;containers=r(1,500);objects=r(1,800)" />
+    </workstage>
+ 
+    <workstage name="dispose">
+      <work type="dispose" workers="100" config="cprefix=zhtest92;containers=r(1,500)" />
+    </workstage>
+ 
+  </workflow>
+ 
+</workload>
+

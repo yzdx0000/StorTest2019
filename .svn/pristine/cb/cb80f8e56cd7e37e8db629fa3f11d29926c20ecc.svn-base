@@ -1,0 +1,36 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于查询所有者的所有bucket列表###########
+
+import subprocess,commands
+
+#添加自定义模块*****
+import _create_logfile_zh    #记录日志模块
+import read_conf_zh    #获取conf中变量的模块
+
+def list_buckets_cmd(ip,certificate_id):
+    cmd='curl -i http://'+str(ip)+':20480/'+' -X GET -H '+' \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\"'  #执行查询所有者bucket列表命令本身
+    return cmd
+
+def list_buckets_exc(ip,certificate_id):
+    cmd=list_buckets_cmd(ip,certificate_id)
+    print cmd
+    (return_code,output)=commands.getstatusoutput(cmd)
+    print return_code
+    print output
+    return (cmd,return_code,output)
+
+#    child=subprocess.Popen(str(cmd),shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)      #调用shell执行命令
+#    child.wait()
+    #将命令执行的结果输出到指定文件，记录日志*****
+#    _create_logfile_zh.create_logfile(cmd,child)
+
+#函数自验*****
+if __name__=="__main__":
+#    ds_ip="www.sugon.com"
+#    certificate_id="00003P36MV6YR0WH00003P36MV6CPOIA"
+    all_argvs=read_conf_zh.get_argvs()
+    list_buckets_exc(all_argvs['oOss_ip'],all_argvs['certificate_id'])
+    
+

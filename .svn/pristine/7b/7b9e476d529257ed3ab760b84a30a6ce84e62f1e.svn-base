@@ -1,0 +1,110 @@
+#!/usr/bin/python
+# -*-coding:utf-8 -*
+import os
+
+import utils_path
+import common
+import s3_common
+import log
+import get_config
+import prepare_clean
+import result
+###################################################################################
+#
+# Author: liuping
+# date 2018-09-08
+# @summary：
+#    根据不同的对象数量,获取对象列表。
+# @steps:
+#    1、创建账户；
+#    2、检查账户创建成功
+#    3、创建证书；
+#    4、上传桶
+#    5、上传对象，并根据不同的对象数量，获取对象列表，对象区间为[1-100],[1-1000],[10000]
+#    6、清理环境
+# @changelog：
+####################################################################################
+
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]                 # 本脚本名字
+FILE_NAME = FILE_NAME.replace('-', '_')
+current_path = os.path.abspath('')
+current_uppath = os.path.dirname(current_path)
+S3outputpath = os.path.join(current_uppath, 'S3output')
+filepath = os.path.join(S3outputpath, FILE_NAME)
+
+ACCOUNT_EMAIL = FILE_NAME + "@sugon.com"
+
+
+def judge_result(rc, filename):
+    if rc == 0:
+        pass
+    else:
+        result.result(filename, -1)
+
+
+def case():
+    log.info("1> 创建账户")
+    account_name = FILE_NAME + "_account1"
+    rc, account_id = s3_common.add_account(account_name, ACCOUNT_EMAIL, 0)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "add_account %s failed!!!" % account_name)
+
+    log.info("2> 检查账户是否存在")
+    rc, stdout = s3_common.find_account(ACCOUNT_EMAIL)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "find account %s failed!!!" % ACCOUNT_EMAIL)
+
+    log.info("3> 创建证书")
+    rc, certificate_id, certificate = s3_common.add_certificate(account_id)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "create certificate failed!!!")
+
+    log.info("4> 上传1个桶")
+    bucket_name = FILE_NAME + '_bucket_1'
+    rc, stdout = s3_common.add_bucket(bucket_name, certificate_id, exe_node_ip=None)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "add bucket %s failed!!!" % bucket_name)
+    rc, stdout = s3_common.check_bucket(bucket_name, certificate_id, exe_node_ip=None)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "check bucket %s failed!!!" % bucket_name)
+
+    rc, stdout = s3_common.create_file_m(filepath, 1, exe_node_ip=None)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "create_file_m fail!!!")
+
+    obj_name_lst = []
+    objstartnum = 1
+    objendnum = 100
+    for i in range(4):
+        log.info("5> 上传对象：from %s to %s" % (objstartnum, objendnum + 1))
+        for k in range(objstartnum, objendnum + 1):
+            object_name = bucket_name + '_obj_%d' % k
+            rc, stdout = s3_common.add_object(bucket_name, object_name, filepath,
+                                              certificate_id, exe_node_ip=None)
+            judge_result(rc, FILE_NAME)
+            common.judge_rc(rc, 0, "add_object %s fail!!!" % object_name)
+
+        log.info("6> 当对象数目是%s时获取桶%s内的对象列表" % (objendnum,bucket_name))
+        rc, object_name_lst = s3_common.get_all_object_in_bucket(bucket_name, certificate_id, exe_node_ip=None)
+        judge_result(rc, FILE_NAME)
+        common.judge_rc(rc, 0, "当对象数目是%s时获取桶%s内的对象列表,失败" % (objendnum,bucket_name))
+
+        if len(object_name_lst) != objendnum:
+            result.result(FILE_NAME, -1)
+            common.judge_rc(-1, 0, "get_all_object_in_bucket num is not equal to %s" % objendnum)
+        objstartnum = objendnum + 1
+        objendnum = objendnum * 2
+
+    result.result(FILE_NAME, 0)
+    log.info('%s success!' % FILE_NAME)
+
+
+def main():
+    prepare_clean.s3_test_prepare(FILE_NAME, [ACCOUNT_EMAIL])
+    case()
+    prepare_clean.s3_test_clean([ACCOUNT_EMAIL])
+    log.info('%s finish!' % FILE_NAME)
+
+
+if __name__ == '__main__':
+    common.case_main(main)

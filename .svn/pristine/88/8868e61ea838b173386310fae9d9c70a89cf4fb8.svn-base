@@ -1,0 +1,46 @@
+#-*- coding:utf-8 -*
+#脚本名称：sshListcertificatesHaveReturn
+#脚本用途：根据accountid获取所有的certificateid
+#输入：mgrid,accountid；返回值：所有certificateid
+#脚本创建者：刘艳哲
+#脚本创建时间：2017.10.20
+import sys
+import commands
+import _checkresult_lyz
+def sshListcertificatesHaveReturn(mgrip,accountid):
+	#1、运行listcertificates命令
+	cmd='ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listcertificates accountid='+accountid+'"'
+	print cmd
+	(status,output)=commands.getstatusoutput('ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos listcertificates accountid='+accountid+'"')
+	print 'cersinfo is %s' %output
+	#2、找到certificate的certificateinfo
+	infostart=output.find('[')
+	infoend=output.find(']')
+	certificateinfo=output[int(infostart+1):infoend]
+	#print certificateinfo
+	#3、找到每一个certificate的信息
+	count=certificateinfo.count('{')
+	beforcersatrt=0
+	benforcerend=0
+	certificatePerInfo=[]
+	for i in range(count):
+		cerstart=certificateinfo.find('{',beforcersatrt)
+		cerend=certificateinfo.find('}',benforcerend)
+		beforcersatrt=cerstart+1
+		benforcerend=cerend+1
+		#print cerstart,cerend
+		certificate=certificateinfo[(cerstart+1):cerend]
+		print certificate
+		certificatePerInfo.append(certificate)
+	#4、找到每一个certificateid
+	certificateids=[]
+	for j in range(count):
+		certificatePerInfoo=certificatePerInfo[j]
+		cerIdStart=certificatePerInfoo.find(':')
+		cerIdEnd=certificatePerInfoo.find('%')
+		certificateid=certificatePerInfoo[(cerIdStart+1):cerIdEnd]
+		certificateids.append(certificateid)
+	print certificateids
+	return certificateids
+if __name__=="__main__":
+	sshListcertificatesHaveReturn(sys.argv[1],sys.argv[2])

@@ -1,0 +1,49 @@
+# -*- coding:utf-8 -*- 
+#**********************************************#
+#标题：创建账户模块
+#使用方法：调用"acc_add()"函数，指定mgrip,账户名、email即可。
+#作者：王建磊
+#创建时间：2017/10/10
+#更新时间：2017/10/11
+#**********************************************#
+import os,sys
+import commands
+
+#创建账户命令生成函数
+def acc_add_cmd(mgrip,acc_name,acc_email):
+	#part1 = "/home/parastor/bin/sysctl/parastor_pos addaccount accountname=" 	#拼串片段，无需关注。
+	#part2 = " email=" 							 	#拼串片段，无需关注。a
+	#part3 = " quota=0" 							 	#拼串片段，无需关注。
+	#cmd = ''.join((part1,acc_name,part2,acc_email,part3))#生成创建账户的指令
+	cmd='ssh '+mgrip+' "/home/parastor/bin/sysctl/parastor_pos addaccount accountname='+acc_name+' email='+acc_email+' quota=0'+'"'
+	print cmd
+	return cmd
+
+#创建账户函数
+def acc_add(mgrip,acc_name,acc_email):#输入参数为:"账户名"，"账户邮箱"
+	cmd = acc_add_cmd(mgrip,acc_name,acc_email)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	print output
+	if (output[0:1]!='a'):
+		print "create error!"
+		return -1
+	str1 = output[output.find("#") + 1:]						#字符串筛选片段，无需关注
+	str2 = str1[str1.find(":") + 1:]						#字符串筛选片段，无需关注
+	acc_id = str2[0:16]								#字符串筛选片段，无需关注
+	return output
+def acc_addReturnaccountid(mgrip,acc_name,acc_email):#输入参数为:"账户名"，"账户邮箱"
+	cmd = acc_add_cmd(mgrip,acc_name,acc_email)
+	(return_code,output)=commands.getstatusoutput(cmd)
+	print output
+	if (output[0:1]!='a'):
+		print "create error!"
+		return -1
+	str1 = output[output.find("#") + 1:]						#字符串筛选片段，无需关注
+	str2 = str1[str1.find(":") + 1:]						#字符串筛选片段，无需关注
+	acc_id = str2[0:16]								#字符串筛选片段，无需关注
+	return acc_id
+if __name__=="__main__":
+	acc_add(sys.argv[1],sys.argv[2],sys.argv[3])
+#调试代码
+#acc_id=acc_add('wjl','wjl@sugon.com')
+#print acc_id

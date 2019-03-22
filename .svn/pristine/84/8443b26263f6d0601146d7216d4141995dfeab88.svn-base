@@ -1,0 +1,81 @@
+# -*- coding: utf-8 -*
+#!/usr/bin/env python
+"此脚本是根据当前脚本所在路径来获得conf的绝对路径"
+import os
+import os,sys,commands,time
+import common
+import ConfigParser
+###################################################
+# 类名称：conf_lyz
+# 该脚本包含了一般的配置文件相关的操作
+###################################################
+class confrelate():
+    def getconfpath(self,confname):
+        current_path = os.path.abspath('')
+        current_uppath= os.path.dirname(current_path)
+        confpath=os.path.join(current_uppath,'conf')
+        #confpath是配置文件所在的目录
+        policyconfpath=os.path.join(confpath,confname)
+        return policyconfpath
+    #"该函数用来读取配置文件中的参数，需要3个输入：配置文件名称、section的名字、参数的名字"
+    def readconf(self,confname,sectionname,argvname):
+        confrelateo=confrelate()
+        confpath=confrelateo.getconfpath(confname)
+        conf=ConfigParser.ConfigParser()
+        with open(confpath) as confconf:
+            conf.readfp(confconf)
+            getconfargv=conf.get(sectionname,argvname)
+            return getconfargv
+    #################################################
+    #函数作用：读取配置文件中的多个参数
+    #参数说明： 其中argvnames必须是个list
+    #返回值：返回读取的所有参数，以list的方式返回
+    ###################################################
+    def readmanyconf(self,confname,sectionname,argvnames):
+        confrelateo = confrelate()
+        confpath = confrelateo.getconfpath(confname)
+        conf = ConfigParser.ConfigParser()
+        getconfargvs=[]
+        with open(confpath) as confconf:
+            conf.readfp(confconf)
+            for argvname in argvnames:
+                #print 'argvname is %s' %argvname
+                getconfargv = conf.get(sectionname, argvname)
+                getconfargvs.append(getconfargv)
+            return getconfargvs
+    #函数作用：读取public的所有
+
+
+    #"本函数是将conf中获得的字符串转化成list.例如：conf=backup1，bakcup2   那么我们获得的结果是一个字符串，此函数可以将它转化为[backup1,bakcup2]"
+    def confStringToList(self,argv):
+        splitstring = argv.split(',')
+        listoutput = list(splitstring)
+        return listoutput
+        # print listoutput
+        # print type(listoutput)
+
+    #本函数将读取配置文件中的一个section中的所有内容
+    def readsection(self,confname,sectionname):
+        confrelateo = confrelate()
+        confpath = confrelateo.getconfpath(confname)
+        conf = ConfigParser.ConfigParser()
+        getconfargvs = []
+        with open(confpath) as confconf:
+            conf.readfp(confconf)
+        sectioncont=conf.items(sectionname)
+        sectioncont=dict(sectioncont)
+        return sectioncont
+        #print sectioncont
+if __name__=="__main__":
+    confrelateo=confrelate()
+    policyconfpath = confrelateo.getconfpath('faultconf_lyz.conf')
+    section=confrelateo.readsection('faultconf_lyz.conf','s3')
+    '''
+    print policyconfpath
+
+    confargvmain=confrelateo.readconf('policy.conf','backup1','rulename')
+    print confargvmain
+
+    confrelateo.confStringToList("vdbench1,vdbench2")
+    '''
+

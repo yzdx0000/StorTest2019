@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<workload name="bug1176" description="bucket create opreate.">
+
+  <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW1KM2V0O9NZAQRMMC2EL1TO9IPQEEFKML03T0IJW5M8MK3OE2;secretkey=ff80d883285d40b019dcffefe4ef10a25d8034df;endpoint=http://20.10.10.231:20480;path_style_access=true;timeout=1800000;" />  
+
+<workflow>
+  <workstage name="init">
+        <storage type="s3" config="accesskey=2PO1B8F4QBKHSRZW1KM2V0O9NZAQRMMC2EL1TO9IPQEEFKML03T0IJW5M8MK3OE2;secretkey=ff80d883285d40b019dcffefe4ef10a25d8034df;endpoint=http://20.10.10.231:20480;path_style_access=true;timeout=1800000;" />        
+        <work type="init" workers="1" config="cprefix=zhtest_4;containers=r(1,1)" />
+  </workstage>
+ 
+  <workstage name="prepare">
+        <work type="prepare" workers="500" config="cprefix=zhtest_4;oprefix=pre41obj;containers=r(1,1);objects=r(1,50000000);sizes=c(4)KB" />
+  </workstage>
+ 
+  <workstage name="mn">
+        <work name="mn1" workers="500" runtime="3600">
+        <operation type="write" ratio="50" config="cprefix=zhtest_4;oprefix=sufobj;containers=r(1,1);objects=r(50000001,100000000);sizes=c(4)KB;hashCheck=False" />
+        <operation type="read" ratio="50" config="cprefix=zhtest_4;oprefix=preobj;containers=r(1,1);objects=r(1,50000000);hashCheck=False" />
+        </work> 
+  </workstage>
+</workflow>  
+</workload>
+

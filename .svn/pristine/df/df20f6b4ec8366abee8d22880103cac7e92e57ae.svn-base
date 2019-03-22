@@ -1,0 +1,492 @@
+# -*- coding:utf-8 -*
+
+import os,sys,commands,time
+import common
+import threading
+import getoutputpath_lyz
+import getconfpath_lyz
+###################################################
+# 类名称：fault
+# 该脚本包含了一般的故障操作
+###################################################
+class fault():
+    def  poweroff(self,ipmiip):
+        print 'in power ipmiip is %s' % ipmiip
+        cmd='ipmitool -H '+ipmiip+' -I lan -U admin -P admin power off'
+        (status,output)=commands.getstatusoutput(cmd)
+        print output
+    def poweron(self,ip):
+        cmd = 'ipmitool -H ' + ip + ' -I lan -U admin -P admin power on '
+        (status, output) = commands.getstatusoutput(cmd)
+        print output
+    def ifdown(self,ip,eth):
+        cmd='ssh '+ip+' "ifdown '+eth+'"'
+        (status, output) = commands.getstatusoutput(cmd)
+        print output
+    def ifup(self,eth,ip):
+        cmd = 'ssh ' + ip + ' "ifup ' + eth + '"'
+        (status, output) = commands.getstatusoutput(cmd)
+        print output
+    def removeDisk(self,ip,node):
+        cmd='ssh '+ip+' "echo scsi remove-single-device '+node+' > /proc/scsi/scsi"'
+        (status, output) = commands.getstatusoutput(cmd)
+        print output
+    def addDisk(self,ip,node):
+        cmd = 'ssh ' + ip + ' "echo scsi add-single-device ' + node + ' > /proc/scsi/scsi"'
+        (status, output) = commands.getstatusoutput(cmd)
+        print output
+    def killprocess(self,ip,processname):
+        cmd='ssh '+ip+' killall -9 '+processname
+        (status, output) = commands.getstatusoutput(cmd)
+        print 'time of killproocess is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+        print output
+    def getVmidOfNodes(self,esxiip):
+        print esxiip
+        cmd='ssh  '+esxiip+' "vim-cmd vmsvc/getallvms"'
+        print cmd
+        (status,output) = commands.getstatusoutput(cmd)
+        print output
+    def startib(self,ip):
+        cmd='/etc/init.d/opensmd start'
+        (status,ouput)=commands.getstatusoutput(cmd)
+
+    def virtualpoweroff(self,esxiip,ip):
+        print 'aa'
+
+    #以下的函数和以上的唯一区别是，下面的有log，传入参数多了一个logger
+    def poweroffHaveLog(self, logger, ipmiip):
+        logger.info('in power ipmiip is %s' % ipmiip)
+        cmd = 'ipmitool -H ' + ipmiip + ' -I lan -U admin -P admin power off'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+
+    def poweronHaveLog(self, logger, ip):
+        cmd = 'ipmitool -H ' + ip + ' -I lan -U admin -P admin power on '
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+    def ifdownHaveLog(self, logger, ip, eth):
+        cmd = 'ssh ' + ip + ' "ifdown ' + eth + '"'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+    def ifupHaveLog(self, logger, eth, ip):
+        cmd = 'ssh ' + ip + ' "ifup ' + eth + '"'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+    def removeDiskHaveLog(self, logger, ip, node):
+        cmd = 'ssh ' + ip + ' "echo scsi remove-single-device ' + node + ' > /proc/scsi/scsi"'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+    def addDiskHaveLog(self, logger, ip, node):
+        cmd = 'ssh ' + ip + ' "echo scsi add-single-device ' + node + ' > /proc/scsi/scsi"'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+    def killprocessHaveLog(self, logger, ip, processname):
+        cmd = 'ssh ' + ip + ' killall -9 ' + processname
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+        logger.info('time of killproocess is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+
+    def getVmidOfNodesHaveLog(self, logger, esxiip):
+        logger.info(esxiip)
+        cmd = 'ssh  ' + esxiip + ' "vim-cmd vmsvc/getallvms"'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+    def startibHaveLog(self, logger, ip):
+        cmd = '/etc/init.d/opensmd start'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+#####################################################################################
+# 类名称：statusrecovery
+# 该类的作用是：故障之后等待节点状态恢复相关的函数
+#####################################################################################
+class statusrecovery():
+    ###############
+    #函数作用：判断parastor是否接管
+    ###############
+    def iftakeover(self,ip):
+        while 1:
+            cmd = 'ssh ' + ip + ' "parastor_monitor checkstat"'
+            (status, output) = commands.getstatusoutput(cmd)
+            print output
+            if output.find('nodetype:MGR') >= 0:
+                print '节点已经接管'
+                break
+            else:
+                time.sleep(120)
+                print '等待节点接管'
+    def iftakeover1(self,ip):
+        cmd = 'ssh ' + ip + ' "parastor_monitor checkstat"'
+        (status, output) = commands.getstatusoutput(cmd)
+        print output
+
+
+
+
+    def ifpoweron(self,ip):
+        cmd = 'ping ' + ip + ' -c 4'
+        while 1:
+            (status, output) = commands.getstatusoutput(cmd)
+            if status == 0 and output.find('ttl=') >= 0 and output.find('time=') >= 0:
+                print '节点%s开机成功' %(ip)
+                break
+            else:
+                time.sleep(120)
+                print '等待节点 %s开机' %(ip)
+
+    def ifProcessServiceOk_lyz1(self,ip,processname,otherip):
+        cmd='ssh '+ip+' "parastor_monitor checkstat nodetype='+processname+'"'
+        cmd1='ssh ' + ip + ' "parastor_monitor checkstat"'
+        cmd2='ping '+otherip+' -c 4'
+        while 1:
+            print cmd
+            (status,output)=commands.getstatusoutput(cmd)
+            print output
+            print cmd1
+            (status1, output1) = commands.getstatusoutput(cmd1)
+            print output1
+            print cmd2
+            (status2, output2) = commands.getstatusoutput(cmd2)
+            print output2
+            if output.find('ok')>=0:
+                print 'service of %s is ok' %processname
+                break
+            else:
+                print '进程%s还未处于ok状态，等待服务初始化' %processname
+                time.sleep(30)
+    def ifProcessServiceOk_lyz(self,ip,processname):
+        cmd='ssh '+ip+' "parastor_monitor checkstat nodetype='+processname+'"'
+        cmd1='ssh ' + ip + ' "parastor_monitor checkstat"'
+        while 1:
+            print cmd
+            (status,output)=commands.getstatusoutput(cmd)
+            print output
+            print cmd1
+            (status1, output1) = commands.getstatusoutput(cmd1)
+            print output1
+            if output.find('ok')>=0:
+                print 'service of %s is ok' %processname
+                break
+            else:
+                print '进程%s还未处于ok状态，等待服务初始化' %processname
+                time.sleep(30)
+
+    def ifprocessStart(self, ip, processname):
+        statusrecoveryo=statusrecovery()
+        while 1:
+            ifExist = common.ifExistsProcess_lyz(ip, processname)
+            if ifExist:
+                print '节点 %s 的进程 %s 已经起来' % (ip, processname)
+                break
+            else:
+                print '正在等待节点 %s 的进程 %s启动' % (ip, processname)
+                time.sleep(60)
+
+    def waiteoossServiceok(self,mgrip,oossnodeid):
+        while 1:
+            ifok=0
+            cmd='ssh '+mgrip+' "parastor_monitor checkstat nodetype=oOss"'
+            result=os.popen(cmd)
+            before='nodeid:'
+            after='#status'
+            before1='status:'
+            for line in result:
+                print line
+                beforen=line.find(before)
+                aftern=line.find(after)
+                nodeid=line[(beforen+7):(aftern)]
+                nodeid=int(nodeid)
+                #print 'nodeid is %d' % nodeid
+                oossnodeid=int(oossnodeid)
+                #print 'oossnodeid is %d' % oossnodeid
+                if nodeid==oossnodeid:
+                    beforen1=line.find(before1)
+                    status=line[(beforen1+7):(beforen1+10)]
+                    print 'status is %s' %status
+                    if status.find('ok')>=0:
+                        print 'oossid %s oOss is ok' %oossnodeid
+                        ifok=1
+                        break
+                    else:
+                        print 'oossid %s oOss is not ok' %oossnodeid
+                        time.sleep(15)
+            if ifok==1:
+                break
+    #*********************************************************************
+    #以下函数跟以上唯一的不同是多了记录log的功能，所以输入多了一个logger参数
+    def iftakeoverHaveLog(self,logger,ip):
+        while 1:
+            cmd = 'ssh ' + ip + ' "parastor_monitor checkstat"'
+            logger.info(cmd)
+            (status, output) = commands.getstatusoutput(cmd)
+            logger.info(output)
+            if output.find('nodetype:MGR') >= 0:
+                logger.info('节点已经接管')
+                break
+            else:
+                time.sleep(120)
+                logger.info('等待节点接管')
+    def iftakeover1HaveLog(self,logger,ip):
+        cmd = 'ssh ' + ip + ' "parastor_monitor checkstat"'
+        logger.info(cmd)
+        (status, output) = commands.getstatusoutput(cmd)
+        logger.info(output)
+
+
+
+
+    def ifpoweronHaveLog(self,logger,ip):
+        cmd = 'ping ' + ip + ' -c 4'
+        logger.info(cmd)
+        while 1:
+            (status, output) = commands.getstatusoutput(cmd)
+            logger.info(output)
+            if status == 0 and output.find('ttl=') >= 0 and output.find('time=') >= 0:
+                logger.info('节点%s开机成功' %(ip))
+                break
+            else:
+                time.sleep(120)
+                logger.info('等待节点 %s开机' %(ip))
+
+    def ifProcessServiceOkHaveLog_lyz1(self,logger,ip,processname,otherip):
+        cmd='ssh '+ip+' "parastor_monitor checkstat nodetype='+processname+'"'
+        cmd1='ssh ' + ip + ' "parastor_monitor checkstat"'
+        cmd2='ping '+otherip+' -c 4'
+        while 1:
+            logger.info(cmd)
+            (status,output)=commands.getstatusoutput(cmd)
+            logger.info(output)
+            logger.info(cmd1)
+            (status1, output1) = commands.getstatusoutput(cmd1)
+            logger.info(output1)
+            logger.info(cmd2)
+            (status2, output2) = commands.getstatusoutput(cmd2)
+            logger.info(output2)
+            if output.find('ok')>=0:
+                logger.info('service of %s is ok' %processname)
+                break
+            else:
+                logger.info('进程%s还未处于ok状态，等待服务初始化' %processname)
+                time.sleep(30)
+    def ifProcessServiceOkHaveLog_lyz(self,logger,ip,processname):
+        cmd='ssh '+ip+' "parastor_monitor checkstat nodetype='+processname+'"'
+        cmd1='ssh ' + ip + ' "parastor_monitor checkstat"'
+        while 1:
+            logger.info(cmd)
+            (status,output)=commands.getstatusoutput(cmd)
+            logger.info(output)
+            logger.info(cmd1)
+            (status1, output1) = commands.getstatusoutput(cmd1)
+            logger.info(output1)
+            if output.find('ok')>=0:
+                logger.info('service of %s is ok' %processname)
+                break
+            else:
+                logger.info('进程%s还未处于ok状态，等待服务初始化' %processname)
+                time.sleep(30)
+
+    def ifprocessStartHaveLog(self, logger,ip, processname):
+        statusrecoveryo=statusrecovery()
+        while 1:
+            ifExist = common.ifExistsProcess_lyz(ip, processname)
+            if ifExist:
+                logger.info('节点 %s 的进程 %s 已经起来' % (ip, processname))
+                break
+            else:
+                logger.info('正在等待节点 %s 的进程 %s启动' % (ip, processname))
+                time.sleep(60)
+
+    def waiteoossServiceokHaveLog(self,logger,mgrip,oossnodeid):
+        while 1:
+            ifok=0
+            cmd='ssh '+mgrip+' "parastor_monitor checkstat nodetype=oOss"'
+            result=os.popen(cmd)
+            before='nodeid:'
+            after='#status'
+            before1='status:'
+            for line in result:
+                logger.info(line)
+                beforen=line.find(before)
+                aftern=line.find(after)
+                nodeid=line[(beforen+7):(aftern)]
+                nodeid=int(nodeid)
+                #print 'nodeid is %d' % nodeid
+                oossnodeid=int(oossnodeid)
+                #print 'oossnodeid is %d' % oossnodeid
+                if nodeid==oossnodeid:
+                    beforen1=line.find(before1)
+                    status=line[(beforen1+7):(beforen1+10)]
+                    logger.info('status is %s' %status)
+                    if status.find('ok')>=0:
+                        logger.info('oossid %s oOss is ok' %oossnodeid)
+                        ifok=1
+                        break
+                    else:
+                        logger.info('oossid %s oOss is not ok' %oossnodeid)
+                        time.sleep(15)
+            if ifok==1:
+                break
+    def waiteServiceokHaveLog(self,logger,mgrip,oossnodeid,processname):
+        while 1:
+            ifok=0
+            cmd='ssh '+mgrip+' "parastor_monitor checkstat nodetype='+processname+'"'
+            result=os.popen(cmd)
+            before='nodeid:'
+            if processname=='oPara':
+                after = '#mosgrp_state'
+            elif processname=='MGR':
+                after = '#ha_status'
+            elif processname=='oStor':
+                after = '#phy_status'
+            elif (processname=='oOms' or processname=='oOss'):
+                after='#status'
+            before1='#status:'
+            for line in result:
+                logger.info(line)
+                beforen=line.find(before)
+                aftern=line.find(after)
+                nodeid=line[(beforen+7):(aftern)]
+                print 'nodeid is %s'%nodeid
+                nodeid=int(nodeid)
+                #print 'nodeid is %d' % nodeid
+                oossnodeid=int(oossnodeid)
+                #print 'oossnodeid is %d' % oossnodeid
+                if nodeid==oossnodeid:
+                    beforen1=line.find(before1)
+                    status=line[(beforen1+8):(beforen1+11)]
+                    logger.info('status is %s' %status)
+                    if status.find('ok')>=0:
+                        logger.info('%s %s  is ok' %(processname,oossnodeid))
+                        ifok=1
+                        break
+                    else:
+                        logger.info('%s %s  is not ok' %(processname,oossnodeid))
+                        time.sleep(15)
+            if ifok==1:
+                break
+
+class sql():
+    #该函数在ds上执行，ip是oOms所在ip
+    def ifsqllink(self,oossip,ip):
+        #到oossip上创建一个文件，在文件中写入'\q',也就是数据库的退出命令
+        filename='/opt/lyzcmdforsqlexit'
+        print os.path.exists(filename)
+        if os.path.exists(filename):
+            os.system('rm -rf filename')
+            print '%s exists we delete it' %filename
+        cmd='ssh '+oossip+' "touch '+filename+'"'
+        (status,output)=commands.getstatusoutput(cmd)
+        print output
+        cmd1='ssh %s "echo \'\q\' > %s"' %(oossip,filename)
+        print cmd1
+        (status, output) = commands.getstatusoutput(cmd1)
+        cmd2='ssh '+oossip+' "/mnt/parastor/.ps_hidden/pos/postgres/bin/psql -d pos_iam -h '+ip+'< '+filename+'"'
+        print cmd
+        (status,output2)=commands.getstatusoutput(cmd2)
+        print output2
+        if output2=='':
+            print time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+            print 'sqllink is ok'
+            return True
+        else:
+            print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+            print 'sqllink is not ok'
+            return False
+    #该函数一直等待，知道数据库链接成功
+    def waitsqllink(self,oossip,ip):
+        #到oossip上创建一个文件，在文件中写入'\q',也就是数据库的退出命令
+        filename='/opt/lyzcmdforsqlexit'
+        print os.path.exists(filename)
+        if os.path.exists(filename):
+            os.system('rm -rf filename')
+            print '%s exists we delete it' %filename
+        cmd='ssh '+oossip+' "touch '+filename+'"'
+        (status,output)=commands.getstatusoutput(cmd)
+        print output
+        cmd1='ssh %s "echo \'\q\' > %s"' %(oossip,filename)
+        print cmd1
+        (status, output) = commands.getstatusoutput(cmd1)
+        cmd2='ssh '+oossip+' "/mnt/parastor/.ps_hidden/pos/postgres/bin/psql -d pos_iam -h '+ip+'< '+filename+'"'
+        print cmd
+        (status,output2)=commands.getstatusoutput(cmd2)
+        print output2
+        while 1:
+            if output2=='':
+                print time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(time.time()))
+                print 'sqllink is ok'
+                break
+            else:
+                print time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
+                print 'sqllink is not ok'
+                time.sleep(60)
+class mixfault():
+
+    #该函数用来执行循环下电上电操作
+    def cyclepoweroffandon(self,ip,ipmiip):
+        faulto = fault()
+        statusrecoveryo = statusrecovery()
+        while 1:
+            #下电
+            print '*************************************************************************************************************'
+            print '*************************************************************************************************************'
+            print 'time of poweoff is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+            faulto.poweroff(ipmiip)
+            time.sleep(180)
+            # 上电
+            print '*************************************************************************************************************'
+            print '*************************************************************************************************************'
+            print 'time of poweon is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+            faulto.poweron(ipmiip)
+            # 等待成功
+            print '*************************************************************************************************************'
+            print '*************************************************************************************************************'
+            statusrecoveryo.ifpoweron(ip)
+            print 'time of poweon finish is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
+            time.sleep(180)
+    #该函数与以上唯一的不同是多了一个logger，用来执行循环下电上电操作
+    def cyclepoweroffandonHaveLog(self,logger,ip,ipmiip):
+        faulto = fault()
+        statusrecoveryo = statusrecovery()
+        while 1:
+            #下电
+            logger.info('*************************************************************************************************************')
+            logger.info('*************************************************************************************************************')
+            logger.info('time of poweoff is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+            faulto.poweroff(ipmiip)
+            time.sleep(180)
+            # 上电
+            logger.info('*************************************************************************************************************')
+            logger.info('*************************************************************************************************************')
+            logger.info('time of poweron is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+            faulto.poweron(ipmiip)
+            # 等待成功
+            logger.info('*************************************************************************************************************')
+            logger.info('*************************************************************************************************************')
+            statusrecoveryo.ifpoweron(ip)
+            logger.info('time of poweon finish is %s' % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))))
+            time.sleep(180)
+
+
+
+
+
+
+
+if __name__=="__main__":
+    faulto=fault()
+    faulto.getVmidOfNodes('10.2.20.202')

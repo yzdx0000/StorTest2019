@@ -1,0 +1,216 @@
+# -*- coding:utf-8 _*-
+"""
+测试内容:系统剩余空间大于节点容量，节点故障和恢复
+1、部署3节点集群环境，配置日志3副本，配置访问分区为3个节点；
+5、对齐 大小块混合顺序读写业务为脚本mix-S-Align.conf
+
+步骤:
+1、在访问区配置中，每个节点取1块磁盘创建副本模式存储池，创建存储池pool1 50G ；并创建和配置对于的访问分区和vip地址池；
+2、创建10条逻辑卷，单卷大小为2G；
+3、创建10条精简卷，单卷大小为10G；
+4、将5条逻辑卷写满
+5、一个节点下电后创建10条精简卷
+6、步骤5中节点上电
+
+检查项:
+1、步骤2，10条逻辑卷创建成功
+2、步骤3，10条精简卷创建成功
+3、步骤4，5条逻辑卷写满，系统剩余可用容量为40G，可预留容量为27.5G左右
+4、步骤5，节点下电后，系统剩余可用容量不变，可预留容量不变，所有卷的可用容量减少，10条精简卷创建成功
+5、步骤6，节点恢复后，存储池可用容量恢复，卷可用容量恢复
+"""
+
+import os, sys
+import time
+import random
+import utils_path
+import Lun_managerTest
+import common
+import ReliableTest
+import log
+import error
+import get_config
+import login
+import error
+import decorator_func
+from get_config import config_parser as cp
+import env_manage_lun_manage
+import env_manage_repair_test
+
+"""初始化日志和全局变量"""
+file_name = os.path.basename(__file__)
+file_name = file_name[:-3]  # 获取本脚本名，去掉.py后缀
+log_file_path = log.get_log_path(file_name)  # 获取日志目录，即test_cases/Log/Case_log
+log.init(log_file_path, True)  # 初始化日志文件
+
+log.info("---------------全局初始化操作-----------------")
+node_ip1 = env_manage_lun_manage.node_ip1
+node_ip2 = env_manage_lun_manage.deploy_ips[1]
+client_ip1 = env_manage_lun_manage.client_ips[0]
+esxi_ip = env_manage_lun_manage.Esxi_ips
+fault_ip = node_ip2
+log.info("获取机器类型，若为虚拟机则获取vm_id")
+type_info = env_manage_repair_test.get_os_type(fault_ip)
+vm_ids = None
+if type_info != "phy":
+    vm_ids = env_manage_repair_test.Reliable_osan.vm_id(esxi_ip=esxi_ip, u_name=cp("esxi", "esxi_user"),
+                                                        pw=cp("esxi", "esxi_passwd"),
+                                                        node_ip=fault_ip)
+else:
+    vm_ids = ReliableTest.get_ipmi_ip(fault_ip)
+
+"""读取存储池的容量"""
+storage_pool_id = env_manage_lun_manage.osan.get_storage__type_id(s_ip=node_ip1, type="BLOCK")
+az_id = env_manage_lun_manage.osan.get_access_zone_id(s_ip=node_ip1)[0]
+storage_pool_size = env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1,
+                                                                 command='get_storage_pools', ids="ids",
+                                                                 indexname="storage_pools",
+                                                                 argv2="total_bytes",
+                                                                 argv1=storage_pool_id) / int(
+    cp("reserve", "replica_num"))
+log.info("id为{}的存储池容量为{} byte".format(storage_pool_id, storage_pool_size))
+thick_lun_size = int(storage_pool_size * 0.4 / 10 / float(cp("reserve", "multiple")))
+log.info("thick lun size为{} byte".format(thick_lun_size))
+
+
+def iscsi_login():
+    global min_seq_w1
+    global min_seq_w2
+    login.login()
+
+    # 修改vdbench配置文件的参数值
+    seekpct = 0  # 随机
+    rdpct1 = 0  # 读写比例(0是全写)
+    rdpct2 = 100
+    xfersize1 = cp("vdbench", "unmix_xfersize1")
+    lun1 = env_manage_lun_manage.osan.ls_scsi_dev(client_ip1)
+    min_seq_w1 = env_manage_lun_manage.osan.gen_vdb_xml(maxdata=int(thick_lun_size * 10),
+                                                        thread=cp("vdbench", "threads"), lun=lun1,
+                                                        xfersize=xfersize1, seekpct=seekpct, rdpct=rdpct1)
+    min_seq_w2 = env_manage_lun_manage.osan.gen_vdb_xml(maxdata=int(storage_pool_size * 10),
+                                                        thread=cp("vdbench", "threads"), lun=lun1,
+                                                        xfersize=xfersize1, seekpct=seekpct, rdpct=rdpct1)
+    min_seq_r = env_manage_lun_manage.osan.gen_vdb_xml(maxdata=int(thick_lun_size * 0.2),
+                                                       thread=cp("vdbench", "threads"), lun=lun1,
+                                                       xfersize=xfersize1, seekpct=seekpct, rdpct=rdpct2)
+
+
+def create_lun_thick(arg=1):
+    for i1 in range(10):
+        lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes=thick_lun_size, lun_type="THICK",
+                                                       lun_name='LUN{}'.format(i1),
+                                                       stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+
+
+def create_lun_thin(arg=1):
+    for i2 in range(10, 10 + 10):
+        lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes=int(storage_pool_size / 5),
+                                                       lun_type="THIN",
+                                                       lun_name='LUN{}'.format(i2),
+                                                       stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+
+    storage_pool_size2 = env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1,
+                                                                      command='get_storage_pools', ids="ids",
+                                                                      indexname="storage_pools",
+                                                                      argv2="total_bytes",
+                                                                      argv1=storage_pool_id)
+    storage_pool_avail_bytes = env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1,
+                                                                            command='get_storage_pools', ids="ids",
+                                                                            indexname="storage_pools",
+                                                                            argv2="avail_bytes",
+                                                                            argv1=storage_pool_id)
+    log.info("系统剩余可用容量为{},可预留容量为{}".format(storage_pool_size2, storage_pool_size))
+    if storage_pool_size2 == storage_pool_size:
+        pass
+    else:
+        log.info("存储池容量校验失败")
+        os._exit(1)
+    if 0.95 * (storage_pool_size - 10 * thick_lun_size - 10 * (
+            int(cp("reserve", "thin_lun_reserve")) * 1024 * (1024 + 20))) < storage_pool_avail_bytes < 1.05 * (
+            storage_pool_size - 10 * thick_lun_size - 10 * (
+            int(cp("reserve", "thin_lun_reserve")) * 1024 * (1024 + 20))):
+        pass
+
+
+def create_lun_thin2(arg=1):
+    for i2 in range(30, 30 + 10):
+        lun_id = env_manage_lun_manage.osan.create_lun(s_ip=node_ip1, total_bytes=int(storage_pool_size / 5),
+                                                       lun_type="THIN",
+                                                       lun_name='LUN{}'.format(i2),
+                                                       stor_pool_id=storage_pool_id, acc_zone_id=az_id)
+
+
+def process_error(arg=1):
+    decorator_func.timer(10)
+    for i in range(10):
+        time.sleep(60)
+        ReliableTest.run_kill_process(node_ip=node_ip1, process="oSan")
+
+
+def network_error(arg=1):
+    decorator_func.timer(10)
+    fault_ip = env_manage_lun_manage.Reliable_osan.get_master_oRole(node_ip2)  # 获取oPmgr主进程节点ip
+    env_manage_lun_manage.Reliable_osan.network_test(fault_ip, cp('create_subnet', 'network_interface'),
+                                                     'down')
+    time.sleep(300)
+    env_manage_lun_manage.Reliable_osan.network_test(fault_ip, cp('create_subnet', 'network_interface'),
+                                                     'up')
+
+
+def os_error(arg=3):
+    log.info('Run task %s (%s)...' % (sys._getframe().f_code.co_name, os.getpid()))
+    env_manage_repair_test.down_node(node_ip=fault_ip, type_info=type_info, vm_id=vm_ids)
+    time.sleep(30)
+    storage_pool_size2 = env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1,
+                                                                      command='get_storage_pools', ids="ids",
+                                                                      indexname="storage_pools",
+                                                                      argv2="total_bytes",
+                                                                      argv1=storage_pool_id)
+
+    time.sleep(60)
+    env_manage_repair_test.up_node(node_info=vm_ids, type_info=type_info)
+    env_manage_lun_manage.Reliable_osan.get_os_status_1(fault_ip)  # 检测重启后机器状态，是否已开机
+
+
+def map_lun():
+    hg_id = env_manage_lun_manage.osan.create_host_group(s_ip=node_ip1, hg_name='myhostgroup1')
+    h_id = env_manage_lun_manage.osan.add_host(s_ip=node_ip1, h_name='host1', hg_id=hg_id)
+    ini_id = env_manage_lun_manage.osan.add_initiator(s_ip=node_ip1, h_id=h_id, iqn=cp("add_initiator", "iqn"),
+                                                      alias=cp("add_initiator", "alias"))
+    decorator_func.judge_target(
+        env_manage_lun_manage.osan.get_option_single(s_ip=node_ip1, command="get_initiators", indexname="initiators"
+                                                     , argv2="auth_type", ids="ids", argv1=ini_id),
+        "NONE")
+
+    env_manage_lun_manage.osan.update_iscsid_conf(cli_ip=client_ip1, CHAPTYPE='None', s_ip=client_ip1)
+    lun_ids = random.sample(env_manage_lun_manage.Reliable_osan.get_thin_lun(node_ip1), 5)
+    for i in lun_ids:
+        env_manage_lun_manage.osan.map_lun(s_ip=node_ip1, lun_ids=i, hg_id=hg_id)
+
+
+def case():
+    log.info("在访问区配置中，每个节点取1块磁盘创建副本模式存储池，创建存储池pool1 50G；并创建和配置对于的访问分区和vip地址池；")
+    log.info("创建10条逻辑卷，单卷大小为2G，创建10条精简卷，单卷大小为10G,将5条逻辑卷写满")
+    create_lun_thick()
+    create_lun_thin()
+    map_lun()
+    iscsi_login()
+    env_manage_lun_manage.co2_osan.run_vdb(client_ip=client_ip1, vdb_xml=min_seq_w1, output=node_ip1)
+    log.info("一个节点下电,个节点下电后创建10条精简卷节点上电")
+    os_error()
+    create_lun_thin2()
+
+
+def main():
+    env_manage_lun_manage.revert_env()
+    error.rel_check_before_run(file_name, jnl_rep=3, free_jnl_num=0, node_num=3)
+
+    env_manage_lun_manage.clean()
+
+    case()  # 用例步骤
+
+    env_manage_lun_manage.clean()
+
+
+if __name__ == '__main__':
+    common.case_main(main)  # 主函数执行入口

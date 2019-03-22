@@ -1,0 +1,8 @@
+sd=default,journal=/root/vdbench/journal,openflags=o_direct
+sd=sd1,lun=/dev/sdj,offset=6144,align=9216
+sd=sd2,lun=/dev/sdk,offset=5632,align=7680
+sd=sd3,lun=/dev/sdl,offset=9728,align=7168
+wd=wd1,sd=sd1,xfersize=(2136k,35,3835k,28,5829k,29,9104k,8),rdpct=19,seekpct=38
+wd=wd2,sd=sd2,xfersize=(8766k,9,1547k,28,9112k,19,9657k,44),rdpct=68,seekpct=22
+wd=wd3,sd=sd3,xfersize=(9256k,17,6518k,6,225k,26,6746k,51),rdpct=90,seekpct=12
+rd=run1,wd=wd*,iorate=200,elapsed=600,maxdata=500G,threads=(5,5,5),interval=1

@@ -1,0 +1,214 @@
+#!/usr/bin/python
+help_doc = '''
+#By Diws,2017-11-24
+#Usage:      mpi_check_md5.py vdbench_path threads_num run_times
+#Attention:  The node where to run the script, need a nfs mount path;and there must have a vdbench tool to init data
+#Attention:  The script does not support run as a cluster,that means if you want to run on some nodes,you must run the
+#            script on each node.
+#Additional: If you want to change the files' size and files' number,find the "Generate the vdbench config file" segment,
+#            and modify "fsd_str" parameter,besides, change the "depth" parameter is helpless,because in oreder to avoid 
+#            the object name confict,the script just scan the first depth of the directory.
+#            If necessary,you can set the account ID and certificate ID directly.
+#Warning:    If you shared one system,you must change the "acc_name" parameter in order to 
+'''
+import os
+import sys
+import cmd
+import threading
+import commands
+import time
+
+if len(sys.argv) != 4:
+	print help_doc
+	exit(1)
+vdb_path = sys.argv[1]
+threads = sys.argv[2]
+run_times = int(sys.argv[3])
+#Stage : Init
+
+#Check if there is a mount path,so the script can inits datas into it.If there is no mount path,print error and exit
+res = commands.getstatusoutput("mount | grep -v nfsd | grep 'type nfs' | wc -l")
+#print res[1]
+if int(res[1]) == 0 :
+	print "There is no mount path,please mount a nfs client."
+	exit(1)
+res = commands.getstatusoutput("mount | grep -v nfsd | grep 'type nfs' | sed -n 1p | awk -F ' ' '{print $3}'")
+mount_path = res[1]
+time_stamp = str(time.time())
+src_path = mount_path+'/src_'+time_stamp
+dst_path = mount_path+'/dst_'+time_stamp
+
+#Generate the vdbench config file
+hd_str = "hd=h1,shell=ssh,user=root,system=localhost,vdbench="+vdb_path+"\n"
+fsd_str = "fsd=fsd1,depth=1,files=20,sizes=(1k,10,4k,10,100k,10,1M,10,500k,10,10M,10,100M,1,20k,19,7M,10,200k,10),anchor="+src_path+",width="+str(threads)+"\n"
+fwd_str = "fwd=fwd1,hd=h1,xfersize=1K,operation=read,fsd=fsd1,threads="+str(threads)+"\n"
+rd_str = "rd=rd1,fwd=fwd1,fwdrate=max,format=yes,elapsed=2,interval=1"+"\n"
+vdb_xml = cmd.log_path+"/vdb_xml"
+#Clean old xml file
+clean_xml_cmd="cd %s;rm -rf vdb_xml" %(cmd.log_path)
+commands.getstatusoutput(clean_xml_cmd)
+vdb_file = open(vdb_xml,'a')
+vdb_file.write(hd_str)
+vdb_file.write(fsd_str)
+vdb_file.write(fwd_str)
+vdb_file.write(rd_str)
+vdb_file.close()
+
+#Run the vdbench to generate src files
+vdb_cmd = vdb_path+"/vdbench -k -f "+vdb_xml
+res = os.system(vdb_cmd)
+if res !=  0 :
+	print "Run vdbench error."
+	exit(1)
+
+#Stage : PUT OBJECT
+acc_name = "water"
+
+#Add account and get the account id
+acc_id = cmd.add_acc(acc_name,acc_name+"@md5.com")
+#acc_id = "00001YJ8WJDM1IIJ"
+
+#Add certificate
+cer_res = cmd.add_cer(acc_id[0])
+
+#Get certificate id
+cer_id = cmd.get_cer_id(acc_id[0])
+cmd.log_rec(acc_name+"\t"+acc_id[0]+"\t"+cer_id[0])
+#cer_id = ["00001YJ8WJDM1IIJ000024OYV8WVESID"]
+#Put bucket for the account
+put_buc = cmd.put_bucket(cmd.domain_name,acc_name,cer_id[0])
+#Get the directorys where the files stored
+def get_dir_files(path):
+	if  os.path.exists(path):
+	#	for src_dirpath, src_dirnames, src_filenames in os.walk(mount_path+"/"+src_path):
+		for src_dirpath, src_dirnames, src_filenames in os.walk(path):
+			break
+	else :
+		print "The path:"+path+" doesn't exist."
+		exit(1)
+	return src_dirpath, src_dirnames, src_filenames
+
+#Get the file's md5sum,and put it
+def put_obj(path,num):
+	#md5_path = mount_path+"/1511333980.07"+"/src_md5_"+str(num)
+	md5_path = src_path+"/src_md5_"+str(num)
+	(src_child_dirpath, src_child_dirnames, src_child_filenames) = get_dir_files(path)
+	for src_file in src_child_filenames:
+		print "begin put "+path+"/"+src_file
+		cmd.log_rec("begin put "+path+"/"+src_file)
+		src_file_fullname = path+"/"+src_file
+		md5_res = commands.getstatusoutput("md5sum "+src_file_fullname)
+		src_obj_name = str(num)+"_"+src_file
+		if md5_res[0] == 0 :
+			tmp = open(md5_path,'a')
+			tmp.write(md5_res[1]+"\n")
+			tmp.close
+			put_res = cmd.put_obj(cmd.domain_name,acc_name,src_obj_name,src_file_fullname,cer_id[0])
+			while put_res[0] != 0 :
+				print "Put obj error:"+src_file_fullname
+				cmd.log_rec("Put obj error:"+src_file_fullname)
+				print "Begin reput it."
+				cmd.log_rec("Begin reput it.")
+				cmd.log_rec("\n##########"+put_res[1]+"##########\n")
+				put_res = cmd.put_obj(cmd.domain_name,acc_name,src_obj_name,src_file_fullname,cer_id[0])
+				time.sleep(5)
+		else :
+			print "Get "+src_file_fullname+"md5sum failed."
+			exit(1)
+#Get obj
+def get_obj(path,num,times):
+	#File to store the objects' md5sum which get from parastor
+	#md5_path = mount_path+"/1511333980.08"+"/dst_md5_"+str(num)
+	md5_path = dst_path+"_"+str(times)+"/dst_md5_"+str(num)
+	#Directory to store the objects which get from parastor
+	#dst_file_path = mount_path+"/1511333980.08"+"/vdb.1_"+str(num)+".dir"
+	dst_file_path = dst_path+"_"+str(times)+"/vdb.1_"+str(num)+".dir"
+	#If the directory is not exist,then create it.
+	is_exists=os.path.exists(dst_file_path)
+	if not is_exists:
+		os.makedirs(dst_file_path)
+	#This is in order to get the objects' name
+	(src_child_dirpath, src_child_dirnames, src_child_filenames) = get_dir_files(path)
+	for src_file in src_child_filenames:
+		src_obj_name = str(num)+"_"+src_file
+		dst_file_name = dst_file_path+"/"+src_file
+		print "begin get "+src_obj_name
+		cmd.log_rec("begin get "+src_obj_name)
+		get_res = cmd.get_obj(cmd.domain_name,acc_name,src_obj_name,dst_file_name,cer_id[0])
+		while get_res[0] != 0 :
+			print "Get obj error:"+src_obj_name
+			cmd.log_rec("Get obj error:"+src_obj_name)
+			print "Begin reget it."
+			cmd.log_rec("Begin reget it.\n")
+			cmd.log_rec("\n##########"+get_res[1]+"##########\n")
+			get_res = cmd.get_obj(cmd.domain_name,acc_name,src_obj_name,dst_file_name,cer_id[0])
+			time.sleep(5)
+		md5_res = commands.getstatusoutput("md5sum "+dst_file_name)
+		if md5_res[0] == 0 :
+			tmp = open(md5_path,'a')
+			tmp.write(md5_res[1]+"\n")
+			tmp.close
+		else :
+			print "Get "+dst_file_name+" md5sum failed."
+			exit(1)
+#Check the results
+def check_md5_file(src_md5_file,dst_md5_file):
+	src_file = open(src_md5_file,'r')
+        for line in src_file:
+                src_md5_res = line.split(' ')[0].strip()
+                src_file_res = (line.split(' ')[-1]).split('/')[-1].strip()
+                dst_md5_info = commands.getstatusoutput('grep '+src_file_res+' '+dst_md5_file)
+                dst_md5_res = dst_md5_info[1].split(' ')[0]
+                if src_md5_res == dst_md5_res :
+                        print line.strip()+" pass."
+			cmd.log_rec(line.strip()+" pass.")
+                else:
+                        print line.strip()+" check failed !!!"
+			cmd.log_rec(line.strip()+" check failed !!!")
+                        exit(1)
+#Get the path:src_dirnames for each thread
+#(src_dirpath, src_dirnames, src_filenames) = get_dir_files(mount_path+"/1511333980.07")
+(src_dirpath, src_dirnames, src_filenames) = get_dir_files(src_path)
+
+put_threads = []
+put_num = 1
+for src_dirname in src_dirnames:
+	#print src_dirname+"\t"+str(put_num)
+	#tmp = threading.Thread(target=put_obj,args = (mount_path+"/1511333980.07/"+"vdb.1_"+str(put_num)+".dir",put_num))
+	tmp = threading.Thread(target=put_obj,args = (src_path+"/"+"vdb.1_"+str(put_num)+".dir",put_num))
+	put_threads.append(tmp)
+	put_num = put_num+1
+for put_thread in put_threads:
+	put_thread.setDaemon(True)
+	put_thread.start()
+for put_thread in put_threads:
+	put_thread.join()
+
+for run_time in range(0,run_times):
+	get_threads = []
+	get_num = 1
+	for src_dirname in src_dirnames:
+		#print get_num
+		#print src_dirname+"\t"+str(get_num)
+		#get_tmp = threading.Thread(target=get_obj,args = (mount_path+"/1511333980.07/"+"vdb.1_"+str(get_num)+".dir",get_num))
+		get_tmp = threading.Thread(target = get_obj,args = (src_path+"/"+"vdb.1_"+str(get_num)+".dir",get_num,run_time))
+		get_threads.append(get_tmp)
+		get_num = get_num+1
+	for get_thread in get_threads:
+		get_thread.setDaemon(True)
+		get_thread.start()
+	for get_thread in get_threads:
+		get_thread.join()
+
+	#Check md5sum
+	check_threads = []
+	md5_num=1
+	for src_dirname in src_dirnames:
+		check_md5_tmp = threading.Thread(target = check_md5_file,args = (src_path+"/src_md5_"+str(md5_num),dst_path+"_"+str(run_time)+"/dst_md5_"+str(md5_num)))
+		check_threads.append(check_md5_tmp)
+		md5_num = md5_num+1
+	for check_thread in check_threads:
+		check_thread.setDaemon(True)
+		check_thread.start()
+	for check_thread in check_threads:
+		check_thread.join()

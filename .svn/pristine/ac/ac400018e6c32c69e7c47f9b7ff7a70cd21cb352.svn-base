@@ -1,0 +1,63 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+#######本脚本用于查询桶配额###########
+
+import subprocess,sys,os,commands
+import _checkresult_lyz
+import getoutputpath_lyz
+import _xmlanalyzeQuota
+#添加自定义模块*****
+
+  
+def get_bucket_quota_cmd(ip,bucket_name,certificate_id):
+    cmd='curl -s -i http://'+str(ip)+':20480/'+str(bucket_name)+'?quota -XGET -H '+' \"Authorization: AWS4-HMAC-SHA256 Credential='+str(certificate_id)+'\"'  #执行创查询桶容量命令本身
+    return cmd
+
+def get_bucket_quota_exc(ip,bucket_name,certificate_id):
+    cmd=get_bucket_quota_cmd(ip,bucket_name,certificate_id)
+    #child=subprocess.Popen(str(cmd),shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)      #调用shell执行命令
+    #child.wait()
+    #将命令执行的结果输出到指定文件，记录日志*****
+    #_create_logfile_zh.create_logfile(cmd,child)
+    (status,output)=commands.getstatusoutput(cmd)
+    #print output
+    #print output
+    re=_checkresult_lyz.checkresult(status,output)
+    if re==-1:
+        return -1
+    outputdir = getoutputpath_lyz.getoutputpath()
+    fileAllObjectsallpath = os.path.join(outputdir, 'fileQuota')
+    with open(fileAllObjectsallpath,'w') as filequota:
+        filequota.write(output)
+    quota=_xmlanalyzeQuota.analyze_xml()
+    print quota
+    return quota
+def get_bucket_quota_excHaveLog(ip,bucket_name,certificate_id,logger):
+    cmd=get_bucket_quota_cmd(ip,bucket_name,certificate_id)
+    logger.info(cmd)
+    #child=subprocess.Popen(str(cmd),shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)      #调用shell执行命令
+    #child.wait()
+    #将命令执行的结果输出到指定文件，记录日志*****
+    #_create_logfile_zh.create_logfile(cmd,child)
+    (status,output)=commands.getstatusoutput(cmd)
+    logger.info(output)
+    re=_checkresult_lyz.checkresultHaveLog(status,output,logger)
+    if re == -1:
+        return -1
+    outputdir = getoutputpath_lyz.getoutputpath()
+    fileAllObjectsallpath = os.path.join(outputdir, 'fileQuota')
+    with open(fileAllObjectsallpath,'w') as filequota:
+        filequota.write(output)
+    quota=_xmlanalyzeQuota.analyze_xml()
+    logger.info(quota)
+    return quota
+#函数自验*****
+if __name__=="__main__":
+    #ds_ip=raw_input("please input ds ip: ")
+    #bucket_name=raw_input("please input bucket name: ")
+    #certificate_id=raw_input("please input certificate id: ")
+    #get_bucket_quota_exc(ds_ip,bucket_name,certificate_id)
+    get_bucket_quota_exc(sys.argv[1],sys.argv[2],sys.argv[3])
+    
+

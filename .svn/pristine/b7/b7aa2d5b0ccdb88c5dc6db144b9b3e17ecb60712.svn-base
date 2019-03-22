@@ -1,0 +1,22 @@
+#-*- coding:utf-8 -*
+#函数名称：deleteObject
+#函数作用：删除对象
+#函数输入：
+import sys,commands
+import _checkresult_lyz
+def usage():
+	print 'python scriptname oossip bucketname objectname certificateid'
+def deleteObject(oossip,bucketname,objectname,certificateid):
+	cmd='curl -i http://%s:20480/%s/%s -X DELETE -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,certificateid)
+	print cmd
+	(status,output)=commands.getstatusoutput(cmd)
+	print output
+	print 'delete %s   %s ok************************************' %(bucketname,objectname)
+	re=_checkresult_lyz.checkresult(status, output)
+	if re==-1:
+		return -1
+if __name__=="__main__":
+	if len(sys.argv)!=5:
+		usage()
+	else:
+		deleteObject(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4])

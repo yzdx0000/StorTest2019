@@ -1,0 +1,105 @@
+#!/usr/bin/python2.6
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+
+import utils_path
+import common
+import s3_common
+import log
+import get_config
+import prepare_clean
+import result
+
+##########################################################################
+#
+# Author: zhanghan
+# date 2018-09-08
+# @summary：
+#    验证桶的配额信息可以查询成功
+# @steps:
+#    1、创建账户；
+#    2、给账户添加证书；
+#    3、上传桶；
+#    4、设置桶的配额
+#    5、获取桶的配额
+#    6、检验获取到的配额和设置的配额是否相同
+#    7、清理环境
+#
+# @changelog：
+##########################################################################
+
+# 全局变量
+FILE_NAME = os.path.splitext(os.path.basename(__file__))[0]  # 本脚本名字
+FILE_NAME = FILE_NAME.replace('-', '_')
+ACCOUNT_EMAIL = FILE_NAME + "@sugon.com"
+
+
+def judge_result(rc, filename):
+    if rc == 0:
+        pass
+    else:
+        result.result(filename, "-1")
+
+
+def case():
+    log.info("1> 创建账户")
+    account_name = FILE_NAME + "_account1"
+    rc, account_id = s3_common.add_account(account_name, ACCOUNT_EMAIL, 0)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "create account failed!!!")
+
+    log.info("2> 创建证书")
+    rc, certificate_id, certificate = s3_common.add_certificate(account_id)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "create certificate failed!!!")
+
+    log.info("3> 上传桶")
+    # obj_node = common.Node()
+    # ooss_node_lst = s3_common.get_ooss_node_ids()
+    # oossid = ooss_node_lst[0]
+    # oossip = obj_node.get_node_ip_by_id(oossid)
+    bucket_name = FILE_NAME + '_bucket1'
+    bucket_name = bucket_name.replace('_', '-')
+    rc, stdout = s3_common.add_bucket(bucket_name, certificate_id)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "add bucket failed!!!")
+
+    log.info("4> 设置桶的配额")
+    buc_quota_set = 2000
+    rc, stdout = s3_common.update_bucket_quota(
+        bucket_name, certificate_id, buc_quota_set)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "update bucket quota failed!!!")
+
+    log.info("5> 获取桶的配额")
+    rc, buc_quota_get = s3_common.get_bucket_quota(bucket_name, certificate_id)
+    judge_result(rc, FILE_NAME)
+    common.judge_rc(rc, 0, "get bucket quota failed!!!")
+
+    log.info("6> 检验获取到的配额和设置的配额是否相同")
+    if buc_quota_get == str(buc_quota_set):
+        log.info("the get value and the set value is %s" % buc_quota_get)
+        log.info("检验获取到的配额和设置的配额相同")
+    else:
+        log.info("检验获取到的配额和设置的配额不同")
+        check_rc = -1
+        judge_result(check_rc, FILE_NAME)
+        common.judge_rc(
+            check_rc, 0, "check bucket quota failed, "
+            "the get value is not the same with the sey value!!!")
+
+    log.info("7> 用例%s执行成功" % FILE_NAME)
+
+
+def main():
+    prepare_clean.s3_test_prepare(FILE_NAME, [ACCOUNT_EMAIL])
+    case()
+    prepare_clean.s3_test_clean([ACCOUNT_EMAIL])
+    log.info('%s finished!' % FILE_NAME)
+    result.result(FILE_NAME, "0")
+
+
+if __name__ == '__main__':
+    common.case_main(main)

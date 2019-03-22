@@ -1,0 +1,6 @@
+import os
+num = 1000
+i = 0
+
+while i < num:
+	os.system("python 6_put_bucket_zff.py")

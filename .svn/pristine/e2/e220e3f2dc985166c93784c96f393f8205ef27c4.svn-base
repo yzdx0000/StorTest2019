@@ -1,0 +1,72 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#将指定目录下的所有一级文件上传，上传完成后，自动下载，并校验源文件和下载后文件的MD5值
+#邸炜松 2017-11-13
+#使用方法：check_obj_md5_diws.py 账户名 源文件路径 下载的对象目标路径
+import os
+import sys
+import commands
+import cmd
+acc_name=sys.argv[0]
+src_path=sys.argv[1]
+dst_path=sys.argv[2]
+clean_dst_cmd="cd %s;rm -rf *" %(dst_path)
+commands.getstatusoutput(clean_dst_cmd)
+#Add account,and get its account id
+acc_id=cmd.add_acc(acc_name,acc_name+"@md5.com")
+#Add certificate for account,and get its certificate id
+cer_res=cmd.add_cer(acc_id[0])
+if cer_res[0] == 0 :
+	cmd.log_rec("Add certificate for account:"+acc_id[0]+"success")
+else:
+	cmd.log_rec("Add certificate for account:"+acc_id[0]+"Error")
+	#exit(-1)
+cer_id=cmd.get_cer_id(acc_id[0])
+#Put bucket for the cerfificate
+cmd.put_bucket(cmd.domain_name,acc_name,cer_id[0])
+#Get the source files to put
+for src_dirpath, src_dirnames, src_filenames in os.walk(src_path):
+	break
+#Get the source files' md5sum,then put it
+src_file_dict={}
+for src_file in src_filenames:
+	print "begin put "+src_file
+	src_file_fullname=src_dirpath+"/"+src_file
+	md5_res=commands.getstatusoutput("md5sum "+src_file_fullname)
+	if md5_res[0] == 0 :
+		src_file_dict[src_file]=md5_res[1].split(' ')[0]
+		put_res=cmd.put_obj(cmd.domain_name,acc_name,src_file,src_file_fullname,cer_id[0])
+		if put_res[0] != 0 :
+			cmd.log_res("put file:"+src_file_fullname+"Error")
+			exit(1)
+	else:
+		exit(1)
+#Create dest dirs
+is_exists=os.path.exists(dst_path)
+if not is_exists:
+	 os.makedirs(dst_path)
+#Get the dest files into the dst_path
+dst_file_dict={}
+for src_file in src_filenames:
+	dst_file_fullname=dst_path+"/get_"+src_file
+	dst_file_name="get_"+src_file
+	print "get file"+dst_file_name
+	get_res=cmd.get_obj(cmd.domain_name,acc_name,src_file,dst_file_fullname,cer_id[0])
+	if get_res[0] == 0 :
+		#commands.getstatusoutput("sed -i '1,5d' "+dst_file_fullname)
+		md5_res=commands.getstatusoutput("md5sum "+dst_file_fullname)
+		if md5_res[0] == 0 :
+			dst_file_dict[dst_file_name]=md5_res[1].split(' ')[0]
+		else:
+			cmd.log_res("Check dstfile:"+dst_file_fullname+"md5sum Error")
+			exit(1)
+	else:
+		cmd.log_res("Get dstfile"+dst_file_fullname+"Error")
+		exit(1)
+#Check the src_file_dict if it is same with dst_file_dict
+for src_file in src_filenames:
+	dst_file="get_"+src_file
+	if src_file_dict[src_file] != dst_file_dict[dst_file] :
+		print "check md5sum error,file is"+dst_file
+		exit(1)
+

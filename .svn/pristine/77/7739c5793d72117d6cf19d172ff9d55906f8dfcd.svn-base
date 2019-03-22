@@ -1,0 +1,121 @@
+#!/usr/bin/python
+# -*- coding:utf-8 -*-
+#**********************************************
+#实现功能：recovery_oOms_logger用于杀几次oOms进程，待其恢复后退出；recovery_oOss_logger用于杀指定次数的oOss进程，待其恢复后退出；recovery_postgres_logger用于杀指定次数的postgres进程，待其恢复后退出
+#所需参数：recovery_oOms_logger参数oomsip，recovery_oOss_logger需要oomsip和oossip,recovery_postgres_logger需要修改参数oomsip
+#作者：刘萍
+#创建时间：2018/01/12
+#**********************************************
+import os
+import commands
+import threading
+import time
+import _readconffile_lp
+import commonfunction_lp
+import getoutputpath_lp
+import _log_lp
+
+def recovery_oOms_logger(oomsip,logger):
+    for n in range(5):
+        cmd="ssh "+oomsip+" \"parastor_monitor checknodeperf nodetype=oOms|grep "+oomsip+"|cut -d '#' -f3|cut -d ':' -f2"+"\""
+        logger.info(cmd)
+        oomsstat=commands.getstatusoutput(cmd)
+        logger.info(oomsstat)
+        if (oomsstat[0]==0) and (oomsstat[1]=='ok'):
+            while True:
+	        (status,out)=commands.getstatusoutput("ssh "+oomsip+" \"killall -9 oOms"+"\"")
+                logger.info("-----------------Check if oOms is killed--------------------")
+                cmd1="ssh "+oomsip+" \"parastor_monitor checknodeperf nodetype=oOms|grep "+oomsip+"|cut -d '#' -f3|cut -d ':' -f2"+"\""
+                logger.info(cmd1)
+                oomsstat1=commands.getstatusoutput(cmd1)
+                logger.info(oomsstat1)
+                if (oomsstat1[0]==0) and (oomsstat1[1]=='shutdown'):
+		    logger.info("------------------the count of kill oOms is %d-----------------" % (n+1))
+		    break
+                else:
+                    time.sleep(2)
+        else:
+            time.sleep(10)
+    
+#判断oOms有没有正常
+    while True:
+        oomsstat=commands.getstatusoutput("ssh "+oomsip+" \"parastor_monitor checknodeperf nodetype=oOms|grep "+oomsip+"|cut -d '#' -f3|cut -d ':' -f2"+"\"")
+	if (oomsstat[0]==0) and (oomsstat[1]=='ok'):
+	    break
+	else:
+	    time.sleep(10)
+			
+def recovery_oOss_logger(oomsip,oossip,logger):
+    for n in range(5):
+        cmd="ssh "+oomsip+" \"parastor_monitor checknodeperf nodetype=oOss|grep "+oossip+"|cut -d '#' -f3|cut -d ':' -f2"+"\""
+        logger.info(cmd)
+        oossstat=commands.getstatusoutput(cmd)
+        logger.info(oossstat)
+        if (oossstat[0]==0) and (oossstat[1]=='ok'):
+            while True:
+                cmd="ssh "+oossip+" \"killall -9 oOss"+"\""
+                logger.info(cmd)
+                (status,out)=commands.getstatusoutput("ssh "+oossip+" \"killall -9 oOss"+"\"")
+                logger.info("-----------------Check if oOss is killed--------------------")
+                cmd1="ssh "+oomsip+" \"parastor_monitor checknodeperf nodetype=oOss|grep "+oossip+"|cut -d '#' -f3|cut -d ':' -f2"+"\""
+                oossstat1=commands.getstatusoutput(cmd1)
+                logger.info(oossstat1)
+                if (oossstat1[0]==0) and (oossstat1[1]=='shutdown'):
+	            logger.info("-------------the count of kill oOss is %d-------------" % (n+1))
+                    break
+                else:
+                    time.sleep(10)
+        else:
+                time.sleep(120)
+#判断oOss进程有没有正常
+    while True:
+        cmd="ssh "+oomsip+" \"parastor_monitor checknodeperf nodetype=oOss|grep "+oossip+"|cut -d '#' -f3|cut -d ':' -f2"+"\""
+        logger.info(cmd)
+        oossstat=commands.getstatusoutput(cmd)
+        logger.info(oossstat)
+	if (oossstat[0]==0) and (oossstat[1]=='ok'):
+	    break
+	else:
+	    time.sleep(60)
+def recovery_postgres_logger(oomsip,logger):
+    n=0
+    for i in range(5):
+	cmd3="ssh "+oomsip+" \"ps aux|grep /mnt/parastor/.ps_hidden/pos/postgres/bin/postgres|grep -v grep|wc -l"+"\""
+	(status3,result3)=commands.getstatusoutput(cmd3)
+	if(result3=='1'):
+	    (status,out)=commands.getstatusoutput("ssh "+oomsip+" killall -9 postgres")
+	    if(status==0):
+	        logger.info("the count of kill postgres is %d" % (n+1))
+		n+=1
+    while True:
+        time.sleep(2)
+        cmd2='ssh '+oomsip+' "parastor_pos listaccounts"'
+        logger.info(cmd2)
+        (status,output2)=commands.getstatusoutput(cmd2)
+        if(status == 0):
+            logger.info("postgres is ok!")
+	    break
+	else:
+	    time.sleep(2)			
+
+				
+
+if __name__=="__main__":
+    args=_readconffile_lp.readconf()
+#    print args
+    # 第二个步骤：创建logger
+    logfilename='test'
+    # 创建日志输出文件
+    output = getoutputpath_lp.getoutputpath()
+    logfilepath = os.path.join(output, logfilename)
+    ifmkdir = commonfunction_lp.touchfile(logfilepath)
+    logger = _log_lp.log(logfilename)
+    if ifmkdir:
+        logger.info('%s is alreay exists and we delete it and create a new one' % logfilepath)
+    else:
+        logger.info('%s is created ok' % logfilepath)
+#    recovery_oOms_logger(args['master_mgr_ip'],logger)
+
+#    recovery_oOss_logger(args['master_mgr_ip'],args['oossip'],logger)
+
+    recovery_postgres_logger(args['master_mgr_ip'],logger)

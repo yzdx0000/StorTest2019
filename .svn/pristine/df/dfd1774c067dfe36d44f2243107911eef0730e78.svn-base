@@ -1,0 +1,3484 @@
+#!/usr/bin/python
+# -*- encoding=utf8 -*-
+
+import os
+import warnings
+import json
+import shell
+import common2
+import time
+import subprocess
+import commands
+import log
+import get_config
+import sys
+import signal
+import threading
+import xml
+import re
+import random
+import datetime
+import ReliableTest
+import common
+from get_config import config_parser as cp
+import binascii
+import Lun_managerTest
+import decorator_func
+import prepare_x1000
+
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+global CONF_FILE
+# CONF_FILE = "/home/StorTest/conf/x1000_test_config_lh.xml"
+CONF_FILE = "/home/StorTest/conf/{}".format(cp('xml_confile', 'filename'))
+node_ips_list = get_config.get_env_ip_info(CONF_FILE)
+CLEAN_ENV = "No"
+current_path_1 = os.path.dirname(os.path.abspath(__file__))
+node = common.Node()
+com2 = common2.oSan()
+
+
+# lun_osan = Lun_managerTest.oSan()
+
+
+class Os_Reliable():
+    '''
+    poweroff_os
+    oJmgs_master_id
+    check_process_stat
+    run_pause_process
+    run_process
+    json_loads
+    get_date_eth
+    get_san_state
+    network_test
+    get_vm_status
+    vm_id
+    get_node_id_by_ip
+    check_badobj
+    add_node
+    del_node
+    get_master_zk
+    get_master_oRole
+    get_cmd_status
+    get_os_status
+    kill_thread
+    pasue_thread
+    run_pasue_threads
+    time_limit
+    get_unuse_disk_uuid
+    add_disks
+    get_share_monopoly_disk_ids
+    get_diskid_by_name
+    get_physicalid_by_name
+    get_diskid_by_name
+    get_physicalid_by_name
+    remove_disk
+    insert_disk
+    run_down_disk_wait
+    run_down_node_wait
+    get_node_state
+    get_lun_size_dict
+    '''
+
+    def __init__(self):
+        pass
+
+    def get_thin_lun(self, node_ip=None):
+        """
+        :Author:wuyuqiao
+        :return: thin_lun ID list
+        :param:node_ip:集群任意一管理节点IP
+        """
+        cmd = ('ssh %s "pscli --command=get_luns"' % node_ip)
+        log.info(cmd)
+        (rc, stdout) = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Error!execute pscli command failed!info:%s" % stdout)
+        else:
+            thin_lun = []
+            result = json.loads(stdout)
+            lun_list = result['result']['luns']
+            if not all(lun_list):
+                log.error("Error!no lun exsits!")
+                os._exit(1)
+            else:
+                for lun in lun_list:
+                    if 'LUN_TYPE_THIN' == lun['lun_type']:
+                        thin_lun.append(lun['id'])
+            if not len(thin_lun):
+                log.error("Error!no THIN lun exsits in system!")
+                os._exit(1)
+            else:
+                return thin_lun
+
+    def get_thick_lun(self, node_ip=None):
+        """
+        :Author:wuyuqiao
+        :return: thick_lun ID list
+        :param:node_ip:集群任意一管理节点IP
+        """
+        cmd = ('ssh %s "pscli --command=get_luns"' % node_ip)
+        log.info(cmd)
+        (rc, stdout) = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Error!execute pscli command failed!info:%s" % stdout)
+            os._exit(1)
+        else:
+            thick_lun = []
+            result = json.loads(stdout)
+            lun_list = result['result']['luns']
+            if not all(lun_list):
+                log.error("Error!no lun exsits!")
+                os._exit(1)
+            else:
+                for lun in lun_list:
+                    if 'LUN_TYPE_THICK' == lun['lun_type']:
+                        thick_lun.append(lun['id'])
+            # if not len(thick_lun):
+            #     log.error("Error!no THICK lun exsits in system!")
+            #     os._exit(1)
+            # else:
+            return thick_lun
+
+    def compare_data(self):
+        """
+        :Author: wangxiang
+        :Date: 2018-8-20
+        :Description: 数据修复/重建完成后，比较内部数据一致性
+        :return:
+        change_log:
+
+            ===================================================
+            2018-08-20:
+            change:wangxiang
+            1.描述:创建，先占个位置；等工具出来再写
+        """
+        time.sleep(30)
+        log.info("start check  badobj")
+        # disk().check_bad_obj()
+        disk().multi_check_part_lun_uniform_by_ip()
+        pass
+
+    def asyn_ntp(self):
+        cli_ips = client_ips
+        ser_ips = deploy_ips
+
+        for cli_ip in cli_ips:
+            cmd1 = "ssh root@{} \"sed -r -i -e 's/^server.*//g' -e 's/^#server.*//g' /etc/ntp.conf; sed -i ':a;N;s/\\n\\n//g;ba' /etc/ntp.conf\"".format(
+                cli_ip)
+            commands.getstatusoutput(cmd1)
+            for ser_ip in ser_ips:
+                cmd2 = "ssh root@{} \"echo server {} >>/etc/ntp.conf ;systemctl  restart  ntpd\"".format(cli_ip, ser_ip)
+
+                commands.getstatusoutput(cmd2)
+
+    def check_disk_state(self, node_ip=None, disk_uuid=None, disk_state=None, wait_time=360000):
+        '''
+        :Usge:通过磁盘UUID检查节点磁盘状态
+        :Arthur:wangxiang
+        :param node_ip: 节点IP
+        :param disk_uuid: 磁盘uuid
+        :param wait_time: 超时时间，等待重建任务完成，若过了超时时间还未完成，则报错退出
+        :return: 磁盘状态：DISK_STATE_ISOLATE  DISK_STATE_HEALTHY  DISK_STATE_REBUILDING_PASSIVE  DISK_STATE_ZOMBIE
+        '''
+        time.sleep(5)
+        node_id = node.get_node_id_by_ip(node_ip)
+        while True:
+            cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%d'" % (node_ip, node_id))
+            log.info(cmd)
+            (res, output) = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.error("Get disks info replica failed!!!")
+                os._exit(1)
+            else:
+                result = json.loads(output)
+                disk_list = result['result']['disks']
+                for disk in disk_list:
+                    if disk['uuid'] == disk_uuid:
+                        if disk['state'] == disk_state:
+                            return 0
+                        else:
+                            log.info("Waiting for Rebuilding to be completed")
+                            log.info("The %s disk status is %s" % (disk['devname'], disk['state']))
+                            time.sleep(120)
+                            break
+                    else:
+                        pass
+
+    def os_power_reset(self, s_ip=None, cmd_c=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: send to OS power on or off cmd
+        :param s_ip(str): node IP
+        :param cmd_c(str): command to node EXP:"init 0","init 6".....
+        :return:
+        """
+        # if '6' in cmd_c or 'reboot' in cmd_c:
+        #     cmd_c = 'echo b >/proc/sysrq-trigger &'
+        #     cmd = ("ssh %s \" %s \"" % (s_ip, cmd_c))
+        #     (res, final) = commands.getstatusoutput(cmd)
+        #     log.info(cmd)
+        #     if res != 0:
+        #         log.info("%s os %s poweroff failed, info:%s" % (s_ip, cmd_c, final))
+        #         os._exit(1)
+        #     else:
+        #         log.info("%s os %s poweroff success, waiting 30s to check it " % (s_ip, cmd_c))
+        #         time.sleep(30)
+        #         return
+        # elif cmd_c == "init 0":
+        cmd = ("ssh %s \" %s \"" % (s_ip, cmd_c))
+        (res, final) = commands.getstatusoutput(cmd)
+        log.info("send:\"%s\"" % (cmd))
+        if res != 0:
+            log.info("%s os %s poweroff success, waiting 10s to check it ." % (s_ip, cmd_c))
+            time.sleep(10)
+            return
+        else:
+            log.info("%s os %s poweroff fail, Error info: %s" % (s_ip, cmd_c, final))
+            os._exit(1)
+            # else:
+            #     log.error("function \"os_power_reset\" running failed ,will to check cmd:%s " % (cmd_c))
+            #     os._exit(1)
+
+    def poweroff_os(self, s_ip=None, cmd_c=None, wait_time=30):
+        """
+
+        :param s_ip: 
+        :param cmd_c:
+        :param wait_time:
+        :return:
+        """
+        if '6' in cmd_c or 'reboot' in cmd_c:
+            cmd_c = 'echo b >/proc/sysrq-trigger'
+        cmd = ("timeout 10 ssh %s \" %s \"" % (s_ip, cmd_c))
+        log.info(cmd)
+        (res, final) = commands.getstatusoutput(cmd)
+        log.info("%s os %s poweroff success, waiting %s to check it. info:%s" % (s_ip, cmd_c, wait_time, final))
+
+        time.sleep(wait_time)
+
+    def os_down_new(self, mac_type="vir", falut_ip=None, cmd_c=None, ipmi_ip=None):
+        '''节点关机'''
+        warnings.warn("This function is no longer recommended", DeprecationWarning)
+        if mac_type == "vir":
+            cmd = ("ssh %s \" %s \"" % (falut_ip, cmd_c))
+            log.info(cmd)
+            (res, final) = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.info("%s os  poweroff success" % (falut_ip))
+                time.sleep(60)
+            else:
+                log.info("%s os  poweroff fail" % (falut_ip))
+                os._exit(1)
+        elif mac_type == "phy":
+            if ipmi_ip == None:
+                log.info("please the arg  ipmi_ip")
+                os._exit(1)
+            else:
+                cmd1 = 'ipmitool -H %s -I lan -U admin -P admin power off' % ipmi_ip
+                cmd2 = 'ipmitool -H %s -I lan -U ADMIN -P ADMIN power off' % ipmi_ip
+                rc, stdout = commands.getstatusoutput(cmd1)
+                if 0 != rc:
+                    if 'Invalid user name' in stdout:
+                        rc, stdout = commands.getstatusoutput(cmd2)
+                        if 0 != rc:
+                            return False
+                        else:
+                            return True
+                    else:
+                        return False
+                else:
+                    return True
+        else:
+            log.info("please give a right machine_type .may be  phy  or   vir ?")
+            os._exit(1)
+
+    def os_up_new(self, mac_type="vir", ipmi_ip=None, esxi_ip=None, u_name=None, pw=None, vm_id=None):
+        warnings.warn("This function is no longer recommended", DeprecationWarning)
+        if mac_type == "vir":
+            str1 = "vim-cmd vmsvc/power.on %s" % (str(vm_id))
+            cmd = ("%s/expect %s %s \"%s\" \"%s\"" % (current_path_1, esxi_ip, u_name, pw, str1))
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.info("Up virtual machine failed.")
+                os._exit(1)
+            elif mac_type == "phy":
+                if ipmi_ip == None:
+                    log.info("please the arg  ipmi_ip")
+                    os._exit(1)
+                else:
+                    cmd1 = 'ipmitool -H %s -I lan -U admin -P admin power on' % ipmi_ip
+                    cmd2 = 'ipmitool -H %s -I lan -U ADMIN -P ADMIN power on' % ipmi_ip
+                    rc, stdout = commands.getstatusoutput(cmd1)
+                    if 0 != rc:
+                        if 'Invalid user name' in stdout:
+                            rc, stdout = commands.getstatusoutput(cmd2)
+                            if 0 != rc:
+                                return False
+                            else:
+                                return True
+                        else:
+                            return False
+                    else:
+                        return True
+            else:
+                log.info("please give a right machine_type .may be  phy  or   vir ?")
+                os._exit(1)
+
+    def init_otrace(self):
+        """
+        :Author: Liu he
+        :Date: 2018-8-20
+        :Description: 初始化otrace，配置otrace服务
+        :return:
+        """
+        for ip in deploy_ips:
+            cmd = ("ssh %s \"[ -d /home/parastor/log/otrace/ ]\" >/dev/null 2>&1;echo $?" % (ip))
+            re, stdout = commands.getstatusoutput(cmd)
+            if stdout == 1:
+                log.error("the system environment is clear ")
+            else:
+                cmd1 = (
+                        "ssh %s \"rm -rf /home/parastor/log/otrace/ ; rm -rf /dev/shm/otrace_buf /dev/shm/sem.otrace_tp ;sleep 2 ;/home/parastor/tools/otraced -d\"" % (
+                    ip))
+                rc, stdout = commands.getstatusoutput(cmd1)
+                if rc == 0:
+                    log.info("cmd \"rm\" and restart otraced have finished")
+
+            cmd = ("ssh %s \"mkdir /home/parastor/log/otrace/\"" % (ip))
+            re, stdout = commands.getstatusoutput(cmd)
+            if re != 0:
+                log.error("mkdir otrace failed")
+                os._exit(1)
+            else:
+                log.info("mkdir otrace success")
+                cmd2 = (
+                        "ssh %s \"/home/parastor/tools/otraced -d;sleep 1 ; /home/parastor/tools/otrc -z on;sleep 1 ;/home/parastor/tools/otrc -i | grep ring\"" % (
+                    ip))
+                rc, stdout2 = commands.getstatusoutput(cmd2)
+                if rc != 0:
+                    log.info("start otrace failed")
+                else:
+                    otrace_status = stdout2.split(":")[2].split(" ")[0]
+                    # print otrace_status
+                    if otrace_status == "0x00000042":
+                        log.info("start otrace success")
+                        cmd3 = (
+                                "ssh %s \"/home/parastor/tools/otrc -o /home/parastor/log/otrace/otrace.data -s 4096 -S \\\"IOPREP|DJNL|DPC|LMPC|LIOC\\\" \"" % (
+                            ip))
+                        rc3, stdout3 = commands.getstatusoutput(cmd3)
+                        print stdout3
+                        # print rc3
+                        if rc3 != 0:
+                            log.info("otrace.data.0 set failed")
+                        else:
+                            log.info("otrace.date.0 set success")
+                    else:
+                        log.info("start otrace failed,please check")
+                        os._exit(1)
+
+    def oJmgs_master_id(self):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 在系统节点列表中轮询查询oJmgs主进程节点IP and id号
+        :return: final:node ID ;m_ojmgs_ip:node IP
+        """
+        while True:
+            for s_ip in node_ips_list:
+                # print ("try get master from %s" % s_ip)
+                cmd = ("ssh %s \"pscli --command=get_master | grep node_id | cut -d \' \' -f 10 \" " % (s_ip))
+                log.info(cmd)
+                (res, final) = commands.getstatusoutput(cmd)
+                if 0 == res:
+                    log.info("get oJmgs master node id is %s " % (final))
+                    m_ojmgs_ip = node_ips_list[int(final) - 1]
+                    return final, m_ojmgs_ip
+                else:
+                    time.sleep(30)
+
+    ##############################################################################
+    ###name  :      check_process_stat
+    ###parameter:   命令参考 node_ip节点IP，p_name进程名称
+    ###author:      wuyq
+    ###date  :      2018.8.13
+    ###Description: 在系统中查询某个节点的某个进程的状态是否正常
+    ##############################################################################
+    def check_process_stat(self, node_ip, p_name):
+        node_id = node.get_node_id_by_ip(node_ip)
+        cmd = ('ssh %s "pscli --command=get_services --node_ids=%s"' % (node_ip, node_id))
+        log.info(cmd)
+        (rc, stdout) = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.info('the node is Error...')
+        else:
+            data = json.loads(stdout)
+        count = 0
+        while count < len(data['result']['nodes'][0]['services']):
+            # state=data['result']['nodes'][0]['services'][0]['inTimeStatus']
+            service = data['result']['nodes'][0]['services'][count]['service_type']
+            if service == p_name:
+                state = data['result']['nodes'][0]['services'][count]['inTimeStatus']
+                state_str = state.split('_')
+                state = state_str[2]
+                log.info('The %s service of the %s node is %s' % (p_name, node_ip, state))
+                return state
+            count += 1
+
+    def run_pause_process(self, p_name=None, p_ip=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 使用kill -19 [pid] 方式将进程暂时挂起
+        :param p_name(str): 进程名称
+        :param p_ip(str): 进程所在节点
+        :return:
+        """
+        ps_cmd = ('ssh %s \"ps -ef | grep %s | grep -v grep\"' % (p_ip, p_name))
+        rc, stdout = commands.getstatusoutput(ps_cmd)
+        if '' == stdout:
+            return
+        log.info(stdout)
+        lines = stdout.split('\n')
+        for line in lines:
+            vars = line.split()
+            pid = vars[1]
+            kill_cmd = ('ssh %s "kill -19 %s"' % (p_ip, pid))
+            log.info('node %s kill %s' % (p_ip, p_name))
+            rc, stdout = commands.getstatusoutput(kill_cmd)
+            if 0 != rc:
+                log.error("Execute command: \"%s\" failed. \nstdout: %s" % (kill_cmd, stdout))
+        return
+
+    def run_process(self, p_name=None, p_ip=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: kill -18 [pid]恢复挂起进程
+        :param p_name(str): 进程名称
+        :param p_ip(str): 进程所在节点
+        :return:
+        """
+        ps_cmd = ('ssh %s \"ps -ef | grep %s | grep -v grep\"' % (p_ip, p_name))
+        rc, stdout = commands.getstatusoutput(ps_cmd)
+        if '' == stdout:
+            return
+        log.info(stdout)
+        lines = stdout.split('\n')
+        for line in lines:
+            vars = line.split()
+            pid = vars[1]
+            kill_cmd = ('ssh %s "kill -18 %s"' % (p_ip, pid))
+            log.info('node %s %s have recover' % (p_ip, p_name))
+            rc, stdout = commands.getstatusoutput(kill_cmd)
+            if 0 != rc:
+                log.error("Execute command: \"%s\" failed. \nstdout: %s" % (kill_cmd, stdout))
+        return
+
+    def json_loads(self, stdout):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 将传入的字符串格式化,  从ReliableTest库移植过来
+        :param stdout: 需要格式化的字符
+        :return:
+        """
+        try:
+            stdout = stdout.replace('\\', '')
+            stdout_str = json.loads(stdout, strict=False)
+            return stdout_str
+        except Exception, e:
+            log.error(stdout)
+            raise Exception("Error msg is %s" % e)
+
+    def get_date_eth(self, node_id, s_ip):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 获取本节点的数据网的eth名字
+        :param node_id(str): 节点ID号
+        :param s_ip(str): 节点IP地址
+        :return:SS
+        """
+        cmd = ("ssh %s \"pscli --command=get_nodes --ids=%s \" " % (s_ip, node_id))
+        log.info(cmd)
+        data_ip_list = []
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        else:
+            result = json.loads(stdout)
+            data_ips = result['result']['nodes'][0]['data_ips']
+            for data_ip in data_ips:
+                ip = data_ip['ip_address']
+                data_ip_list.append(ip)
+        eth_list = []
+        for ip in data_ip_list:
+            tem_dic = {}
+            cmd1 = 'ssh %s "ip addr | grep %s"' % (s_ip, ip)
+            rc, stdout = commands.getstatusoutput(cmd1)
+            if 0 != rc:
+                raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd1, stdout))
+            else:
+                eth_name = stdout.split()[-1]
+                tem_dic["eth"] = eth_name
+
+            cmd2 = 'ssh %s "ifconfig | grep %s"' % (s_ip, ip)
+            rc, stdout = commands.getstatusoutput(cmd2)
+            if 0 != rc:
+                raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd2, stdout))
+            else:
+                mask = stdout.strip().split()[3]
+                tem_dic["dataip"] = ip
+                tem_dic["mgrip"] = s_ip
+                tem_dic["mask"] = mask
+            eth_list.append(tem_dic)
+        return eth_list
+
+    def get_node_eth_list(self, node_ip):
+        """
+        :Auther:Liu he
+        :Description: 获取指定节点所有网卡名称
+        :param node_ip:
+        :return:
+        """
+        eth_list = []
+        cmd = ("ssh %s \"ip addr |grep \"BROADCAST\"\"" % (node_ip))
+        rc, ouput = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("get eth list failed")
+            os._exit(1)
+        else:
+            eth_name = ouput.split("\n")
+            for i in range(len(eth_name)):
+                name = eth_name[i].split(": ")[1]
+                eth_list.append(name)
+        return eth_list
+
+    def get_vip_eth_name(self, node_ip):
+        """
+        :Auther: Liu he
+        :Description:获取指定存储节点业务网卡名称
+        :param node_ip:
+        :return:
+        """
+        vips = get_config.get_vip(conf_file)
+        node_eth_list = ReliableTest.get_eth(node_ip=node_ip, test_ip=vips)
+        log.info("Get vip network name:%s" % (node_eth_list))
+        return node_eth_list
+
+    def get_eth_name(self, s_ip):
+        """
+        :Auther: Liu he
+        :param s_ip: 存储节点IP
+        :return: 该节点所有网卡名称
+        """
+        if s_ip:
+            name_list = []
+            s_id = self.get_node_id_by_ip(s_ip)
+            cmd = ("ssh %s \"pscli --command=get_nodes --ids=%s\" " % (s_ip, s_id))
+            log.info(cmd)
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("get node info failed !!!\nError Info: %s" % (stdout))
+                os._exit(1)
+            else:
+                stdout = json.loads(stdout)
+                nodes = stdout['result']['nodes'][0]
+                log.info("check node ID : %s" % s_id)
+                for i in range(len(nodes['internalNetworkInterfaces'])):
+                    manage_net_name = nodes['internalNetworkInterfaces'][i]['name']
+                    name_list.append(manage_net_name.encode("utf-8"))
+            # log.info("Find The node %s have eth name list %s" % (s_ip, name_list) )
+            log.info("Get eth list:%s" % (name_list))
+            return name_list
+        else:
+            log.error("s_ip is None, Please check")
+            os._exit(1)
+
+    def get_san_state(self, s_ip=None):
+        """
+        :Auther: Liu he
+        :Description: 获取san状态(默认第一个访问区)
+        :return: 开启返回True 未开启返回False
+        """
+        param_list = [s_ip]
+        if all(param_list):
+            cmd = ("pscli --command=get_access_zones")
+            log.info(cmd)
+            # rc, stdout = commands.getstatusoutput(cmd)
+            rc, stdout = com2.run_pscli_cmd(cmd, time_out=300, times=1)
+            if rc != 0:
+                log.error("get cmd failed,Error infor:%s" % (stdout))
+                os._exit(1)
+            else:
+                status_san = []
+                stdout = json.loads(stdout)
+                chk_san = stdout["result"]["access_zones"]
+                if chk_san:
+                    for i in range(len(chk_san)):
+                        san_state = stdout["result"]["access_zones"][i]["enable_san"]
+                        status_san.append(san_state)
+                    return status_san
+                else:
+                    return
+        else:
+            log.error("param is None error :s_ip :%s " % (s_ip))
+            os._exit(1)
+
+    def network_test(self, s_ip=None, net_name=None, net_stat=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 将指定节点上的网卡进行关闭和开启
+        :param s_ip: s_ip节点IP地址
+        :param net_name: 需要测试的网卡名称
+        :param net_stat: net_stat=“down” or “up”
+        :return:
+        """
+        log.info("testing network is %s , will %s" % (net_name, net_stat))
+        if net_stat == "down":
+            cmd = ("ssh %s \" ifdown %s\"" % (s_ip, net_name))
+            log.info(cmd)
+            (res, final) = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.error("ifdown error")
+                os._exit(1)
+            else:
+                log.info("%s in %s ifdown success" % (net_name, s_ip))
+                return
+        elif net_stat == "up":
+            cmd = ("ssh %s \" ifup %s\"" % (s_ip, net_name))
+            log.info(cmd)
+            (res, final) = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.error("ifup error")
+                os._exit(1)
+            else:
+                log.info("%s ifup success" % (net_name))
+                return
+        else:
+            log.error("check network")
+            os._exit(1)
+
+    def net_flash_test(self, node_ip=None, netname=None, times=10, interval=30):
+        """
+        :Arthur: wuyuqiao
+        :param node_ip: 需要闪断数据网的节点
+        :param net_name: 单个网卡名字或网卡列表
+        :param times: 闪断次数
+        :param interval: 闪断间隔秒数
+        :return: 无
+        """
+        param_list = [node_ip, netname, times, interval]
+        if all(param_list):
+            if type(netname) == str:
+                for count in range(times):
+                    log.info('第 %d 次闪断数据网' % (count + 1))
+                    log.info('节点数据网卡断开,网卡:%s' % netname)
+                    self.network_test(node_ip, netname, 'down')
+                    time.sleep(interval)
+                    log.info('节点数据网卡恢复,网卡:%s' % netname)
+                    self.network_test(node_ip, netname, 'up')
+                    time.sleep(45)
+            elif type(netname) == list:
+                for count in range(times):
+                    log.info('第 %d 次闪断数据网' % (count + 1))
+                    for eth in netname:
+                        log.info('节点数据网卡断开,网卡:%s' % eth)
+                        self.network_test(node_ip, eth, 'down')
+                    time.sleep(interval)
+                    for eth in netname:
+                        log.info('节点数据网卡恢复,网卡:%s' % eth)
+                        self.network_test(node_ip, eth, 'up')
+                    time.sleep(30)
+            else:
+                log.error('netname Parameter is invalid ')
+                os._exit(1)
+        else:
+            log.error("iterable is error: \n node_ip:%s \n netname:%s \n times:%d \n interval:%d" % (
+                node_ip, netname, times, interval))
+            os._exit(1)
+
+    def vm_id(self, esxi_ip=None, u_name=None, pw=None, node_ip=None, vm_id=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 通过虚拟机IP获取虚拟节点在虚拟机中的id号
+        :param esxi_ ip: 虚拟机管理节点IP
+        :param u_name: 虚拟机用户名
+        :param pw: 密码
+        :param node_ip: 虚拟机IP
+        :param vm_id: 虚拟机id号（选填）
+        :return:
+        """
+        if None == vm_id:
+            cmd1 = ("ssh %s \"ifconfig | grep -A 3 %s | grep ether | awk '{print \$2}'\"" % (node_ip, node_ip))
+            rc, stdout = commands.getstatusoutput(cmd1)
+            if 0 != rc:
+                log.error("Can not attatch the node.")
+                os._exit(1)
+            else:
+                mac = stdout
+                str1 = "for i in \`vim-cmd vmsvc/getallvms | awk '{print \$1}' | grep -v -E [a-zA-Z].*\`;do vim-cmd vmsvc/device.getdevices \$i | grep -i -q %s && echo \$i;done" % (
+                    mac)
+                cmd = ("%s/expect %s %s \"%s\" \"%s\"" % (current_path_1, esxi_ip, u_name, pw, str1))
+                rc, stdout = commands.getstatusoutput(cmd)
+                vm_id = stdout.split("\n")[2]
+        log.info("get vMware ID: %s" % (vm_id))
+        return vm_id
+
+    def get_vm_status(self, esxi_ip, vm_name, pw, vm_id):
+        """
+        :Auther: Liu He
+        :Description: 通过VMWare宿主机获取虚拟机开机状态
+        :param esxi_ip: 虚拟机IP
+        :param vm_name: VMware登录用户名
+        :param pw: 密码
+        :param vm_id: 节点ID
+        :return: 虚拟机运行状态，Powered off or Powered on
+        """
+        # str1 = "esxcli vm process list"
+        arg_list = [esxi_ip, vm_name, pw, vm_id]
+        if all(arg_list):
+            str1 = "vim-cmd vmsvc/power.getstate %s " % (vm_id)
+            cmd = ("%s/expect %s %s \"%s\" \"%s\"" % (current_path_1, esxi_ip, vm_name, pw, str1))
+            log.info(cmd)
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.info("can not get vm system status,please check vm.Error Infor: %s" % (stdout))
+                os._exit(1)
+            else:
+                get_info = stdout.split("\n")
+                # log.debug(get_info)
+                node_status = get_info[-1]
+                log.info("get vm status is %s" % (node_status))
+                return node_status
+        else:
+            log.error("In parameter: %s " % (arg_list))
+            os._exit(1)
+
+    def get_power_status(self, bmc_ip):
+        """
+        :Auther: Liu He
+        :Description: 通过BMC获取物理机开机状态
+        :param bmc_ip: BMC ip 地址
+        :param bmc_name: BMC用户名
+        :param bmc_pw: 密码
+        :return（str）: 虚拟机运行状态，on or off
+        """
+        arg_list = [bmc_ip]
+        if all(arg_list):
+            cmd1 = ("ipmitool -H %s -I lan -U admin -P admin power status" % (bmc_ip))
+            cmd2 = ("ipmitool -H %s -I lan -U ADMIN -P ADMIN power status" % (bmc_ip))
+            rc, stdout = commands.getstatusoutput(cmd1)
+            log.info(cmd1)
+            if 0 != rc:
+                rc, stdout = commands.getstatusoutput(cmd2)
+                log.info(cmd2)
+                if 0 != rc:
+                    log.info(stdout)
+                    return False
+                else:
+                    node_status = stdout.strip().split(" ")[-1]
+                    log.info("get The machine status is %s" % (node_status))
+                    return node_status
+            else:
+                node_status = stdout.strip().split(" ")[-1]
+                log.info("get The machine status is %s" % (node_status))
+                return node_status
+
+    def get_node_id_by_ip(self, node_ip):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 通过节点IP地址获取该节点在系统中的id号
+        :param node_ip: 虚拟机IP
+        :return: node ID
+        """
+        cmd = (" ssh %s \"pscli --command=get_nodes\"" % (node_ip))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        else:
+            msg = json.loads(stdout)
+            nodes_info = msg["result"]["nodes"]
+            for node in nodes_info:
+                ctl_ip = node["ctl_ips"][0]["ip_address"]
+                if node_ip == ctl_ip:
+                    return node["node_id"]
+            log.info("there is not a node's ip is %s!!!" % node_ip)
+            return None
+
+    def get_lun_id_by_name(self, s_ip, lun_name):
+        """
+        :Auther: Liu he
+        :Description: 通过lun name 获取lun id号
+        :param s_ip: 任意集群节点IP
+        :param lun_name: 要搜索的lun 名称
+        :return: 检索到的lun id号
+        """
+        cmd = ("ssh %s \"pscli --command=get_luns\"" % (s_ip))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("cmd failed!!! %s" % (cmd))
+            os._exit(1)
+        else:
+            stdout = json.loads(stdout)
+            lun = stdout["result"]["luns"]
+            for i in range(len(lun)):
+                name = stdout["result"]["luns"][i]["name"]
+                if name == lun_name:
+                    lun_id = stdout["result"]["luns"][i]["id"]
+                    return lun_id
+            return
+
+    def get_map_by_lun(self, s_ip, lun_info):
+        """
+        :Auther: Liu he
+        :Description: 通过 已映射的lun名称，查找对应mapid
+        :param s_ip:  任意节点IP
+        :param lun_name: 查找lun map所对应的lun 名称
+        :return: lun map ID
+        """
+        usg_list = [s_ip, lun_info]
+        if all(usg_list):
+            if str(lun_info).isdigit():
+                lun_id = lun_info
+                log.info("Return by \"get_map_by_name\" Get LUN ID:%s" % (lun_id))
+            else:
+                lun_id = self.get_lun_id_by_name(s_ip, lun_info)
+                log.info("Return by \"get_map_by_name\" Get LUN ID:%s" % (lun_id))
+            cmd = ("ssh %s \"pscli --command=get_lun_maps\"" % (s_ip))
+            log.info(cmd)
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("cmd failed!!! %s" % (cmd))
+                os._exit(1)
+            else:
+                stdout = json.loads(stdout)
+                map = stdout["result"]["lun_maps"]
+                for i in range(len(map)):
+                    by_map_lun_id = map[i]["lun_id"]
+                    if by_map_lun_id == lun_id:
+                        map_id = map[i]["id"]
+                        return map_id
+        else:
+            log.error("You need check The %s" % (usg_list))
+            os._exit(1)
+
+    def get_matid(self, node_ip):
+        """
+        :Author: wangxiang
+        :Date: 2018-8-30
+        :Description: 获取oJob主
+        :param node_ip: 虚拟机IP
+        :return:
+        """
+        node_ID = self.get_node_id_by_ip(node_ip)
+        cmd = ("ssh %s \"/home/parastor/tools/nWatch  -t oJob -i %s -c JOB#jobinfo\"" % (node_ip, node_ID))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc or 'failed' in stdout.splitlines()[0]:
+            log.warn("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            return -1
+        master_job_id = stdout.split(',')[0].split(":")[-2].split()[0]
+        return master_job_id
+
+    def check_rcvredobj(self, node_ip):
+        """
+        :Author: wangxiang
+        :Date: 2018-8-27
+        :Description: 通过IP地址检查该节点上是否有修复任务，
+        :param node_ip: 虚拟机IP
+        :return:
+        """
+        decorator_func.timer(30)
+        node_ID = self.get_node_id_by_ip(node_ip)
+        cmd = ("ssh %s \"/home/parastor/tools/nWatch -t oJob -i %s -c RCVR#jobinfo\"" % (node_ip, node_ID))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc or 'failed' in stdout.splitlines()[0]:
+            log.warn("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            return -1
+        master_job_id = stdout.split(',')[0].split()[-1]
+        log.info("The master job id is %s" % master_job_id)
+
+        cmd = ("ssh %s \"/home/parastor/tools/nWatch -t oJob -i %s -c RCVR#repairjob\" " % (node_ip, master_job_id))
+        log.info(cmd)
+        rc, result_badobj = commands.getstatusoutput(cmd)
+        if 0 != rc or 'failed' in stdout.splitlines()[0]:
+            log.warn("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, result_badobj))
+            return -1
+        result_tmp = result_badobj.split()
+        if "0" != result_tmp[-1]:
+            log.info("masterjob = %s, badobj_num = %s" % (master_job_id, result_tmp[-1]))
+            return result_tmp[-1]
+
+        log.info("The current environment does not have badobj")
+        return 0
+
+    def add_node(slef, node_ip, config_file):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 添加节点
+        :param node_id: node ID
+        :param config_file: 节点配置文件
+        :return:
+        """
+        usage_list = [node_ip, config_file]
+        if all(usage_list):
+            cmd = ("ssh %s \"pscli --command=add_nodes --config_file=%s\" " % (node_ip, config_file))
+            log.info('add node: %s' % (cmd))
+            rc, stdout = commands.getstatusoutput(cmd)
+            if 0 != rc:
+                log.error("Execute command: \"%s\" failed. \nError Info:\n%s" % (cmd, stdout))
+                os._exit(1)
+            else:
+                log.info("Add node is success")
+                return
+        else:
+            log.error("iterable is error,Error Info:\n node_ip:%s \n config_file:%s " % (node_ip, conf_file))
+            os._exit(1)
+
+    def del_node(slef, node_ip, node_id):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 删除节点
+        :param node_ip: 节点IP
+        :param node_id: 节点ID
+        :return:
+        """
+        usage_list = [node_ip, node_id]
+        if usage_list:
+            cmd = ("ssh %s \"pscli --command=remove_node --id=%s\" " % (node_ip, node_id))
+            log.info('remove node: %s' % (cmd))
+            rc, stdout = commands.getstatusoutput(cmd)
+            if 0 != rc:
+                log.error("Execute command: \"%s\" failed. \nError Info:\n%s" % (cmd, stdout))
+                os._exit(1)
+            else:
+                log.info("delete node success")
+                return
+        else:
+            log.error("iterable is error: \n  node_ip:%s \n config_file:%s " % (node_ip, node_id))
+            os._exit(1)
+
+    ##############################################################################
+    ###name  :      get_master_zk
+    ###parameter:   参数 node_ip:节点IP，
+    ###author:      wuyq
+    ###date  :      2018.08.09
+    ###Description: oRole master IP address
+    ##############################################################################
+    def get_master_zk(self, deploy_ips=[]):
+        for node_ip in deploy_ips:
+            cmd = ("ssh %s \"ls /root/zk/bin/zkCli.sh\"" % (node_ip))
+            rc, output = commands.getstatusoutput(cmd)
+            if rc != 0:
+                zk_dir = "/home/parastor/conf/zk"
+            else:
+                zk_dir = "/root/zk"
+            cmd = ('ssh %s "%s/bin/zkServer.sh status"' % (node_ip, zk_dir))
+            log.info(cmd)
+            (rc, stdout) = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.warn("the node is not Stor node...")
+            else:
+                lines = stdout.split('\n')
+                data_line = lines[len(lines) - 1]
+                if 'leader' in data_line:
+                    master_node_ip = node_ip
+                    log.info("zk master node ip is %s " % (master_node_ip))
+                    return master_node_ip
+
+    def get_master_oRole(self, s_ip):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: from ZoooKeeper get oRole master IP address
+        :param s_ip: 节点IP
+        :return: master oRole process node ip
+        change:
+        ===========================
+            修改添加过滤日志
+        """
+        cmd = ("ssh %s \"ls /root/zk/bin/zkCli.sh\"" % (s_ip))
+        rc, output = commands.getstatusoutput(cmd)
+        if rc != 0:
+            zk_dir = "/home/parastor/conf/zk"
+        else:
+            zk_dir = "/root/zk"
+        cmd = ("ssh %s \" %s/bin/zkCli.sh ls /adm_election/rolemgr |grep rolemgr > /root/.orole_master.txt\"" % (
+            s_ip, zk_dir))
+        commands.getstatusoutput(cmd)
+        cmd2 = ("ssh %s \"cat /root/.orole_master.txt;rm -rf /root/.orole_master.txt \"" % (s_ip))
+        (re2, stdout2) = commands.getstatusoutput(cmd2)
+        if re2 != 0:
+            log.info("error")
+        else:
+            role_list = []
+            min = stdout2.split(",")
+            for i in min:
+                role_id = i.strip("[] ")
+                role_list.append(role_id)
+            role_list.sort()
+            role_master = role_list[0]
+            cmd3 = ("ssh %s \"%s/bin/zkCli.sh get /adm_election/rolemgr/%s > /root/.orole_master.txt\"" % (
+                s_ip, zk_dir, role_master))
+            commands.getstatusoutput(cmd3)
+            cmd4 = ("ssh %s \"cat /root/.orole_master.txt; rm -rf /root/.orole_master.txt \"" % (s_ip))
+            (re4, stdout4) = commands.getstatusoutput(cmd4)
+            log.info("get orole master info:%s" % (stdout4))
+            ls_out = stdout4.split(" ")
+            node_num = ls_out[5]
+            result = node_num.split('\n')
+            log.info("get node number result:%s" % (result))
+            real_result = result[1]
+            num = binascii.b2a_hex(real_result)
+            node_id = int(num[1])
+            # node_ip = node_ips_list[node_id]
+            node_ip = common.Node().get_node_ip_by_id(node_id)
+            log.info("oRole master IP is %s, master node ID:%s " % (node_ip, node_id))
+            return node_ip
+
+    def get_master_orole2(self, s_ip):
+        """
+        :Auther:Liu he
+        :Description: 通过nwatch命令拿到主oRole Id和IP
+        :param s_ip: 任意节点IP
+        :return: 主oRole ip地址
+        """
+        usg_list = [s_ip]
+        if all(usg_list):
+            node_id = self.get_node_id_by_ip(s_ip)
+            cmd = (
+                    "ssh %s \"/home/parastor/tools/nWatch -i %s -t oRole -c oRole#rolemgr_master_dump\"" % (
+            s_ip, node_id))
+            log.info(cmd)
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("cmd failed:%s \nError Info:%s" % (cmd, stdout))
+                os._exit(1)
+            else:
+                master_id = stdout.split(":")[-1]
+                master_ip = common.Node().get_node_ip_by_id(master_id)
+                log.info("get oRole master IP:%s " % (master_ip))
+                return master_ip
+        else:
+            log.error("usage Error:%s" % (usg_list))
+            os._exit(1)
+
+    def get_opara_jnl(self):
+        for ip in deploy_ips:
+            if False is ReliableTest.check_ping(ip):
+                continue
+            else:
+                node_id = self.get_node_id_by_ip(ip)
+                cmd = ("ssh %s \"/home/parastor/tools/nWatch -t oRole -i %s --command=oRole#rolemgr_view_dump\"" % (
+                    ip, node_id))
+                print cmd
+                re, output = commands.getstatusoutput(cmd)
+                if re != 0:
+                    log.error("get rolemgr_view_dump failed")
+                else:
+                    jtype1 = output.split("======================jtype:1 info=======================")[1]
+                    lnode_info = jtype1.split("\n")
+                    for line in lnode_info:
+                        if "lnodeid:" in line:
+                            id = line.split(",")[0].split(" ")[-1]
+                            log.info("get opara jnl id:%s" % (id))
+                            return id
+
+    def get_cmd_status(self, s_ip=None, cmd_name=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: get cmd running status
+        :param s_ip(str): node ip
+        :param cmd_name(str): cmd name
+        :return:
+        """
+        cmd = ("ssh %s \"ps aux |grep %s |grep -v grep\" " % (s_ip, cmd_name))  # 先在指定节点上抓取状态，只抓一次防止时间过短在其他节点上遗漏
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(cmd)
+        if rc == 0:
+            log.info("form %s system has detected the \"%s\" command." % (s_ip, cmd_name))
+            return 0
+        nums = 0
+        while nums <= 1000:  # 指定节点上没有抓取到状态，在所有节点上循环进行
+            for ip in deploy_ips:
+                cmd = ("ssh %s \"ps aux |grep %s |grep -v grep\" " % (ip, cmd_name))
+                rc, stdout = commands.getstatusoutput(cmd)
+                if rc == 0:
+                    log.info("form %s system has detected the \"%s\" command. will make next step" % (ip, cmd_name))
+                    return 0
+            nums += 1
+        log.info("The %s is better than 1000th without detecting the \"%s\" command" % (s_ip, cmd_name))
+        return 1
+
+    def get_access_zone_node(self):
+        """
+        :Auther: Liu he
+        :Description: 检查集群中所有在访问区中的节点
+        :return: 节点列表
+        """
+        cmd = ("pscli --command=get_access_zones")
+        rc, output = com2.run_pscli_cmd(cmd, times=1)
+        if rc != 0:
+            log.error("get access zone failed.%s" % (output))
+        else:
+            node_list = []
+            output = json.loads(output)
+            access_list = output["result"]["access_zones"]
+            for access in access_list:
+                node_id = access["node_ids"]
+                node_list.extend(node_id)
+            log.info("Get enable san node list is %s" % (node_list))
+            return node_list
+
+    def get_os_status(self, s_ip=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: get the system status
+        :param s_ip: node ip
+        :return:
+        =======================
+            在节点状态中加入服务状态检查，检查等待时间200s，若200s未恢复报错退出
+        =======================
+        """
+        while True:
+            cmd = ("ssh %s \"hostname\"" % (s_ip))
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.info("waiting the system {} up ".format(s_ip))
+                time.sleep(10)
+            else:
+                cmd = ("ssh %s \"pscli --all|grep get_system_state \"" % (s_ip))
+                rc, final = commands.getstatusoutput(cmd)
+                if rc != 0:
+                    log.info("The %s system have not \"pscli\"，Stop manually if not as expected " % (stdout))
+                    return
+                else:
+                    i = 0
+                    log.info("check the system is up ,get the hostname is %s " % (stdout))
+                    while i < 600:
+                        rc = common.check_service_state()
+                        if rc == True:
+                            log.info("After os up Waiting %ss(About 10 second error) "
+                                     "The %s system service status recover OK." % (i, stdout))
+                            return 0
+                        elif i == 599:
+                            log.error(
+                                "Waiting %ss The %s system have status not recover ,need to checking" % (i, stdout))
+                            # cmd = ("ps aux |grep run_all_tests_xstor |grep -v grep")
+                            # rc, output = commands.getstatusoutput(cmd)
+                            # if rc != 0:
+                            #     log.info("get run_all_test failed")
+                            # else:
+                            #     pid = output.split(" ")[5]
+                            #     cmd = ("kill -9 %s " % (pid))
+                            #     commands.getstatusoutput(cmd)
+                            #
+                            os._exit(1)
+                        else:
+                            i += 1
+                            time.sleep(1)
+
+    def get_os_status_1(self, s_ip=None):
+        """
+        :Author: wangxiang
+        :Date: 2018-9-18
+        :Description: get the system status
+        :param s_ip: node ip
+        :return:
+        """
+        while True:
+            cmd = ("ssh %s \"hostname\"" % (s_ip))
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.info("waiting the system {} up ".format(s_ip))
+                time.sleep(15)
+            else:
+                log.info("check the system is up ,get the hostname is %s,ip is %s " % (stdout, s_ip))
+                return 0
+
+    def kill_thread(self, s_ip=None, p_name=None, t_name=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 查杀线程
+        :param s_ip: 节点IP
+        :param p_name: process name
+        :param t_name: thread name
+        :return:
+        """
+        cmd = (" ssh %s \" pgrep %s\"" % (s_ip, p_name))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("the node have not %s" % p_name)
+            os._exit(1)
+        else:
+            cmd = ("ssh %s \" ps -T -p %s | grep pmgr | tail -n 1| awk '{print \$2}'\"" % (s_ip, stdout))
+            log.info(cmd)
+            rc, final = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("%s have node find" % t_name)
+                os._exit(1)
+            else:
+                i = 0
+                while final.strip() == '':
+                    time.sleep(30)
+                    rc, final = commands.getstatusoutput(cmd)
+                    i += 1
+                    if i == 3:
+                        log.info("try again to get pmgr failed")
+                        os._exit(1)
+                else:
+                    cmd = ("ssh %s \" kill -9 %s\"" % (s_ip, final))
+                    log.info(cmd)
+                    rc, finals = commands.getstatusoutput(cmd)
+                    if rc != 0:
+                        log.error("kill %s fail. error info:\n %s" % (t_name, finals))
+                        os._exit(1)
+                    else:
+                        log.info("kill success %s" % (t_name))
+                        time.sleep(10)
+        return
+
+    def pasue_thread(self, s_ip=None, p_name=None, t_name=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: 挂起线程
+        :param s_ip: 节点IP
+        :param p_name: process name
+        :param t_name: threads name
+        :return:
+        """
+        cmd = (" ssh %s \" pgrep %s\"" % (s_ip, p_name))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("the node have not oRole")
+        else:
+            cmd = ("ssh %s \" ps -T -p %s | grep pmgr | tail -n 1 |awk '{print \$2}' \"" % (s_ip, stdout))
+            log.info(cmd)
+            rc, final = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("oPmgr have node find")
+                os._exit(1)
+            else:
+                print final
+                cmd = ("ssh %s \" kill -19 %s\"" % (s_ip, final))
+                log.info(cmd)
+                rc, finals = commands.getstatusoutput(cmd)
+                if rc != 0:
+                    log.error("kill %s fail" % (t_name))
+                    os._exit(1)
+                else:
+                    log.info("kill success %s" % (t_name))
+        return
+
+    def run_pasue_threads(self, s_ip=None, p_name=None, t_name=None):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description: running 线程
+        :param s_ip: 节点IP
+        :param p_name: process name
+        :param t_name: threads name
+        :return:
+        """
+        cmd = (" ssh %s \" pgrep %s\"" % (s_ip, p_name))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("the node have not oRole")
+        else:
+            cmd = ("ssh %s \" ps -T -p %s | grep pmgr | tail -n 1| awk '{print \$2}'  \"" % (s_ip, stdout))
+            log.info(cmd)
+            rc, final = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("oPmgr have node find")
+                os._exit(1)
+            else:
+                print final
+                cmd = ("ssh %s \" kill -18 %s\"" % (s_ip, final))
+                log.info(cmd)
+                rc, finals = commands.getstatusoutput(cmd)
+                if rc != 0:
+                    log.error("kill %s fail" % (t_name))
+                else:
+                    log.info("kill success %s" % (t_name))
+        return
+
+    def time_limit(self, interval):
+        """
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description:超时检测
+        :param interval: limit time
+        :return:
+        """
+
+        def wraps(func):
+            def handler():
+                raise RuntimeError()
+
+            def deco(*args, **kwargs):
+                signal.signal(signal.SIGALRM, handler)
+                signal.alarm(interval)
+                res = func(*args, **kwargs)
+                signal.alarm(0)
+                return res
+
+            return deco
+
+        return wraps
+
+    def get_unuse_disk_uuid(self, s_ip=None):
+        '''
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description:获取节点内盘的uuid
+        :param node_ids: 节点id
+        :return:
+        =========
+            修改排除已挂载的硬盘作为空闲盘
+        '''
+        node_ids = self.get_node_id_by_ip(s_ip)
+        uuids = []
+        cmd = ("ssh %s \"pscli --command=get_node_stat --ids=%s\"" % (s_ip, node_ids))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        d_list = stdout.split("\n")
+        for disk_info in d_list[4:]:
+            disk_id = disk_info.strip(" ").split(" ")[0]
+            if disk_id == "0":
+                d_uuid = disk_info.strip(" ").split(" ")[-1]
+                d_name = disk_info.strip(" ").split(" ")[8]
+                cmd2 = ("ssh %s \" df -h | grep %s\"" % (s_ip, d_name))
+                rc, stdout2 = commands.getstatusoutput(cmd2)
+                if rc != 0:
+                    uuids.append(d_uuid)
+        if uuids:
+            log.info("from node (ID) %s get unuse disk uuid is %s" % (node_ids, uuids))
+            return uuids
+        else:
+            log.info("the node %s have not disk, need check mount disk " % (node_ids))
+            os._exit(-1)
+
+    def get_all_data_disk_id(self):
+        '''
+        :By:Diws
+        :Date:20181009
+        :return:list,所有共享盘ID
+        '''
+        disk_ids = []
+        nodes = osan.get_nodes(s_ip=deploy_ips)
+        for n_id in nodes:
+            cmd = ("ssh root@%s ' pscli --command=get_disks --node_ids=%s'" % (deploy_ips[0], str(n_id)))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.info("Get disks failed.")
+                exit(1)
+            else:
+                output = json.loads(output)
+                output = output['result']
+                for i in range(len(output['disks'])):
+                    if output['disks'][i]['usage'] == 'DATA':
+                        disk_ids.append(output['disks'][i]['id'])
+        disk_ids = list(set(disk_ids))
+        if 0 in disk_ids:
+            disk_ids.remove(0)
+        return disk_ids
+
+    def add_disks(self, s_ip=None, node_ids=None, uuid=None, usage=None, storage_id="2"):
+        '''
+        :Author: Liu he
+        :Date: 2018-8-13
+        :Description:添加硬盘
+        :param node_ids: 节点id
+        :param uuid: 硬盘的uuid
+        :param usage: (DATA,SHARE)
+        :return:
+        ========================
+        修改：添加参数判断功能，去掉添加失败重试函数重试方法，添加成功及返回成功，失败直接退出
+            node_ids 如果手动写就按照手动写的执行，如果不写就按照是s_ip的地址拿去node id
+        '''
+        time.sleep(10)
+        if node_ids is None:
+            node_ids = self.get_node_id_by_ip(s_ip)
+        us_list = [s_ip, node_ids, uuid, usage, storage_id]
+        if all(us_list):
+            while True:
+                disk_state = disk().check_disk_state(s_ip, uuid)
+                log.info("The disk's state is %s" % (disk_state))
+                if disk_state == 'DISK_STATE_HEALTHY':
+                    break
+                time.sleep(30)
+            # data_disk_ids = re.sub('\[|\]| ', '', str(self.get_all_data_disk_id()))
+            # cmd = (
+            # "ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=MID'" % (
+            # deploy_ips[0], data_disk_ids))
+            # res, output = commands.getstatusoutput(cmd)
+            # if res != 0:
+            #     print output
+            cmd = (
+                    "ssh %s \"pscli --command=add_disks --node_ids=%s --disk_uuids=%s --usage=%s --storage_pool_id=%s\"" % (
+                s_ip, node_ids, uuid, usage, storage_id))
+            log.info(cmd)
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.info("add disk fail!will EXIT.Error Info: %s" % (stdout))
+                time.sleep(10)
+                os._exit(1)
+            else:
+                log.info("add %s disk success" % (usage))
+                return
+        else:
+            log.error("iterable is error: \n  s_ip:%s \n node_ids:%s \n uuid:%s \n usage:%s \n storage_id:%s " % (
+                s_ip, node_ids, uuid, usage, storage_id))
+            os._exit(1)
+
+    # ===================================================
+    # latest date :2018-08-1
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-1:
+    # 修改者:wangxiang
+    # 1.创建
+    def get_share_monopoly_disk_ids(self, s_ip, node_id):
+        """
+        Description: 获取本节点的所有共享硬盘和数据硬盘
+        :param s_ip(str):
+        :param node_id(int):
+        :return:
+        """
+        cmd = ("ssh %s pscli --command=get_disks --node_ids=%s" % (s_ip, node_id))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        else:
+            msg = json.loads(stdout)
+            share_disk_names = []
+            monopoly_disk_names = []
+            disks_pool = msg['result']['disks']
+            for disk in disks_pool:
+                if disk['usage'] == 'SHARED' and disk['usedState'] == 'IN_USE' and disk[
+                    'state'] == 'DISK_STATE_HEALTHY':
+                    share_disk_names.append(disk['devname'])
+                elif disk['usage'] == 'DATA' and disk['usedState'] == 'IN_USE' and disk[
+                    'state'] == 'DISK_STATE_HEALTHY':
+                    monopoly_disk_names.append(disk['devname'])
+
+        return share_disk_names, monopoly_disk_names
+
+    # ===================================================
+    # latest date :2018-08-1
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-1:
+    # 修改者:wangxiang
+    # 1.创建
+    def get_diskid_by_name(self, s_ip, node_id, disk_name):
+        """
+        Description: 根据磁盘名字获取磁盘id
+        :param s_ip(str):
+        :param node_id(int):
+        :param disk_name(str):
+        :return: disk_id
+        """
+        cmd = "ssh %s pscli --command=get_disks --node_ids=%s" % (s_ip, node_id)
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        else:
+            result = json.loads(stdout)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk['devname'] == disk_name:
+                    return disk['id']
+        return None
+
+    # ===================================================
+    # latest date :2018-08-1
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-1:
+    # 修改者:wangxiang
+    # 1.创建
+    def get_physicalid_by_name(self, node_ip, disk_name):
+        """
+        Description: 获取某个节点的一个硬盘的物理id （2:0:0:1）
+        :param node_ip: 节点ip
+        :param disk_name:硬盘名字
+        :return:
+        """
+        cmd = 'ssh %s "lsscsi"' % node_ip
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        else:
+            list_stdout = stdout.split('\n')
+            for mem in list_stdout:
+                if disk_name in mem:
+                    list_mem = mem.split()
+                    id = list_mem[0]
+                    id = id[1:-1]
+                    return id
+        return None
+
+    def get_name_by_physicalid(self, node_ip, physicalid):
+        """
+        Description: 根据物理硬盘id，获取某个节点的一个硬盘的名字
+        :param node_ip: 节点ip
+        :param physicalid:硬盘物理ID:2:0:0:0
+        :return:
+        """
+        cmd = 'ssh %s "lsscsi"' % node_ip
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            raise Exception("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+        else:
+            list_stdout = stdout.split('\n')
+            for mem in list_stdout:
+                if physicalid in mem:
+                    list_mem = mem.split()
+                    id = list_mem[-1]
+                    id = id[:]
+                    return id
+        return None
+
+    # ===================================================
+    # latest date :2018-08-1
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-1:
+    # 修改者:wangxiang
+    # 1.创建
+    def remove_disk(self, node_ip, disk_id, disk_usage):
+        """
+        Description: 拔出某个节点的一个硬盘
+        :param node_ip:要拔硬盘的节点ip
+        :param disk_id:硬盘的物理id(2:0:0:0)
+        :param disk_usage:硬盘的用途(DATA   SHARED)
+        :return:
+        """
+        if not disk_id == None:
+            # cmd = 'ssh %s \"echo scsi remove-single-device %s > /proc/scsi/scsi\"' % (node_ip, disk_id)
+            cmd = 'ssh %s "echo 1 > /sys/class/scsi_device/%s/device/delete"' % (node_ip, disk_id)
+            log.info(cmd)
+            log.info('node %s remove disk %s, disk usage is %s' % (node_ip, disk_id, disk_usage))
+            rc, stdout = commands.getstatusoutput(cmd)
+            log.info(stdout)
+            if 0 != rc:
+                log.error('node %s remove disk %s fault!!!' % (node_ip, disk_id))
+                os._exit(1)
+            else:
+                time.sleep(5)
+        else:
+            log.info('%s is  None!' % disk_id)
+            os._exit(1)
+        time.sleep(5)
+        return
+
+    # ===================================================
+    # latest date :2018-08-1
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-1:
+    # 修改者:wangxiang
+    # 1.创建
+    def insert_disk(self, node_ip, disk_id, disk_usage):
+        """
+        Description: 插入某个节点的一个硬盘
+        :param node_ip:
+        :param disk_id:
+        :param disk_usage:
+        :return:
+        """
+        cmd = 'ssh %s \"echo scsi add-single-device %s > /proc/scsi/scsi\"' % (node_ip, disk_id)
+        log.info(cmd)
+        log.info('node %s add disk %s, disk usage is %s' % (node_ip, disk_id, disk_usage))
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error('node %s add disk %s fault!!!' % (node_ip, disk_id))
+            os._exit(1)
+        time.sleep(5)
+        cmd = 'ssh %s \"lsscsi\"' % node_ip
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(stdout)
+        return
+
+    # ===================================================
+    # latest date :2018-08-2
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-1:
+    # 修改者:wangxiang
+    # 1.创建
+    def run_down_disk_wait(self, s_ip, timeout):
+        """
+        修改磁盘超时参数
+        :param s_ip(str):节点IP
+        :param timeout(str): 超时时间
+        :return:
+        """
+        cmd = "ssh %s pscli --command=update_param --section=MGR --name=disk_isolate2rebuild_timeout --current=%s " % (
+            s_ip, timeout)
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error('update param failed!!!')
+            os._exit(1)
+            return False
+
+    # ==================================================
+    # latest date :2018-08-14
+    # author: wangxiang
+    # ===================================================
+    # 2018-08-14:
+    # 修改者:wangxiang
+    # 1.创建
+    def run_down_node_wait(self, s_ip, timeout):
+        """
+        修改节点超时参数
+        :param s_ip(str):节点IP
+        :param timeout(str): 超时时间
+        :return:
+        """
+        cmd = "ssh %s pscli --command=update_param --section=MGR --name=node_isolate_timeout --current=%s " % (
+            s_ip, timeout)
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        if 0 != rc:
+            log.error('update param failed!!!')
+            os._exit(1)
+            return False
+
+    def os_up(self, nums, esxi_ip, u_name, pw):
+        """
+        :Auther: Liu he
+        :Description: 将虚拟机开机，10分钟未开机认为开机失败
+        :param nums: 节点ID
+        :param esxi_ip: 虚拟机IP
+        :param u_name: 虚拟机用户名（管理员）
+        :param pw: 虚拟机密码
+        :return:
+        """
+        for i in range(600):
+            vm_status = self.get_vm_status(esxi_ip, u_name, pw, nums).strip()
+            if vm_status == "Powered off":
+                log.info("Return by function \"os_up\" :will send power on to vm %s." % (nums))
+                ReliableTest.run_up_vir_node(esxi_ip=esxi_ip, u_name=u_name, pw=pw, vm_id=nums)
+                time.sleep(20)
+            elif vm_status == "Powered on":
+                log.info("Return by function \"os_up\" :waiting the os up finish.")
+                return
+            elif i == 599:
+                log.info("Return by function \"os_up\" :The vm lost when waiting 600s, "
+                         "you need check vm os,Error Info: %s " % (vm_status))
+                os._exit(1)
+            else:
+                time.sleep(1)
+
+    def up_cpu(self, n_ip):
+        """
+        :Auther: Liu he
+        :Description: 提高CPU利用率
+        :return:
+        """
+        cmd = (
+                "ssh %s \" for i in \\`seq 1 $(cat /proc/cpuinfo |grep \"physical id\" |wc -l)\\`; do dd if=/dev/zero of=/dev/null & done\"" % (
+            n_ip))
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(cmd)
+        if rc != 0:
+            log.error("up CPU use ratio failed!!!!,Error info:%s " % (stdout))
+            os._exit(1)
+        else:
+            log.info("up CPU use ratio success")
+            return
+
+    def recover_cpu(self, n_ip):
+        """
+        :Auther: Liu he
+        :Description:恢复CPU利用率
+        :return:
+        """
+        cmd = (
+                "ssh %s \" for i in \\`seq 1 $(cat /proc/cpuinfo |grep \"physical id\" |wc -l)\\`; do pkill -9 dd & done\"" % (
+            n_ip))
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("recover CPU use ratio failed!!!!!")
+            os._exit(1)
+        else:
+            log.info("recover CPU use ratio success")
+
+    def get_unuse_mem(self, ips):
+        """
+        :Auther: Liu he
+        :Description:获取未使用的内存，单位GB
+        :param ips:
+        :return:
+        """
+
+        cmd = ("ssh %s \"free -g |awk \"NR==2\"|awk \'{print\$4}\' \"" % (ips))
+        rc, stdout = commands.getstatusoutput(cmd)
+        if rc != 0:
+            log.error("get member failed!!!,Error Infor:%s" % (stdout))
+            os._exit(1)
+        else:
+            log.info("get unuse memory :%s" % (stdout))
+            return stdout
+
+    def up_member(self, n_ip):
+        """
+        :Auther: Liu he
+        :Description: 将剩余内存全部占用默认占用100s
+        :param n_ip:
+        :return:
+        """
+        mem_size = self.get_unuse_mem(n_ip)
+        up_mem_size = int(mem_size)
+        if up_mem_size == 0:
+            log.info("Now memory is full,will do not Increase the memory")
+            time.sleep(100)
+            return
+        else:
+            log.info("%s node will run test_mem ,will consume memory %sGB" % (n_ip, mem_size))
+            cmd = (
+                    "ssh %s \"echo \\\"import time \ns = ' ' * (%s * 1024 * 1024 * 1024) \ntime.sleep(100) \n\\\">/root/test_mem.py\"" % (
+                n_ip, up_mem_size))
+            rc, stdout = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error(" %s create mem_test faill,info: %s" % (n_ip, stdout))
+                os._exit(1)
+            else:
+                log.info("will running test_mem")
+                cmd = ("ssh %s \"python /root/test_mem.py\"" % (n_ip))
+                rc, stdout = commands.getstatusoutput(cmd)
+                if rc != 0:
+                    log.error("%s Runing test_mem.py failed!!!!.error info: %s " % (n_ip, stdout))
+                    os._exit(1)
+                else:
+                    log.info("runing test_mem.py finish,will clean")
+                    cmd = ("ssh %s \" rm -rf  /root/test_mem.py\"" % (n_ip))
+                    commands.getstatusoutput(cmd)
+        return
+
+    def get_node_state(self, node_ip=None):
+        '''
+        :Auther: Liu he
+        :Description: 获取节点服务状态
+        :param node_ip:需要获取状态的节点IP
+        :return: 节点的状态 :NODE_STATE_HEALTHY ,NODE_STATE_ISOLATE  NODE_STATE_ISOLATE_REBUILDING  NODE_STATE_ZOMBIE
+        '''
+        if node_ip:
+            node_id = node.get_node_id_by_ip(node_ip)
+            cmd = ('ssh %s "pscli --command=get_nodes --ids=%s"' % (deploy_ips[0], node_id))
+            log.info(cmd)
+            (rc, stdout) = commands.getstatusoutput(cmd)
+            if rc != 0:
+                log.error("Error!get nodes info failed:%s" % stdout)
+                os._exit(1)
+            else:
+                result = json.loads(stdout)
+                node_info = result['result']['nodes'][0]
+                node_state = node_info['state']
+                log.info("Return by \"get_node_state\":The node %s state is %s" % (node_ip, node_state))
+                return node_state
+        else:
+            log.error("Error!node ip is invalid!!: %s" % node_ip)
+            os._exit(1)
+
+    def get_access_zones(self, node_ip=None):
+        '''
+        :Description:获取所有访问分区
+        :param node_ip:节点IP
+        :return: 访问分区ID列表
+        '''
+        if node_ip:
+            cmd = ('ssh %s "pscli --command=get_access_zones"' % node_ip)
+            log.info(cmd)
+            (rc, stdout) = commands.getstatusoutput(cmd)
+            if 0 != rc:
+                log.error("Error!get nodes info failed:%s" % stdout)
+                os._exit(1)
+            else:
+                result = json.loads(stdout)
+                zone_info = result['result']['access_zones']
+                access_zone_ids = []
+                for zone in zone_info:
+                    access_zone_ids.append(zone['id'])
+                log.info("Return by \"get_access_zones\":get access_zone_id:%s" % (access_zone_ids))
+                return access_zone_ids
+        else:
+            log.error("Error!node ip is invalid!! %s" % node_ip)
+            os._exit(1)
+
+    def get_node_ids_by_zone(self, zone_id=None):
+        '''
+        :Description:根据访问分区id获取分区中节点ID
+        :param zone_id: 访问分区ID
+        :return: 访问分区节点ID列表
+        '''
+        if zone_id:
+            cmd = ('ssh %s "pscli --command=get_access_zones"' % deploy_ips[0])
+            log.info(cmd)
+            (rc, stdout) = commands.getstatusoutput(cmd)
+            if 0 != rc:
+                log.error("Error!get nodes info failed:%s" % stdout)
+                os._exit(1)
+            else:
+                result = json.loads(stdout)
+                zone_info = result['result']['access_zones']
+                for zone in zone_info:
+                    if zone['id'] == zone_id:
+                        return zone['node_ids']
+                log.error("can not find any node in the access zone!")
+        else:
+            log.error("Error!node ip is invalid!! %s" % deploy_ips[0])
+            os._exit(1)
+
+    def change_process_state(self, node_ip=None, process_name=None, up_down=None):
+        """
+        :Description:将某一节点的进程杀死,并不让其拉起或让其拉起
+        :param node_ip:
+        :param process_name:
+        :return:
+        """
+        if all((node_ip, process_name, up_down)):
+            if up_down == 'down':
+                cmd_bin = (
+                        'ssh %s "mv /home/parastor/bin/%s /home/parastor/bin/%s.bak"' % (
+                node_ip, process_name, process_name))
+                (rc, stdout) = commands.getstatusoutput(cmd_bin)
+                if 0 != rc:
+                    log.error("update process bin file failed!info:%s" % stdout)
+                else:
+                    log.info("update process bin file successful!")
+                ReliableTest.run_kill_process(node_ip, process_name)
+            elif up_down == 'up':
+                cmd_bin = (
+                        'ssh %s "mv /home/parastor/bin/%s.bak /home/parastor/bin/%s"' % (
+                node_ip, process_name, process_name))
+                (rc, stdout) = commands.getstatusoutput(cmd_bin)
+                if 0 != rc:
+                    log.error("update process bin file failed!info:%s" % stdout)
+                else:
+                    log.info("update process bin file successful!")
+            else:
+                log.error("param is invalid!info:%s" % up_down)
+        else:
+            log.error("exsits some param invalid!info:%s,%s,%s" % (node_ip, process_name, up_down))
+
+    def get_unmap_vip(self, s_ip):
+        vips = get_config.get_vip(conf_file)
+        vip_list = com2.analysis_vip(vips[0])
+        target_list = Lun_managerTest.oSan().get_map_target(s_ip=s_ip)
+        for iqn in target_list:
+            iqn = iqn.encode("utf-8")
+            lun_map_vip = iqn.split("target.")[-1]
+            if lun_map_vip in vip_list:
+                vip_list.remove(lun_map_vip)
+        return vip_list
+
+    def get_map_vip(self, s_ip):
+        target_list = Lun_managerTest.oSan().get_map_target(s_ip=s_ip)
+        lun_map_vips = []
+        for iqn in target_list:
+            iqn = iqn.encode("utf-8")
+            lun_map_vip = iqn.split("target.")[-1]
+            lun_map_vips.append(lun_map_vip)
+        return lun_map_vips
+
+    def get_unmap_lun(self, s_ip=None):
+        '''
+        date    :   2018-11-20
+        Description :   获取没有进行lun 映射的lun ID
+        return  :   lun ID
+        '''
+        if None == s_ip:
+            log.error("Please input the correct ip.")
+            os._exit(1)
+        else:
+            lun_ids = com2.get_lun(s_ip)
+            cmd = ("ssh %s \"pscli --command=get_lun_maps\"" % (s_ip))
+            log.info(cmd)
+            (res, final) = commands.getstatusoutput(cmd)
+            if (res != 0):
+                log.error(final)
+                log.error("Get lun maps error.")
+                os._exit(1)
+            else:
+                log.info("Get lun maps success.")
+                final = json.loads(final)
+                final = final['result']
+                for i in range(0, final['total']):
+                    lun_id = final['lun_maps'][i]['lun_id']
+                    if lun_id in lun_ids:
+                        lun_ids.remove(lun_id)
+            return lun_ids
+
+    def get_all_vip_address(self):
+        '''
+        date    :   2018-05-15
+        Description :   获取VIP
+        param   :   s_ip : iscsi服务端IP;n_id : 节点ID
+        return  :   VIP(二元列表)
+        '''
+        vip_list = []
+        for s_ip in deploy_ips:
+            if False is ReliableTest.check_ping(s_ip):
+                continue
+            else:
+                cmd = ("ssh %s \" pscli --command=get_vip_address_pools\"" % (s_ip))
+                (res, final) = commands.getstatusoutput(cmd)
+                log.info(cmd)
+                if res != 0:
+                    log.error(final)
+                    log.error("Get_vip_address_pools error.")
+                    os._exit(1)
+                else:
+                    log.info("Get_vip_address_pools success.")
+                    final = json.loads(final)
+                    if final['result']['total'] == 0:
+                        os._exit(1)
+                    else:
+                        finals = final['result']['ip_address_pools']
+                        for vip in finals:
+                            vip_list.extend(vip['vip_addresses'])
+                    log.info("Get VIP list: %s" % (vip_list))
+                    return vip_list
+
+    def get_lun_size_dict(self, lun_ids):
+        """
+        :auther: Liu he
+        :description: 获取lunID和容量
+        :param s_ip:
+        :return: 返回LUN ID和LUN容量对应的字典
+        """
+        lunsizes = []
+        cmd = ("pscli --command=get_luns")
+        log.info(cmd)
+        res, final = com2.run_pscli_cmd(pscli_cmd=cmd, time_out=300, times=1)
+        if (res != 0):
+            log.error(final)
+            log.error("Get luns error.")
+            exit(1)
+        else:
+            log.info("Get luns success.")
+            final = json.loads(final)
+            final = final['result']
+            for i in range(0, final['total']):
+                lunsizes.append(final["luns"][i]['total_bytes'])
+        lun_size_dict = dict(zip(lun_ids, lunsizes))
+        log.info("get lun size:exp{lun id: lun size}:%s" % (lun_size_dict))
+        return lun_size_dict
+
+    def get_zk_total_num(self):
+        """
+        :auther:Liu he
+        :description: 获取集群zk节点数量
+        :return:
+        """
+        cmd = ("pscli --command=get_cluster_overview")
+        rc, output = com2.run_pscli_cmd(pscli_cmd=cmd, time_out=300, times=1)
+        if rc != 0:
+            log.error("get cluster overview failed:error info:%s" % (output))
+        else:
+            output = json.loads(output)
+            zk_infos = output["result"]["zk_servers"]
+            return len(zk_infos)
+
+
+# 配置文件路径
+conf_file = common2.CONF_FILE
+# 获取集群IP列表
+deploy_ips = get_config.get_env_ip_info(conf_file)
+client_ips = get_config.get_allclient_ip()  # 获取客户端IP
+node = common.Node()
+osan = common2.oSan()
+
+
+# nodes = osan.get_nodes(s_ip=deploy_ips)
+
+
+class disk():
+    '''
+    get_rw_disk_by_node_id
+    get_disk_phyid_by_name
+    get_diskid_by_name
+    get_disk_uuid_by_name
+    delete_disk
+    add_disk
+    get_disk_pool
+    get_diskid_in_disk_pool
+    get_nodeinfo_by_diskid
+    get_storage_poolid_by_diskid
+    get_disk_id_by_uuid
+    expand_disk_2_storage_pool
+    get_lun_size
+    get_jnl_replica
+    get_disk_state
+    get_interface_node
+    '''
+
+    def get_rw_disk_by_node_id(self, s_ip=None, node_id=None, disk_type=None):
+        '''
+        :Usage : get disks which are reading or writing by nodeid
+        :param s_ip: server ip
+        :param node_id: node id to check
+        :disk_type : data or shared
+        :return: list,list of disk names
+        '''
+        disks = []
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        if res != 0:
+            log.error("Get disk name failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk_type == "share" or disk_type == "SHARE":
+                    if disk["usage"] == "SHARED" and disk["usedState"] == "IN_USE":
+                        disks.append(disk["devname"])
+
+                else:
+                    if disk["usage"] == "DATA" and disk['usedState'] == "IN_USE":
+                        disks.append(disk["devname"])
+            return disks
+
+    def get_disk_phyid_by_name(self, s_ip=None, disk_name=None):
+        '''
+        :Usage : get disk physic id by disk name
+        :param s_ip: node ip to get the disk
+        :param disk_name:disk name ,ex:/dev/sdb
+        :return: list,disks' phy id ex:0 0 1 0
+        '''
+        uuids = []
+        for disk in disk_name:
+            cmd = ("ssh %s 'lsscsi |grep -w %s'" % (s_ip, disk))
+            log.info(cmd)
+            (res, output) = commands.getstatusoutput(cmd)
+            if res != 0:
+                log.error("Get disk uuid failed.")
+                os._exit(1)
+            else:
+                uuids.append(re.sub(':', ' ', re.sub('\[|\]', '', output.split()[0])))
+        return uuids
+
+    def get_diskid_by_name(self, s_ip=None, node_id=None, disk_name=None):
+        '''
+        :Usage : get disk name by node id and disk name
+        :param s_ip: server ip
+        :param node_id: node id on which to check the disk
+        :param disk_name: ex:/dev/sdb
+        :return:int, disk id
+        '''
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get disk id failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk["devname"] == disk_name:
+                    return disk["id"]
+
+    def get_disk_uuid_by_name(self, s_ip=None, node_id=None, disk_name=None):
+        '''
+        :Usage : get disk uuid by its name and node id
+        :param s_ip: server ip
+        :param node_id: node where the disk locate
+        :param disk_name: ex: /dev/sdb
+        :return: str,disk's uuid
+        '''
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(cmd)
+        log.info(stdout)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            os._exit(1)
+        else:
+            result = json.loads(stdout)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk['devname'] == disk_name:
+                    return disk['uuid']
+
+    def delete_disk(self, s_ip=None, disk_id=None):
+        '''
+        :Usage : delete disk by pscli command
+        :param s_ip: node ip to delete the disk
+        :param disk_id: disk id
+        :return: None
+        '''
+        cmd = ("ssh %s 'pscli --command=remove_disks --disk_ids=%s'" % (s_ip, str(disk_id)))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(stdout)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            os._exit(1)
+        return
+
+    def add_disk(self, s_ip=None, uuid=None, usage=None, node_id=None, err=True):
+        '''
+        :Usage : add disk on one node through pscli command
+        :param s_ip: node ip to add disk
+        :param uuid: disk's uuid
+        :param usage: data or share
+        :return: None
+        '''
+        time.sleep(15)
+        us_list = [s_ip, node_id, uuid, usage]
+        if all(us_list):
+            for count in range(5):
+                disk_state = disk().check_disk_state(s_ip, uuid)
+                log.info("The disk's state is %s" % (disk_state))
+                if disk_state == 'DISK_STATE_HEALTHY':
+                    break
+                time.sleep(20)
+        cmd = ("ssh %s 'pscli --command=add_disks --node_ids=%s --disk_uuids=%s --usage=%s'" % (
+            s_ip, str(node_id), uuid, usage))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(stdout)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            if err:
+                os._exit(1)
+            else:
+                return False
+        else:
+            log.info("Add disk success.")
+            # data_disk_ids = re.sub('\[|\]| ', '', str(self.get_all_data_disk_id()))
+            # cmd = ("ssh root@%s '/home/parastor/cli/pscli --command=change_disk_speed_level --disk_ids=%s --speed_level=MID'"
+            #        % (deploy_ips[0], data_disk_ids))
+            # res, output = commands.getstatusoutput(cmd)
+            # if res != 0 :
+            #     print output
+
+    def get_disk_pool(self, s_ip=None, ids=None):
+        '''
+        :Usage : get disk pool by storage id
+        :param s_ip:server ip
+        :return: list,disk pool id
+        '''
+        disk_pool_id = []
+        cmd = ("ssh %s \"pscli --command=get_storage_pool_stat --ids=%s| awk '{print \$4}'\"" % (s_ip, str(ids)))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(stdout)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            os._exit(1)
+        else:
+            for line in stdout.strip().split("\n"):
+                if line == "disk_pool_id" or line == '':
+                    continue
+                else:
+                    disk_pool_id.append(line)
+            return disk_pool_id
+
+    def get_diskid_in_disk_pool(self, s_ip=None, s_id=None):
+        '''
+        :Usage : get disk id by storage id
+        :param s_ip:server ip
+        :param d_pool_id: storage id
+        :return:list ,disk id in the same disk pool
+        '''
+        disk_pool_id = {}
+        disk_id = []
+        cmd = ("ssh %s \"pscli --command=get_storage_pool_stat --ids=%s| "
+               "awk '(diskid=NF-1)(poolid=NF-2)"
+               "{if (poolid>0)print \$poolid,\$diskid;"
+               "else if (diskid>0 && poolid<=0)print \$diskid}'\"" % (s_ip, str(s_id)))
+        log.info(cmd)
+        rc, stdout = commands.getstatusoutput(cmd)
+        log.info(stdout)
+        if 0 != rc:
+            log.error("Execute command: \"%s\" failed. \nstdout: %s" % (cmd, stdout))
+            os._exit(1)
+        else:
+            for id in stdout.split("\n"):
+                if id == 'disk_pool_id disk_id':
+                    continue
+                else:
+                    ids = id.split()
+                    if len(ids) == 2:
+                        disk_id = []
+                        id_key = ids[0]
+                        disk_id.append(ids[1])
+                        disk_pool_id[id_key] = disk_id
+                    else:
+                        disk_id.append(id)
+                        disk_pool_id[id_key] = disk_id
+            return disk_pool_id
+
+    def get_nodeinfo_by_diskid(self, s_ip=None, disk_id=None):
+        '''
+        :Usage : get node ctr ip ,node id ,disk name by disk id
+        :param s_ip: server ip
+        :param disk_id: disk id
+        :return: list,int,list
+        '''
+        osan = common2.oSan()
+        node_ids = osan.get_nodes(s_ip=s_ip)
+        for node_id in node_ids:
+            cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+            log.info(cmd)
+            (res, output) = commands.getstatusoutput(cmd)
+            log.info(output)
+            if res != 0:
+                log.error("Get disk id failed.")
+                os._exit(1)
+            else:
+                result = json.loads(output)
+                disk_list = result['result']['disks']
+                for disk in disk_list:
+                    if str(disk["id"]) == str(disk_id):
+                        d_name = []
+                        ctl_ips = ReliableTest.get_ctl_ips(node_ip=s_ip, node_id=node_id)
+                        print ctl_ips
+                        ips = osan.analysis_vip(ctl_ips)
+                        name = disk["devname"]
+                        d_name.append(name)
+                        return ips, node_id, d_name
+
+    def get_storage_poolid_by_diskid(self, s_ip=None, node_id=None, disk_id=None):
+        '''
+        :Usage : get strage pool id by disk id
+        :param s_ip: server ip
+        :param node_id:
+        :param disk_id:
+        :return:int
+        '''
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get disk info failed.")
+            os._exit(1)
+        else:
+            msg = json.loads(output)
+            disks_info = msg["result"]["disks"]
+            for disk in disks_info:
+                if disk['id'] == disk_id:
+                    return disk['storagePoolId']
+            log.info("there is not a disk's id is %s!!!" % (str(disk_id)))
+            return None
+
+    def get_disk_id_by_uuid(self, s_ip=None, node_id=None, disk_uuid=None):
+        '''
+        :Usage : get disk id by its uuid
+        :param s_ip:
+        :param node_idd:
+        :param disk_uuid:
+        :return: int
+        '''
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get disk info failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk['uuid'] == disk_uuid:
+                    return disk['id']
+        return None
+
+    def expand_disk_2_storage_pool(self, s_ip=None, stor_id=None, disk_id=None, err=True):
+        '''
+        :Usage : add disk to storage pool
+        :param s_ip:
+        :param stor_id:
+        :param disk_id:
+        :return:None
+        '''
+        cmd = ("ssh %s 'pscli --command=expand_storage_pool --storage_pool_id=%s --disk_ids=%s'" % (
+            s_ip, str(stor_id), str(disk_id)))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Add disk: %s to storage pool: %s failed." % (str(disk_id), str(stor_id)))
+            if err:
+                os._exit(1)
+            else:
+                return False
+
+    def expand_disk_2_storage_pool_by_uuid(self, s_ip=None, node_id=None, uuid=None, storage_pool_id=None):
+        '''
+        :Usage : add disk to storage pool by its uuid
+        :param s_ip:
+        :param node_id:
+        :param uuid:
+        :return:
+        '''
+        disk_id = self.get_disk_id_by_uuid(s_ip=s_ip, node_id=node_id, disk_uuid=uuid)
+        self.expand_disk_2_storage_pool(s_ip=s_ip, stor_id=storage_pool_id, disk_id=disk_id)
+        print "Node %s add disk %s to storatepool %s success." % (str(node_id), str(disk_id), str(storage_pool_id))
+
+    def get_lun_size(self, c_ip=None, lun=None, unit="$6"):
+        '''
+        :Usage : get lun's size
+        :param c_ip:
+        :param lun:
+        :return: int,unit: $6  Byte  $3  GB
+        '''
+        if unit == "$6":
+            cmd = ("ssh %s \"fdisk -l %s 2> /dev/null | grep '%s' | awk -F ',| ' '{print \$6}'\"" % (c_ip, lun, lun))
+        elif unit == "$3":
+            cmd = ("ssh %s \"fdisk -l %s 2> /dev/null | grep '%s' | awk -F ',| ' '{print \$3}'\"" % (c_ip, lun, lun))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get %s size failed." % (lun))
+            os._exit(1)
+        else:
+            return int(output)
+
+    def parted_lun(self, c_ip=None, lun=None, min_size=None, max_size=None):
+        '''
+        :Usage : make a part for the disk by parted tool
+        :param c_ip: host ip
+        :param lun: lun to make part
+        :param min_size: range
+        :param max_size: range
+        :return: part name
+        '''
+        # range_1 : min:0G,max:4G
+        # range_2 : min:4G,max:16384G(16T)
+        # range_3 : min:16384G,max:65536G(64T)
+        # range_4 : min:65536G,max:262144G(256T)
+
+        # Judge if the lun is exist
+        cmd = ("ssh %s 'ls %s1'" % (c_ip, lun))
+        log.info(cmd)
+
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            lun_size = self.get_lun_size(c_ip=c_ip, lun=lun, unit="$3")
+            lun_size = int(lun_size.split('.')[0])
+            if min_size == None or max_size == None:
+                if lun_size <= 4:
+                    return lun
+                elif lun_size <= 16384 and lun_size > 4:
+                    range_num = random.randint(0, 1)
+                    if range_num == 0:
+                        min_size = random.randint(0, 4)
+                        max_size = min_size + 2
+                    else:
+                        min_size = random.randint(0, lun_size - 2)
+                        max_size = min_size + 2
+                elif lun_size > 16384 and lun_size <= 65536:
+                    range_num = random.randint(0, 2)
+                    if range_num == 0:
+                        min_size = random.randint(0, 4)
+                        max_size = min_size + 2
+                    elif range_num == 1:
+                        min_size = random.randint(4, 16384)
+                        max_size = min_size + 2
+                    else:
+                        min_size = random.randint(16384, lun_size - 2)
+                        max_size = min_size + 2
+                else:
+                    range_num = random.randint(0, 3)
+                    if range_num == 0:
+                        min_size = random.randint(0, 4)
+                        max_size = min_size + 2
+                    elif range_num == 1:
+                        min_size = random.randint(4, 16384)
+                        max_size = min_size + 2
+                    elif range_num == 2:
+                        min_size = random.randint(16384, 65536)
+                        max_size = min_size + 2
+                    else:
+                        min_size = random.randint(65536, lun_size - 2)
+                        max_size = min_size + 2
+
+            cmd = (
+                    "ssh %s 'parted -s %s mklabel gpt mkpart primary %sG %sG'" % (
+            c_ip, lun, str(min_size), str(max_size)))
+            log.info(cmd)
+            (res, output) = commands.getstatusoutput(cmd)
+            log.info(output)
+            if res != 0:
+                log.error("Parted %s and mkpart %s to %s on %s failed." % (lun, str(min_size), str(max_size), c_ip))
+                os._exit(1)
+            else:
+                return lun + '1'
+        else:
+            return lun + '1'
+
+    def del_lun_part(self, c_ip=None, lun=None):
+        '''
+        :Usage : delete the lun partion
+        :param c_ip: host ip
+        :param lun: lun name
+        :return: None
+        '''
+        cmd = ("ssh %s 'parted -s %s rm 1'" % (c_ip, lun))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Rm partion %s on %s failed." % (lun, c_ip))
+            log.error(output)
+        else:
+            return
+
+    def get_jnl_replica(self, s_ip=None):
+        '''
+        :Usage :获取共享盘副本数
+        :param s_ip: 集群节点IP
+        :return: int，副本数
+        '''
+        cmd = ("ssh %s 'pscli --command=get_jnl_replica'" % (s_ip))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get shared disk replica info failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            return result['result']['jnl_replica']
+        return None
+
+    def get_disk_state(self, s_ip=None, disk_id=None):
+        '''
+        :Usge:通过磁盘ID获取磁盘状态
+        :param s_ip: 集群节点IP
+        :param disk_id: 磁盘ID
+        :return: str，磁盘状态
+        :磁盘状态:DISK_STATE_ISOLATE  DISK_STATE_HEALTHY  DISK_STATE_REBUILDING_PASSIVE  DISK_STATE_ZOMBIE
+        '''
+        ips, node_id, d_name = self.get_nodeinfo_by_diskid(s_ip=s_ip, disk_id=disk_id)
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%d'" % (s_ip, node_id))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get shared disk replica info failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk['id'] == disk_id:
+                    return disk['state']
+        return None
+
+    def check_disk_state(self, node_ip=None, disk_uuid=None):
+        '''
+        :Usge:通过磁盘UUID检查节点磁盘状态
+        :Arthur:wuyuqiao
+        :param node_ip: 节点IP
+        :param disk_uuid: 磁盘uuid
+        :return: 磁盘状态：DISK_STATE_ISOLATE  DISK_STATE_HEALTHY  DISK_STATE_REBUILDING_PASSIVE  DISK_STATE_ZOMBIE
+        '''
+        node_id = node.get_node_id_by_ip(node_ip)
+
+        cmd = ("ssh %s 'pscli --command=get_disks --node_ids=%d'" % (node_ip, node_id))
+        log.info(cmd)
+        (res, output) = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get disks info replica failed!!!")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            for disk in disk_list:
+                if disk['uuid'] == disk_uuid:
+                    log.info("The %s disk status is %s" % (disk['devname'], disk['state']))
+                    return disk['state']
+
+            log.error("Can't find the disk or the disk_uuid has been changed!")
+            log.error("The disk's uuid is %s" % (disk_uuid))
+            return None
+
+    def get_interface_node(self, vips=None):
+        '''
+        :Usage:获取业务接入点的节点ID
+        :return: list，接入点节点ID
+        '''
+        node_ids = []
+        for sip in deploy_ips:
+            for vip in vips:
+                cmd = ("ssh %s 'ip a |grep %s'" % (sip, vip))
+                (res, output) = commands.getstatusoutput(cmd)
+                if res == 0:
+                    node_id = node.get_node_id_by_ip(sip)
+                    node_ids.append(node_id)
+                    break
+        return node_ids
+
+    def node_err_prepare(self, filename, node_num=None, share_disk_num=None):
+        """
+        :Author:diws
+        :Date:2018-08-06
+        :Description:脚本执行前调用，检查环境是否满足该用例执行条件
+        :param filename: str，日志文件名
+        :param node_num: str/int，节点数
+        :param share_disk_num: str/int，共享盘数
+        :return: None
+        """
+        node_num = int(node_num)
+        share_disk_num = int(share_disk_num)
+        prepare_x1000.test_prepare(filename, **kwargs)
+
+    def get_jnl_node_id(self):
+        """
+        :Usage:获取日志节点列表
+        :return:list,日志节点列表
+        """
+        jnl_node_ids = []
+        node_ids = osan.get_nodes(s_ip=deploy_ips[1])
+        for id in node_ids:
+            cmd = ("ssh %s ' pscli --command=get_nodes --ids=%s'" % (deploy_ips[1], str(id)))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            log.info(output)
+            if res != 0:
+                log.error("Get node info failed.")
+                os._exit(1)
+            else:
+                if "SHARED" not in output:
+                    continue
+                else:
+                    jnl_node_ids.append(id)
+        return jnl_node_ids
+
+    def get_min_lun_replica(self, s_ip=None):
+        """
+        :Author:diws
+        :Date:2018-08-10
+        :Usage:获取lun最小副本数
+        :param s_ip: 集群节点IP
+        :return: int，最小副本数
+        :Chagelog:
+        """
+        lun_rep_nums = []
+        cmd = ("ssh %s ' pscli --command=get_luns'" % (s_ip))
+        log.info(cmd)
+        res, output = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Get luns error.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            lun_list = result['result']['luns']
+            for lun in lun_list:
+                lun_rep_nums.append(lun["layout"]["replica_num"])
+            return (int(min(lun_rep_nums)))
+        return
+
+    def check_bad_obj(self):
+        """
+        :Author:diws
+        :Date:2018-08-10
+        :Usage:检查集群内是否有坏对象
+        :return:
+        """
+        com_os = Os_Reliable()
+        for d_ip in deploy_ips:
+            if False is ReliableTest.check_ping(d_ip):
+                continue
+            else:
+                san_status = com_os.get_san_state(d_ip)
+                if san_status:
+                    if all(san_status) is True:
+                        log.info("check san status is active")
+                        break
+                    elif True in san_status:
+                        log.info("have a part of node list san status is active:%s" % (san_status))
+                        break
+                    else:
+                        log.info("check san status is inactive, check_bad_obj will pass")
+                        return
+                else:
+                    log.info("check xstor have not access, check_bad_obj will pass")
+                    return
+        for c_ip in client_ips:
+            cmd = ("ssh %s 'ps aux |grep -v grep | grep vdb | grep java'" % (c_ip,))
+            res, output = commands.getstatusoutput(cmd)
+            while res == 0:
+                res, output = commands.getstatusoutput(cmd)
+                log.info("check node %s vdb process exists" % (c_ip))
+                time.sleep(20)
+        for ip in deploy_ips:
+            if False == ReliableTest.check_ping(ip):
+                continue
+            else:
+                cmd = ('ssh root@%s "ps -C oSan"' % (ip,))
+                res, output = commands.getstatusoutput(cmd)
+                if res != 0:
+                    continue
+                n_id = node.get_node_id_by_ip(ip)
+                cmd = ("ssh %s '/home/parastor/tools/nWatch -t oSan -i %s -c oSan#badobjnr'" % (ip, str(n_id)))
+                log.info(cmd)
+                res, output = commands.getstatusoutput(cmd)
+                if (res == 0 and 'support' in output) or (res != 0):
+                    time.sleep(10)
+                    for i in range(5):
+                        res, output = commands.getstatusoutput(cmd)
+                        if res == 0 and 'support' not in output:
+                            break
+                        time.sleep(20)
+                        if i == 4:
+                            log.error("Check bad obj failed after %s times.\noutput Info:%s" % (i, output))
+                            exit(1)
+                # badobjnr = output.split(":")[-1].strip()
+                log.info(output)
+                badobjnr = output.split('\n')[0].split(":")[-1].strip()
+                log.info("Check badobj number is %s." % (str(badobjnr)))
+                while str(badobjnr) != '0':
+                    badobjnr_init = badobjnr
+                    # time.sleep(300)   #等待5分钟改为每分钟检查一次
+                    for n in range(6):
+                        time.sleep(60)
+                        res, output = commands.getstatusoutput(cmd)
+                        if (res == 0 and 'support' in output) or (res != 0):
+                            time.sleep(10)
+                            for i in range(5):
+                                res, output = commands.getstatusoutput(cmd)
+                                if res == 0 and 'support' not in output:
+                                    break
+                                time.sleep(20)
+                                if i == 4:
+                                    log.error("Check bad obj failed after 5 times.")
+                                    exit(1)
+                                    # badobjnr = output.split(":")[-1].strip()
+                        log.info(output)
+                        badobjnr = output.split('\n')[0].split(":")[-1].strip()
+                        if int(badobjnr) == 0:
+                            break
+                        elif n == 5:
+                            if int(badobjnr_init) == int(badobjnr):
+                                log.info(
+                                    "On node %s oSan#badobjnr is %s after 5 minitues." % (str(n_id), str(badobjnr)))
+                                log.error(
+                                    "Found bad obj didn't repair in five minitues, so I cored automaticlly on each node.")
+                                time.sleep(300)
+                                for core_ip in deploy_ips:
+                                    cmd = ("ssh %s 'killall -11 oSan'" % (core_ip,))
+                                    commands.getstatusoutput(cmd)
+                                cmd = 'pscli --command=get_nodes'
+                                res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+                                log.error(output)
+                                os._exit(110)
+                                # elif int(badobjnr_init) / (int(badobjnr_init) - int(badobjnr)) > 6:
+                                #     log.error("Repair time is expand 30 minitues.")
+                                #     os._exit(110)
+
+    def check_lnode_state(self):
+        """
+        :Arthor:wuyuqiao
+        :Usage:检查集群的逻辑节点状态是否正常
+        """
+        com_os = Os_Reliable()
+        san_status = com_os.get_san_state(deploy_ips[0])
+        if san_status:
+            if all(san_status) is True:
+                log.info("check san status is active")
+            else:
+                log.info("check san status is inactive, check_lnode_state will pass")
+                return
+        else:
+            log.info("check xstor have not access, check_lnode_state will pass")
+            return
+        log.info("******************** check lnode state ********************")
+        nodes = osan.get_nodes(s_ip=deploy_ips)
+        for node_id in nodes:
+            current_node_ip = node.get_node_ip_by_id(str(node_id))
+            cmd = ('ssh root@%s "ps -C oSan"' % (current_node_ip,))
+            res, output = commands.getstatusoutput(cmd)
+            if res != 0:
+                continue
+            cmd = ('ssh %s "/home/parastor/tools/nWatch -t oSan -i %s -c oSan#jnlins_dump"' % (
+                current_node_ip, node_id))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            log.info(output)
+            if res != 0:
+                log.error("Check lnode state failed!!!info:%s" % output)
+                os._exit(1)
+            else:
+                cmd = (
+                        'ssh %s "/home/parastor/tools/nWatch -t oSan -i %s -c oSan#jnlins_dump" | grep lnodeid' % (
+                    current_node_ip, node_id))
+                log.info(cmd)
+                output = commands.getoutput(cmd)
+                log.info(output)
+                if output == '':
+                    log.info("Warning:The node %s has not any lnode!" % current_node_ip)
+                else:
+                    lnode_stor = []
+                    for count in range(4):
+                        error_state = 0
+                        lnode_error_list = ''
+                        res, output = commands.getstatusoutput(cmd)
+                        if res != 0:
+                            log.error("Check lnode state failed!!!info:%s" % output)
+                            os._exit(1)
+                        else:
+                            lnode_list = output.split('\n')
+                            for lnode in lnode_list:
+                                lnode_state_ls = lnode.split(':')
+                                lnode_state_tmp = lnode_state_ls[2]
+                                lnode_state = lnode_state_tmp[0]
+                                if lnode_state != '6':
+                                    lnode_error_list = lnode_error_list + lnode + '\n'
+                                    error_state += 1
+                            if 0 == error_state:
+                                log.info("node %s all lnode state is OK!" % current_node_ip)
+                                break
+                            else:
+                                log.info("The node %s has lnode in ERROR state!info:\n%s" % (
+                                    current_node_ip, lnode_error_list))
+                                lnode_stor.append(lnode_error_list)
+                                if 0 != count and lnode_error_list == lnode_stor[count - 1]:
+                                    log.error(
+                                        "The node %s lnode state is not changed after 3 minutes.Maybe stuck!" % current_node_ip)
+                                    os._exit(1)
+                                else:
+                                    log.info("The node %s lnode state is ERROR...waiting 3 minutes" % current_node_ip)
+                        time.sleep(180)
+
+    def restart_otrc(self, ip):
+        '''
+        :Autor:Diws
+        :Date:20180906
+        :param ip:集群节点IP
+        :return:None
+        '''
+        print "None"
+        # cmd = ("ssh %s ' /home/parastor/tools/otrc -i'" % (ip,))
+        # res, output = commands.getstatusoutput(cmd)
+        # if res != 0:
+        #     # enable_otrc = ("ssh %s '/home/parastor/tools/otraced -d'" % (ip,))
+        #     enable_otrc = ("ssh %s 'echo hello'" % (ip,))
+        #     res, output = commands.getstatusoutput(enable_otrc)
+        #     if res != 0:
+        #         log.info(output)
+        #         return None
+        #     enable_log = (
+        #         "ssh %s '/home/parastor/tools/otrc -o /home/parastor/log/otrace/otrace.data -s 4096 -S \"IOPREP|DJNL|DPC|LMPC|LIOC\"'" % (
+        #             ip,))
+        #     res, output = commands.getstatusoutput(enable_log)
+        #     if res != 0:
+        #         log.info(output)
+        #         return None
+        #     otrc_on = ("ssh %s '/home/parastor/tools/otrc -z on'" % (ip,))
+        #     res, output = commands.getstatusoutput(otrc_on)
+        #     if res != 0:
+        #         log.info(output)
+        #         return None
+
+    def get_all_shared_disk_id(self):
+        '''
+        :By:Diws
+        :Date:20181009
+        :return:list,所有共享盘ID
+        '''
+        disk_ids = []
+        nodes = osan.get_nodes(s_ip=deploy_ips)
+        for n_id in nodes:
+            cmd = ("ssh root@%s ' pscli --command=get_disks --node_ids=%s'" % (deploy_ips[0], str(n_id)))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            # log.info(output)
+            if res != 0:
+                log.info("Get disks failed.")
+                exit(1)
+            else:
+                output = json.loads(output)
+                output = output['result']
+                for i in range(len(output['disks'])):
+                    if output['disks'][i]['usage'] == 'SHARED':
+                        disk_ids.append(output['disks'][i]['id'])
+        disk_ids = list(set(disk_ids))
+        if 0 in disk_ids:
+            disk_ids.remove(0)
+        return disk_ids
+
+    def get_all_data_disk_id(self):
+        '''
+        :By:Diws
+        :Date:20181009
+        :return:list,所有共享盘ID
+        '''
+        disk_ids = []
+        nodes = osan.get_nodes(s_ip=deploy_ips)
+        for n_id in nodes:
+            cmd = ("ssh root@%s ' pscli --command=get_disks --node_ids=%s'" % (deploy_ips[0], str(n_id)))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            log.info(output)
+            if res != 0:
+                log.info("Get disks failed.")
+                exit(1)
+            else:
+                output = json.loads(output)
+                output = output['result']
+                for i in range(len(output['disks'])):
+                    if output['disks'][i]['usage'] == 'DATA':
+                        disk_ids.append(output['disks'][i]['id'])
+        disk_ids = list(set(disk_ids))
+        if 0 in disk_ids:
+            disk_ids.remove(0)
+        return disk_ids
+
+    def get_assign_data_disk_id(self, s_ip, node_id):
+        """
+        获取指定节点的物理盘
+        :Author:wangxiang
+        :Date:2018-10-16
+        :type node_id: int
+        :type s_ip: str
+        :param s_ip :
+        :param node_id :
+        :return:
+        """
+        disk_ids = []
+        if all([s_ip, node_id]):
+            cmd = ("ssh root@%s ' pscli --command=get_disks --node_ids=%s'" % (s_ip, str(node_id)))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            # log.info(output)
+            if res != 0:
+                log.info("Get disks failed.")
+                exit(1)
+            else:
+                output = json.loads(output)
+                output = output['result']
+                for i in range(len(output['disks'])):
+                    if output['disks'][i]['usage'] == 'DATA':
+                        disk_ids.append(output['disks'][i]['id'])
+        else:
+            log.error("get  error arg!")
+            exit(1)
+        disk_ids = list(set(disk_ids))
+        if 0 in disk_ids:
+            disk_ids.remove(0)
+        return disk_ids
+
+    def get_lun_los_pair(self):
+        """
+        :author:diws
+        :Date:20181010
+        :Description:获取lun id和los id对应值
+        :return: dict,losid:lunid
+        """
+        lun_los_pair = {}
+        for ip in deploy_ips:
+            if False is ReliableTest.check_ping(ip):
+                continue
+            cmd = ("ssh root@%s ' pscli --command=get_luns'" % (ip,))
+            log.info(cmd)
+            res, output = commands.getstatusoutput(cmd)
+            log.info(output)
+            if res != 0:
+                continue
+            else:
+                output = json.loads(output)
+                output = output['result']['luns']
+                for i in range(len(output)):
+                    lun_los_pair[output[i]['lunMaps'][0]['lun_id']] = output[i]['lunMaps'][0]['target_id']
+                break
+        return lun_los_pair
+
+    def get_jnl_state(self, removed_ip=None):
+        """
+        :Author: Diws
+        :Description:获取所有los节点日志状态
+        :return: dict,{losid:[nodeid, los_state]},los state:0|1|2|3|4|5|6,6为正常服务，1-5为日志接管中间阶段，
+                0为初始化，其他值：不处理
+        """
+        losids = disk().get_lun_los_pair().values()
+        jnl_state = {}
+        losids = list(set(losids))
+        if removed_ip in deploy_ips:
+            deploy_ips.remove(removed_ip)
+        for ip in deploy_ips:
+            if False is ReliableTest.check_ping(ip):
+                continue
+            else:
+                cmd = ('ssh root@%s "ps -C oSan"' % (ip,))
+                res, output = commands.getstatusoutput(cmd)
+                if res != 0:
+                    continue
+                n_id = node.get_node_id_by_ip(ip)
+                for losid in losids:
+                    cmd = (
+                                "ssh root@%s '/home/parastor/tools/nWatch -t oSan -i %d -c oSan#jnlins_dump | grep -w lnodeid:%d'" % (
+                        ip, n_id, losid))
+                    log.info(cmd)
+                    res, output = commands.getstatusoutput(cmd)
+                    log.info(output)
+                    try_nums = 0
+                    while res != 0:
+                        try_nums += 1
+                        res, output = commands.getstatusoutput(cmd)
+                        if try_nums == 5:
+                            break
+                        time.sleep(2)
+                    output = re.sub('\|', ',', output)
+                    cmd = ("echo %s | grep lnodeid:%d | awk -F ',' '{print $2}' | awk -F '[:]' '{print $2}'" % (
+                        output, losid))
+                    res, final = commands.getstatusoutput(cmd)
+                    if len(final) != 0:
+                        jnl_state[losid] = [n_id, final]
+        return jnl_state
+
+    def get_node_ip_by_id(self, removed_ip=None, n_id=None):
+        """
+        :Author:Diws
+        :param removed_ip: 不处理的节点IP
+        :return:str,节点IP
+        """
+        if None != removed_ip:
+            if type(removed_ip) == str:
+                removed_ip = removed_ip.split()
+            for rm_ip in removed_ip:
+                if rm_ip in deploy_ips:
+                    deploy_ips.remove(rm_ip)
+        err_flag = 1
+        for d_ip in deploy_ips:
+            if False is ReliableTest.check_ping(d_ip):
+                continue
+            cmd = ("ssh root@%s 'pscli --command=get_nodes --ids=%s'" % (d_ip, str(n_id)))
+            for i in range(3):
+                res, output = commands.getstatusoutput(cmd)
+                log.info(cmd)
+                if res != 0:
+                    err_flag = 1
+                    time.sleep(10)
+                else:
+                    err_flag = 0
+                    break
+            if err_flag == 0:
+                break
+        if err_flag == 1:
+            log.error(output)
+            log.error("Get nodes failed.")
+            exit(1)
+        msg = json.loads(output)
+        node_ip = msg['result']['nodes'][0]['ctl_ips'][0]['ip_address']
+        return node_ip
+
+    def get_node_id_by_ip(self, removed_ip=None, n_ip=None):
+        """
+        :Author:Diws
+        :param removed_ip: 不处理的节点IP
+        :n_ip:管理节点IP
+        :return:int,节点ID
+        """
+        if None != removed_ip:
+            if type(removed_ip) == str:
+                removed_ip = removed_ip.split()
+            for rm_ip in removed_ip:
+                if rm_ip in deploy_ips:
+                    deploy_ips.remove(rm_ip)
+        err_flag = 1
+        for d_ip in deploy_ips:
+            if False is ReliableTest.check_ping(d_ip):
+                continue
+            cmd = ("ssh root@%s 'pscli --command=get_nodes'" % (d_ip,))
+            for i in range(3):
+                log.info(cmd)
+                res, output = commands.getstatusoutput(cmd)
+                # log.info(output)
+                if res != 0:
+                    err_flag = 1
+                    time.sleep(10)
+                else:
+                    err_flag = 0
+                    break
+            if err_flag == 0:
+                break
+        if err_flag == 1:
+            log.error("Get nodes failed.")
+            exit(1)
+        output = json.loads(output)
+        nodes_info = output["result"]["nodes"]
+        for node in nodes_info:
+            ctl_ip = node["ctl_ips"][0]["ip_address"]
+            if n_ip == ctl_ip:
+                return node["node_id"]
+        log.warn("there is not a node's ip is %s!!!" % n_ip)
+        return None
+
+    def get_nodeip_by_losid(self, losid=None):
+        """
+        :Author:Diws
+        :Date:20181105
+        :Description:根据losid获取los所在节点IP
+        :param losid: los ID
+        :return: 节点IP
+        """
+        nodes = osan.get_nodes()
+        for nid in nodes:
+            cmd = ("/home/parastor/tools/nWatch -t oSan -i %s -c oSan#jnlins_dump" % (str(nid)))
+            res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+            check_str = ('lnodeid:%s' % (str(losid)))
+            if check_str in output:
+                sip = disk().get_node_ip_by_id(n_id=nid)
+                return sip
+        return None
+
+    def check_part_lun_data_uniform_by_ip(self, s_ip=None):
+        """
+        :Author: Diws
+        :Date: 20181105
+        :Description: 比较报单对象副本一致性
+        :param s_ip: 集群节点IP
+        :return:
+        """
+        button = xml.dom.minidom.parse(conf_file)
+        button = button.getElementsByTagName('uniform')[0].firstChild.nodeValue
+        if button == "off":
+            return
+        disk().check_bad_obj()
+        bad_obj_info = {}
+        losids = []
+        losid_ip = {}
+        """检查入参"""
+        if False is ReliableTest.check_ping(s_ip):
+            log.error("Can not attatch the ip %s you want to check." % (s_ip))
+            return
+        elif s_ip == None:
+            log.error("You must input a ip to check.")
+            return
+        """生成的临时配置文件，位置为脚本执行节点/tmp目录下"""
+        tmp_log_file = ("/tmp/tmp_log_file_%s" % (s_ip))
+        cmd = ("ssh root@%s 'grep srrf_obj_end /home/parastor/log/imp_oSan.log*' | cat - > %s" % (s_ip, tmp_log_file))
+        res, output = commands.getstatusoutput(cmd)
+        if res == 0:
+            with open(tmp_log_file, 'r') as log_file:
+                for line in log_file:
+                    if 'lunid' in line and 'losid' in line and 'segidx' in line:
+                        line = re.sub('\[|\]', ' ', line)
+                        line = line.split(' ')
+                        for seg in line:
+                            if 'lunid' in seg:
+                                lunid = re.sub('\(|\)', ' ', seg).split()[-1]
+                            elif 'losid' in seg:
+                                lid = re.sub('\(|\)', ' ', seg).split()[-1]
+                            elif 'segidx' in seg:
+                                segidx = re.sub('\(|\)', ' ', seg).split()[-1]
+                        bad_obj_info[lunid, segidx] = lid
+            log.info("######## bad obj on %s are: ########\n" % (s_ip,))
+            # print bad_obj_info
+            # log.info(bad_obj_info)
+            if len(bad_obj_info) == 0:
+                return
+            for losid in bad_obj_info.values():
+                losids.append(losid)
+            losids = list(set(losids))
+            for losid in losids:
+                nip = disk().get_nodeip_by_losid(losid=losid)
+                losid_ip[losid] = nip
+            for losinfo in bad_obj_info.keys():
+                bad_obj_info[losinfo] = losid_ip[bad_obj_info[losinfo]]
+            log.info(bad_obj_info)
+            seg_num = 0
+            for segidx in bad_obj_info.keys():
+                if bad_obj_info[segidx] != None:
+                    cmd = ("ssh root@%s '/home/parastor/tools/ecodecheck/san-repchk.sh %s %s %s'" % (
+                        bad_obj_info[segidx], str(segidx[1]), str(segidx[0]), bad_obj_info[segidx]))
+                    res, output = commands.getstatusoutput(cmd)
+                    log.info(cmd)
+                    if 'diff' in output:
+                        log.error(output)
+                        log.error("Check part lun data uniform failed.")
+                        os._exit(1)
+                seg_num += 1
+                if seg_num == 11:
+                    break
+            log.info("Check part lun data uniform success.")
+
+    def multi_check_part_lun_uniform_by_ip(self):
+        button = xml.dom.minidom.parse(conf_file)
+        button = button.getElementsByTagName('uniform')[0].firstChild.nodeValue
+        if button == "on":
+            check_threads = []
+            for sip in deploy_ips:
+                check_threads.append(threading.Thread(target=disk().check_part_lun_data_uniform_by_ip, args=(sip,)))
+            for check_thread in check_threads:
+                check_thread.setDaemon(True)
+                check_thread.start()
+            for check_thread in check_threads:
+                check_thread.join()
+        else:
+            pass
+
+    def check_part_lun_data_uniform_by_id(self, l_id=None):
+        """
+        :Author: Diws
+        :Date: 20181106
+        :Description: 比较报单对象副本一致性
+        :param s_ip: 集群节点IP
+        :return:
+        """
+        disk().check_bad_obj()
+        bad_obj_info = {}
+        losids = []
+        losid_ip = {}
+        check_str = 'lunid(%s)' % (str(l_id))
+        """检查入参"""
+        if l_id == None:
+            log.error("You must input a ip to check.")
+        # tmp_log_file = ("/log_tmp")
+        for s_ip in deploy_ips:
+            if False is ReliableTest.check_ping(d_ip):
+                continue
+            else:
+                """生成的临时配置文件，位置为脚本执行节点/tmp目录下"""
+                tmp_log_file = ("/tmp/tmp_log_file_%s" % (s_ip))
+                cmd = ("ssh root@%s 'grep srrf_obj_end /home/parastor/log/imp_oSan.log*' | cat - > %s" % (
+                    s_ip, tmp_log_file))
+                res, output = commands.getstatusoutput(cmd)
+                if res == 0:
+                    with open(tmp_log_file, 'r') as log_file:
+                        for line in log_file:
+                            if check_str in line and 'losid' in line and 'segidx' in line:
+                                line = re.sub('\[|\]', ' ', line)
+                                line = line.split(' ')
+                                for seg in line:
+                                    if 'lunid' in seg:
+                                        lunid = re.sub('\(|\)', ' ', seg).split()[-1]
+                                    elif 'losid' in seg:
+                                        lid = re.sub('\(|\)', ' ', seg).split()[-1]
+                                    elif 'segidx' in seg:
+                                        segidx = re.sub('\(|\)', ' ', seg).split()[-1]
+                                bad_obj_info[lunid, segidx] = lid
+                    log.info("######## bad obj on %s are: ########\n" % (s_ip,))
+                    log.info(bad_obj_info)
+                    for losid in bad_obj_info.values():
+                        losids.append(losid)
+                    losids = list(set(losids))
+                    for losid in losids:
+                        nip = disk().get_nodeip_by_losid(losid=losid)
+                        losid_ip[losid] = nip
+                    for losinfo in bad_obj_info.keys():
+                        bad_obj_info[losinfo] = losid_ip[bad_obj_info[losinfo]]
+                    log.info(bad_obj_info)
+                    for segidx in bad_obj_info.keys():
+                        if bad_obj_info[segidx] != None:
+                            cmd = ("ssh root@%s '/home/parastor/tools/ecodecheck/san-repchk.sh %s %s %s'" % (
+                                bad_obj_info[segidx], str(segidx[1]), str(segidx[0]), bad_obj_info[segidx]))
+                            res, output = commands.getstatusoutput(cmd)
+                            if 'diff' in output:
+                                log.error(output)
+                                log.error("Check part lun data uniform failed.")
+                                exit(1)
+                    log.info("Check part lun data uniform success.")
+
+    def get_sysid(self):
+        """
+        :Author : Diws
+        :Date: 20181114
+        :param ip:
+        :return:
+        """
+        for ip in deploy_ips:
+            if False is ReliableTest.check_ping(ip):
+                continue
+            else:
+                cmd = ("ssh %s 'grep sysid /home/parastor/conf/node.xml'" % (ip,))
+                res, output = commands.getstatusoutput(cmd)
+                if res == 0:
+                    sysid = re.sub('<|>', ',', output)
+                    return sysid.split(',')[2]
+
+    def get_sysid_uuid(self):
+        """
+        :Author:Diws
+        :Date:20181206
+        :return: the id and uuid of the testing cluster
+        """
+        cmd = "pscli --command=get_cluster_overview"
+        res, output = com2.run_pscli_cmd(pscli_cmd=cmd)
+        output = json.loads(output)
+        output = output['result']
+        return output['sysid'], output['uuid'], output['name']
+
+    def check_baljob(self, check_state='yes'):
+        """
+        :Author:Diws
+        :Date:20181207
+        :Description:检查均衡是否完成
+        :return:
+        """
+        nodes = osan.get_nodes()
+        for node in nodes:
+            cmd = ("/home/parastor/tools/nWatch -i %s -t oPara -c oPara#vmgr_balrecord_dump" % (str(node),))
+            log.info(cmd)
+            res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+            log.info(output)
+            if '-110' in output:
+                break
+            else:
+                if check_state == 'yes':
+                    while ' 0 baljob' not in output:
+                        time.sleep(10)
+                        log.info("Waiting for balance.......")
+                        log.info(output)
+                else:
+                    if ' 0 baljob' not in output:
+                        log.info('Begin balance job.')
+                        return True
+
+    def get_disk_cap(self):
+        """
+        :Author:Diws
+        :Date:20181207
+        :Description:获取每个磁盘池中，每个磁盘的容量
+        :return: dict
+        """
+        total_info = {}
+        cmd = "pscli --command=get_nodes"
+        res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+        output = json.loads(output)['result']['nodes']
+        for s_ip in deploy_ips:
+            if ReliableTest.check_ping(s_ip):
+                # 获取存储池id
+                storage_pool_ids = osan.get_storage_id(s_ip=s_ip)
+                # 遍历每个存储池
+                for s_p_id in storage_pool_ids:
+                    disk_pool_info = {}
+                    # 获取每个存储池中，每个磁盘池中的磁盘id,disk_infos: dict, key:value--disk_pool_id:[diskid1,diskid2]
+                    disk_infos = self.get_diskid_in_disk_pool(s_ip=s_ip, s_id=s_p_id)
+                    # 遍历每个磁盘池
+                    for d_p_id in disk_infos.keys():
+                        disk_cap_info = {}
+                        # 遍历每个磁盘
+                        for d_id in disk_infos[d_p_id]:
+                            gotcha = 0
+                            # 查找每个节点
+                            for n_id in output:
+                                # 获取该节点所有磁盘id
+                                for d_disk in n_id['data_disks']:
+                                    if str(d_id) == str(d_disk['id']):
+                                        disk_cap_info[d_id] = round(
+                                            float(d_disk['used_bytes']) / float(d_disk['total_bytes']), 2)
+                                        gotcha = 1
+                                        break
+                                if gotcha == 1:
+                                    break
+                                for d_disk in n_id['shared_disks']:
+                                    if str(d_id) == str(d_disk['id']):
+                                        disk_cap_info[d_id] = round(
+                                            float(d_disk['used_bytes']) / float(d_disk['total_bytes']), 2)
+                                        gotcha = 1
+                                        break
+                                if gotcha == 1:
+                                    break
+                        disk_pool_info[d_p_id] = disk_cap_info
+                    total_info[s_p_id] = disk_pool_info
+                return total_info
+
+    def comp_disk_cap(self, disk_cap_info):
+        """
+        :Author:Diws
+        :Date:20181210
+        :Description:根据传入的磁盘信息，比较每个存储池内，每个磁盘池中每个盘的容量
+        :param disk_cap_info:
+        :return:
+        """
+        for sid in disk_cap_info.keys():
+            for did in disk_cap_info[sid].keys():
+                b_cap = max(disk_cap_info[sid][did], key=disk_cap_info[sid][did].get)
+                s_cap = min(disk_cap_info[sid][did], key=disk_cap_info[sid][did].get)
+                if (float(disk_cap_info[sid][did][b_cap]) - float(disk_cap_info[sid][did][s_cap])) > 0.1:
+                    log.error("There is some disk is not balance, and they are:%d %d." % (b_cap, s_cap))
+                    os._exit(1)
+
+    def set_disk_uuid(self, s_ip=None, disk_name=None):
+        """
+        :Author:Diws
+        :Data:20181210
+        :param s_ip: 目标节点IP
+        :param disk_name: 磁盘名
+        :return:uuid
+        """
+        pass
+        cmd = 'uuidgen -r'
+        res, generate_uuid = commands.getstatusoutput(cmd)
+        cmd = ("ssh root@%s 'parted -s %s p'" % (s_ip, disk_name))
+        log.info(cmd)
+        res, output = commands.getstatusoutput(cmd)
+        log.info(output)
+        if 'primary' in output or 'ext' in output:
+            log.error("You are going to format your system disk.")
+            os._exit(1)
+        for ip in deploy_ips:
+            if ReliableTest.check_ping(ip):
+                cmd = ("ssh root@%s 'scp /home/parastor/tools/hardware/disk/disk_set_uuid %s/tmp'" % (ip, s_ip))
+                commands.getstatusoutput(cmd)
+            break
+        cmd = ("ssh root@%s 'parted -s %s mklabel gpt;/tmp/disk_set_uuid %s %s'" % (
+            s_ip, disk_name, disk_name, generate_uuid))
+        log.info(cmd)
+        res, output = commands.getstatusoutput(cmd)
+        log.info(output)
+        if res != 0:
+            log.error("Format disk error.")
+            os._exit(1)
+        else:
+            return generate_uuid
+
+    def get_free_disk_uuid_by_node_id(self, node_id=None, disk_type='data'):
+        """
+        :Author:Diws
+        :Date:20181210
+        :param node_id:节点ID
+        :return: uuid list
+        """
+        disks = []
+        cmd = ("pscli --command=get_disks --node_ids=%s" % (str(node_id),))
+        log.info(cmd)
+        res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+        if res != 0:
+            log.error("Get disk name failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            if disk_type == 'data' or disk_type == 'DATA':
+                for disk in disk_list:
+                    if disk["usedState"] == "UNUSED" and disk["speed_level"] == "MID":
+                        disks.append(disk["uuid"])
+            else:
+                for disk in disk_list:
+                    if disk["usedState"] == "UNUSED" and disk["speed_level"] == "HIGH":
+                        disks.append(disk["uuid"])
+            return disks
+
+    def get_free_disk_info_by_node_id(self, node_id=None, disk_type='data'):
+        """
+        :Author:Diws
+        :Date:20181211
+        :param node_id:节点ID
+        :return: dict: {disk_name:[disk_uuid, disk_phy_id]}
+        """
+        disk_info = {}
+        node_ip = self.get_node_ip_by_id(n_id=node_id)
+        cmd = ("pscli --command=get_disks --node_ids=%s" % (str(node_id),))
+        log.info(cmd)
+        res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+        if res != 0:
+            log.error("Get disk name failed.")
+            os._exit(1)
+        else:
+            result = json.loads(output)
+            disk_list = result['result']['disks']
+            if disk_type == 'data' or disk_type == 'DATA':
+                for disk in disk_list:
+                    if disk["usedState"] == "UNUSED" and disk["speed_level"] == "MID":
+                        disks = []
+                        disk_name = disk['devname']
+                        disk_uuid = disk["uuid"]
+                        disks.append(disk_name)
+                        disk_phyid = self.get_disk_phyid_by_name(s_ip=node_ip, disk_name=disks)
+                        disk_info[disk_name] = [disk_uuid, disk_phyid[0]]
+            else:
+                for disk in disk_list:
+                    if disk["usedState"] == "UNUSED" and disk["speed_level"] == "HIGH":
+                        disks = []
+                        disk_name = disk['devname']
+                        disk_uuid = disk["uuid"]
+                        disks.append(disk_name)
+                        disk_phyid = self.get_disk_phyid_by_name(s_ip=node_ip, disk_name=disks)
+                        disk_info[disk_name] = [disk_uuid, disk_phyid[0]]
+            return disk_info
+
+    def seprate_ojmgs_orole(self):
+        """
+        :Author:Diws
+        :Date:20181224
+        :Description:将主oJmgs和主oRole分离
+        :return:
+        """
+        master_ojmgs_id, master_ojmgs_ip = Os_Reliable().oJmgs_master_id()
+        master_orole_ip = Os_Reliable().get_master_orole2(deploy_ips[0])
+        master_orole_id = self.get_node_id_by_ip(n_ip=master_orole_ip)
+        if int(master_ojmgs_id) == int(master_orole_id):
+            Os_Reliable().change_process_state(node_ip=master_orole_ip, process_name='oRole', up_down='down')
+            time.sleep(60)
+            Os_Reliable().change_process_state(node_ip=master_orole_ip, process_name='oRole', up_down='up')
+
+    def get_disk_ids_by_node_id(self):
+        """
+        :Author:Diws
+        :Date:20181227
+        :Description:根据节点id返回该节点所有used状态的磁盘id
+        :return:
+        """
+        disk_info = {}
+        nodes = osan.get_nodes()
+        for nid in nodes:
+            disk_ids = []
+            cmd = ('pscli --command=get_disks --node_ids=%s' % (str(nid),))
+            res, output = osan.run_pscli_cmd(pscli_cmd=cmd)
+            output = json.loads(output)
+            disks = output['result']['disks']
+            for disk in disks:
+                if disk['usage'] == 'DATA' and disk['usedState'] == 'FREE':
+                    disk_ids.append(disk['id'])
+            disk_info[nid] = disk_ids
+        return disk_info
+
+
+if __name__ == '__main__':
+    # Os_Reliable().asyn_ntp()
+    # disk_ids = disk().get_all_data_disk_id()
+    # disk().modify_deploy_xml(dst_ip=deploy_ips[0])
+    # print disk().get_node_disks(dst_ip='10.2.43.21')
+    # print disk().get_free_disk_uuid_by_node_id(node_id=1,disk_type='data')
+    # print disk().get_free_disk_info_by_node_id(node_id=1, disk_type='data')
+    print disk().get_disk_ids_by_node_id()

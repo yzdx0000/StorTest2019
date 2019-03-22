@@ -1,0 +1,230 @@
+#-*- coding:utf-8 -*
+#脚本名称：cancleupobjectBySplit
+#脚本参数：oossip,bucketname,objectname,certificateid,surobjectpathdir(要上传的数据所在目录),surobjectname（要上传数据所在去掉编号的的名字）,num（段数量）
+#注意：执行该函数前要将要上传的文件用"split -b 段大小 文件名 -d 文件分割名"进行分割,且本脚本所在的目录中必须存在脚本_checkresult_lyz.py
+#脚本使用，直接调用upObjectBySplit，给定所需参数即可
+#脚本构成：改脚本由四个函数构成：uploadid_init（初始化多段上传）、uploadoncePeriod（上传第一段）、canclesplit（取消段上传）、uploadootherPeriod（双上传其他段）cancleupobjectBySplit
+#（总调用函数）:cancleupobjectBySplit
+
+import commands,sys,os
+import _xmlanalyzeUploadid
+
+import _checkresult_lyz
+import getoutputpath_lyz
+
+#def upobjectBySplit(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num):
+#函数名称：uploadid_init
+#函数作用：初始化多段上传
+#输入：oossip,bucketname,objectname,certificateid
+#输出：uploadid
+def init(oossip,bucketname,objectname,certificateid):
+	print "**********************************************************************"
+	print '初始化多段上传'
+	#步骤一：初始化多段上传，将结果打印到file1中
+	cmd1='curl -i http://%s:20480/%s/%s?uploads -XPOST -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,certificateid)
+	print cmd1
+	(status1,output1)=commands.getstatusoutput(cmd1)
+	#print output1
+	print 'status1 is %s:' % status1
+	outputpath=getoutputpath_lyz.getoutputpath()
+	out=os.system('cd '+outputpath+';touch fileuploadid')
+	fileuploadidallpath=os.path.join(outputpath,'fileuploadid')
+	print 'fileuploadidallpath is %s' % fileuploadidallpath
+	print output1
+	with open(fileuploadidallpath,'w') as f:
+		f.write(output1)
+	#print "status is %s,putput is %s" % (status1,output1)
+	re=_checkresult_lyz.checkresult(status1,output1)
+	if re==-1:
+		return -1
+	upid=_xmlanalyzeUploadid.analyze_xml()
+	print "uploadId is %s" % upid
+	return upid
+
+#函数名称：canclesplit
+#函数功能：取消多段上传
+#函数参数：oossip,bucketname,objectname,uploadId,certificateid
+def canclesplit(oossip,bucketname,objectname,uploadId,certificateid):
+	cmdcancle='curl -i http://%s:20480/%s/%s?uploadId=%s -XDELETE -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,uploadId,certificateid)
+	print 'cmdcancle is %s' %cmdcancle
+	(statuscancle,outputcancle)=commands.getstatusoutput(cmdcancle)
+	re=_checkresult_lyz.checkresult(statuscancle,outputcancle)
+	if re == -1:
+		return -1
+	print '************取消多段上传成功****************'
+
+#uploadPeriod负责分段上传，将文件的每一个段都传上去，注意段的个数不能超过10个
+#进行该步骤前要保证要上传的文件已经一批能够split -b num filename -d surobjectname分割过
+#如果参数中surobjectname是test，num=2，则上传的段名称必须是test00，test02
+def uploadoncePeriod(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,uploadid):
+	print "**************************************************************************"
+	print "上传第一段"
+	num=int(num)
+	#print 'num is %s' %num
+	#上传第一段
+	comsurobjectname0 = surobjectpathdir + '/' + surobjectname + str(0)+str(0)
+	cmdforup = 'curl -i http://%s:20480/%s/%s?partNumber=%s\&uploadId=%s -XPUT -H "Authorization: AWS4-HMAC-SHA256 Credential=%s" -T %s' %(oossip,bucketname,objectname,'1',uploadid,certificateid,comsurobjectname0)
+	(statusforup, outputforup) = commands.getstatusoutput(cmdforup)
+	print outputforup
+	re=_checkresult_lyz.checkresult(statusforup, outputforup)
+	if re == -1:
+		return -1
+	print '***********分段上传成功上传第一段*************'
+
+def uploadotherPeriod(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,uploadid):
+	num=int(num)
+	for i in range(1,num):
+		#print 'range(num) is %s' %range(num)
+		#print 'i is %s' %i
+		comsurobjectname=surobjectpathdir+'/'+surobjectname+str(0)+str(i)
+		print comsurobjectname
+		partNumber=str(i+1)
+		#print partNumber
+		cmd2='curl -i http://%s:20480/%s/%s?partNumber=%s\&uploadId=%s -XPUT -H "Authorization: AWS4-HMAC-SHA256 Credential=%s" -T %s' %(oossip,bucketname,objectname,partNumber,uploadid,certificateid,comsurobjectname)
+		print cmd2
+		(status2,output2)=commands.getstatusoutput(cmd2)
+		#print 'status2 is %s' % status2
+		print output2
+		#print 'status2 is %s' %status2
+		if output2.find('200 OK')<0:
+			print '取消多段上传成功，段无法上传'
+		else:
+			print 'error#####################################################'
+			print '取消多段上传后，段依然上传成功'
+			return -1
+
+
+
+#函数名称：combinePeriod
+#函数作用：合并段
+def combinePeriod(oossip,bucketname,objectname,uploadid,certificateid,num):
+	print "********************************************************************************"
+	print "合并段"
+	cmd3=' curl -i http://%s:20480/%s/%s?uploadId=%s -XPOST -H "Authorization: AWS4-HMAC-SHA256 Credential=%s" -d "<CompleteMultipartUpload>' %(oossip,bucketname,objectname,uploadid,certificateid)
+	num=int(num)
+	for i in range(num):
+		cmdme='<Part><PartNumber>%s</PartNumber><ETag>etag1</ETag></Part>' % str(i+1)
+		cmd3=cmd3+cmdme
+	cmd3=cmd3+'</CompleteMultipartUpload>"'
+	print cmd3
+	(status3,output3)=commands.getstatusoutput(cmd3)
+	print output3
+	re=_checkresult_lyz.checkresult(status3,output3)
+	if re == -1:
+		return -1
+
+def cancleupObjectBySplit(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num):
+	uploadid=init(oossip,bucketname,objectname,certificateid)
+	uploadoncePeriod(oossip, bucketname, objectname, certificateid, surobjectpathdir, surobjectname, num, uploadid)
+	canclesplit(oossip, bucketname, objectname, uploadid, certificateid)
+	uploadotherPeriod(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,uploadid)
+	#combinePeriod(oossip,bucketname,objectname,uploadid,certificateid,num)
+
+################################################################################
+#以下的函数与以上唯一的不同是，以下的函数有logger，所以所有的输入多了一个logger
+#############################################################################################
+def initHaveLog(oossip,bucketname,objectname,certificateid,logger):
+	logger.info("**********************************************************************")
+	print '初始化多段上传'
+	#步骤一：初始化多段上传，将结果打印到file1中
+	cmd1='curl -i http://%s:20480/%s/%s?uploads -XPOST -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,certificateid)
+	logger.info(cmd1)
+	(status1,output1)=commands.getstatusoutput(cmd1)
+	#print output1
+	logger.info('status1 is %s:' % status1)
+	outputpath=getoutputpath_lyz.getoutputpath()
+	out=os.system('cd '+outputpath+';touch fileuploadid')
+	fileuploadidallpath=os.path.join(outputpath,'fileuploadid')
+	logger.info('fileuploadidallpath is %s' % fileuploadidallpath)
+	logger.info(output1)
+	with open(fileuploadidallpath,'w') as f:
+		f.write(output1)
+	#print "status is %s,putput is %s" % (status1,output1)
+	re=_checkresult_lyz.checkresultHaveLog(status1,output1,logger)
+	if re == -1:
+		return -1
+	upid=_xmlanalyzeUploadid.analyze_xml()
+	logger.info("uploadId is %s" % upid)
+	return upid
+
+#函数名称：canclesplit
+#函数功能：取消多段上传
+#函数参数：oossip,bucketname,objectname,uploadId,certificateid
+def canclesplitHaveLog(oossip,bucketname,objectname,uploadId,certificateid,logger):
+	cmdcancle='curl -i http://%s:20480/%s/%s?uploadId=%s -XDELETE -H "Authorization: AWS4-HMAC-SHA256 Credential=%s"' %(oossip,bucketname,objectname,uploadId,certificateid)
+	logger.info('cmdcancle is %s' %cmdcancle)
+	(statuscancle,outputcancle)=commands.getstatusoutput(cmdcancle)
+	re=_checkresult_lyz.checkresultHaveLog(statuscancle,outputcancle,logger)
+	if re ==-1:
+		return -1
+	logger.info('************取消多段上传成功****************')
+
+#uploadPeriod负责分段上传，将文件的每一个段都传上去，注意段的个数不能超过10个
+#进行该步骤前要保证要上传的文件已经一批能够split -b num filename -d surobjectname分割过
+#如果参数中surobjectname是test，num=2，则上传的段名称必须是test00，test02
+def uploadoncePeriodHaveLog(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,uploadid,logger):
+	logger.info("**************************************************************************")
+	logger.info("上传第一段")
+	num=int(num)
+	#print 'num is %s' %num
+	#上传第一段
+	comsurobjectname0 = surobjectpathdir + '/' + surobjectname + str(0)+str(0)
+	cmdforup = 'curl -i http://%s:20480/%s/%s?partNumber=%s\&uploadId=%s -XPUT -H "Authorization: AWS4-HMAC-SHA256 Credential=%s" -T %s' %(oossip,bucketname,objectname,'1',uploadid,certificateid,comsurobjectname0)
+	(statusforup, outputforup) = commands.getstatusoutput(cmdforup)
+	logger.info(outputforup)
+	re = _checkresult_lyz.checkresultHaveLog(statusforup, outputforup,logger)
+	if re==-1:
+		return -1
+	logger.info('***********分段上传成功上传第一段*************')
+
+def uploadotherPeriodHaveLog(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,uploadid,logger):
+	num=int(num)
+	for i in range(1,num):
+		#print 'range(num) is %s' %range(num)
+		#print 'i is %s' %i
+		comsurobjectname=surobjectpathdir+'/'+surobjectname+str(0)+str(i)
+		logger.info(comsurobjectname)
+		partNumber=str(i+1)
+		#print partNumber
+		cmd2='curl -i http://%s:20480/%s/%s?partNumber=%s\&uploadId=%s -XPUT -H "Authorization: AWS4-HMAC-SHA256 Credential=%s" -T %s' %(oossip,bucketname,objectname,partNumber,uploadid,certificateid,comsurobjectname)
+		logger.info(cmd2)
+		(status2,output2)=commands.getstatusoutput(cmd2)
+		#print 'status2 is %s' % status2
+		logger.info(output2)
+		#print 'status2 is %s' %status2
+		if output2.find('200 OK')<0:
+			logger.info('取消多段上传成功，段无法上传')
+		else:
+			logger.error('error#####################################################')
+			logger.error('取消多段上传后，段依然上传成功')
+			return -1
+
+
+
+#函数名称：combinePeriod
+#函数作用：合并段
+def combinePeriodHaveLog(oossip,bucketname,objectname,uploadid,certificateid,num,logger):
+	logger.info("********************************************************************************")
+	print "合并段"
+	cmd3=' curl -i http://%s:20480/%s/%s?uploadId=%s -XPOST -H "Authorization: AWS4-HMAC-SHA256 Credential=%s" -d "<CompleteMultipartUpload>' %(oossip,bucketname,objectname,uploadid,certificateid)
+	num=int(num)
+	for i in range(num):
+		cmdme='<Part><PartNumber>%s</PartNumber><ETag>etag1</ETag></Part>' % str(i+1)
+		cmd3=cmd3+cmdme
+	cmd3=cmd3+'</CompleteMultipartUpload>"'
+	logger.info(cmd3)
+	(status3,output3)=commands.getstatusoutput(cmd3)
+	logger.info(output3)
+	re=_checkresult_lyz.checkresultHaveLog(status3,output3,logger)
+	if re == -1:
+		return -1
+
+def cancleupObjectBySplitHaveLog(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,logger):
+	uploadid=initHaveLog(oossip,bucketname,objectname,certificateid,logger)
+	uploadoncePeriodHaveLog(oossip, bucketname, objectname, certificateid, surobjectpathdir, surobjectname, num, uploadid,logger)
+	canclesplitHaveLog(oossip, bucketname, objectname, uploadid, certificateid,logger)
+	uploadotherPeriodHaveLog(oossip,bucketname,objectname,certificateid,surobjectpathdir,surobjectname,num,uploadid,logger)
+	#combinePeriod(oossip,bucketname,objectname,uploadid,certificateid,num)
+if __name__=="__main__":
+	cancleupObjectBySplit(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6],sys.argv[7])
+	#init('10.2.40.18', 'hehe', 'objectfenduan2', '000024P00B8AVJNI000025XCEGCC5NIZ')

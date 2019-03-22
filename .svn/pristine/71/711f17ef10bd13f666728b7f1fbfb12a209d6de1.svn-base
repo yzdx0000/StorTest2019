@@ -1,0 +1,5 @@
+[stress_conf]
+max_iops = 1004.32
+threads = 8
+lun_nums = 24
+
