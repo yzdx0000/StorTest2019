@@ -21,6 +21,10 @@ import multiprocessing
 import threading
 from multiprocessing import Pool
 
+#P1 = multiprocessing.Process(name="callTestWinpcap", target=callTestWinpcap)
+ #       P2 = multiprocessing.Process(name="cm_TestWinpcap", target=cm_TestWinpcap)
+  #      P1.start()
+   #     P2.start()
 
 def exit_fun(arg='common', num=1):
     """
